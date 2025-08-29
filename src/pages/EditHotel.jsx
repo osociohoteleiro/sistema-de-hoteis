@@ -178,6 +178,8 @@ const EditHotel = () => {
             value={formData.hotel_capa}
             onChange={handleImageChange}
             label="Imagem de Capa do Hotel"
+            hotelName={formData.hotel_nome || hotel?.hotel_nome}
+            acceptFiles="image/*"
           />
 
           {/* Hotel Name */}

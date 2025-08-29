@@ -13,13 +13,46 @@ const Hotels = () => {
   const closeDrawer = () => setIsDrawerOpen(false);
 
   const fetchHotels = async () => {
-    if (!config.apiEndpoints.listHotels) {
-      console.error('Endpoint de listagem não configurado');
-      return;
-    }
-
     setLoading(true);
+    
     try {
+      // Se não há endpoint configurado, usar dados de exemplo para desenvolvimento
+      if (!config.apiEndpoints.listHotels) {
+        console.log('📝 Nenhum endpoint de listagem configurado, usando dados de exemplo...');
+        
+        // Dados de exemplo para desenvolvimento
+        const exampleHotels = [
+          {
+            hotel_uuid: 'hotel-exemplo-1',
+            hotel_nome: 'Hotel Exemplo 1',
+            hora_checkin: '14:00:00',
+            hora_checkout: '12:00:00',
+            hotel_capa: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=300&fit=crop&crop=center'
+          },
+          {
+            hotel_uuid: 'hotel-exemplo-2', 
+            hotel_nome: 'Hotel Exemplo 2',
+            hora_checkin: '15:00:00',
+            hora_checkout: '11:00:00',
+            hotel_capa: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400&h=300&fit=crop&crop=center'
+          },
+          {
+            hotel_uuid: 'hotel-exemplo-3',
+            hotel_nome: 'Hotel Teste S3',
+            hora_checkin: '16:00:00', 
+            hora_checkout: '10:00:00',
+            hotel_capa: null // Para testar upload
+          }
+        ];
+        
+        setTimeout(() => {
+          setHotels(exampleHotels);
+          setLoading(false);
+        }, 500);
+        return;
+      }
+
+      // Usar endpoint configurado se disponível
       const response = await fetch(config.apiEndpoints.listHotels);
       if (response.ok) {
         const data = await response.json();

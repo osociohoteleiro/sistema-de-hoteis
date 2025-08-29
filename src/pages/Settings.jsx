@@ -107,7 +107,32 @@ const Settings = () => {
   };
 
   const handleLogoChange = (imageUrl) => {
+    console.log('📷 Settings: Recebendo nova URL do logo:', imageUrl);
+    console.log('📷 Settings: Tipo da URL:', typeof imageUrl);
+    console.log('📷 Settings: URL completa:', imageUrl);
+    
     setLogoInput(imageUrl);
+    
+    // Salvar automaticamente após upload bem-sucedido
+    if (imageUrl && imageUrl !== '') {
+      console.log('💾 Settings: Salvando logo automaticamente...');
+      console.log('💾 Settings: Estado antes do update:', { 
+        logoInput: logoInput, 
+        companyNameInput: companyNameInput 
+      });
+      
+      updateConfig({
+        logo: imageUrl,
+        companyName: companyNameInput.trim() || 'Sistema de Hotéis'
+      });
+      
+      console.log('✅ Settings: updateConfig chamado com:', {
+        logo: imageUrl,
+        companyName: companyNameInput.trim() || 'Sistema de Hotéis'
+      });
+      
+      toast.success('Logo atualizado com sucesso!');
+    }
   };
 
   const handleUploadSettingChange = (key, value) => {
@@ -676,6 +701,8 @@ const Settings = () => {
                 onChange={handleLogoChange}
                 label="Logotipo da Empresa"
                 className="mb-4"
+                hotelName={null}
+                acceptFiles="image/*"
               />
 
               <button

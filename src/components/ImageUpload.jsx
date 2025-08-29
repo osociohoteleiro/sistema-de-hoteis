@@ -2,35 +2,50 @@ import { useState, useRef, useCallback } from 'react';
 import { useImageUpload } from '../hooks/useImageUpload';
 import { formatFileSize } from '../utils/imageUpload';
 
-const ImageUpload = ({ value, onChange, label = 'Imagem', className = '' }) => {
+const ImageUpload = ({ value, onChange, label = 'Arquivo', className = '', hotelName = null, acceptFiles = 'image/*,application/pdf' }) => {
   const fileInputRef = useRef(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [preview, setPreview] = useState(value || null);
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState(0);
   
-  const { upload, isUploading, uploadProgress } = useImageUpload();
+  const { upload, isUploading, uploadProgress } = useImageUpload(hotelName);
 
   const handleFileSelect = useCallback(async (file) => {
     if (!file) return;
 
-    // Criar preview imediato
-    const previewUrl = URL.createObjectURL(file);
-    setPreview(previewUrl);
+    // Criar preview imediato (apenas para imagens)
+    let previewUrl = null;
+    if (file.type.startsWith('image/')) {
+      previewUrl = URL.createObjectURL(file);
+      setPreview(previewUrl);
+    } else {
+      setPreview('pdf'); // Indicador para PDF
+    }
+    
     setFileName(file.name);
     setFileSize(file.size);
 
     try {
-      // Upload da imagem
+      // Upload do arquivo
       const result = await upload(file);
       
       if (result) {
-        // Limpar o preview local e usar a URL do upload
-        URL.revokeObjectURL(previewUrl);
-        setPreview(result.url);
+        // Limpar o preview local se houver
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+        
+        // Para PDFs, manter o indicador, para imagens usar a URL
+        if (file.type === 'application/pdf') {
+          setPreview('pdf');
+        } else {
+          setPreview(result.url);
+        }
         
         // Notificar componente pai
         if (onChange) {
+          console.log('🔄 ImageUpload: Notificando componente pai com URL:', result.url);
           onChange(result.url);
         }
       }
@@ -62,10 +77,12 @@ const ImageUpload = ({ value, onChange, label = 'Imagem', className = '' }) => {
     setIsDragOver(false);
     
     const files = Array.from(e.dataTransfer.files);
-    const imageFile = files.find(file => file.type.startsWith('image/'));
+    const validFile = files.find(file => 
+      file.type.startsWith('image/') || file.type === 'application/pdf'
+    );
     
-    if (imageFile) {
-      handleFileSelect(imageFile);
+    if (validFile) {
+      handleFileSelect(validFile);
     }
   };
 
@@ -135,10 +152,10 @@ const ImageUpload = ({ value, onChange, label = 'Imagem', className = '' }) => {
                 </svg>
               </div>
               <p className="text-white mb-2">
-                Clique ou arraste uma imagem aqui
+                Clique ou arraste um arquivo aqui
               </p>
               <p className="text-sidebar-400 text-sm">
-                PNG, JPG, WebP até 5MB
+                PNG, JPG, WebP, PDF até 5MB
               </p>
             </>
           )}
@@ -146,7 +163,7 @@ const ImageUpload = ({ value, onChange, label = 'Imagem', className = '' }) => {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={acceptFiles}
             onChange={handleInputChange}
             className="hidden"
           />
@@ -155,14 +172,28 @@ const ImageUpload = ({ value, onChange, label = 'Imagem', className = '' }) => {
         // Preview Area
         <div className="relative bg-white/10 rounded-lg border border-white/20 overflow-hidden">
           <div className="aspect-video relative">
-            <img
-              src={preview}
-              alt="Preview"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.target.style.display = 'none';
-              }}
-            />
+            {preview === 'pdf' ? (
+              // Preview para PDF
+              <div className="w-full h-full flex items-center justify-center bg-red-500/10">
+                <div className="text-center text-white">
+                  <svg className="w-16 h-16 mx-auto mb-2 text-red-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
+                  </svg>
+                  <p className="text-sm font-medium">PDF</p>
+                  <p className="text-xs text-white/70">{fileName}</p>
+                </div>
+              </div>
+            ) : (
+              // Preview para imagens
+              <img
+                src={preview}
+                alt="Preview"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            )}
             
             {/* Overlay com informações */}
             <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
@@ -214,7 +245,7 @@ const ImageUpload = ({ value, onChange, label = 'Imagem', className = '' }) => {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={acceptFiles}
             onChange={handleInputChange}
             className="hidden"
           />

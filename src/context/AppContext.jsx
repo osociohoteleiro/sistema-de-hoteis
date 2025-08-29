@@ -43,11 +43,17 @@ const DEFAULT_CONFIG = {
     updateEndpoints: '' // PUT /endpoints/{hotel_uuid}
   },
   uploadConfig: {
-    service: 'base64', // 'imgbb', 'cloudinary', 'custom', 'base64'
+    service: 'aws-s3', // 'aws-s3', 'imgbb', 'cloudinary', 'custom', 'base64'
     maxSize: 5 * 1024 * 1024, // 5MB
-    allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
-    // ImgBB config
-    imgbbApiKey: '',
+    allowedTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'application/pdf'],
+    // AWS S3 config
+    awsAccessKeyId: 'AKIA27ECEV5DUIEBSWMI',
+    awsSecretAccessKey: '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',
+    awsRegion: 'us-east-2',
+    awsBucketName: 'hoteloshia',
+    // ImgBB config (fallback para quando S3 não funcionar)
+    // Para obter uma chave gratuita: https://api.imgbb.com/
+    imgbbApiKey: '', // Adicione sua chave do ImgBB aqui
     // Cloudinary config
     cloudinaryCloudName: '',
     cloudinaryUploadPreset: '',
@@ -88,12 +94,16 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const updateConfig = (newConfig) => {
-    console.log('updateConfig chamado:', newConfig);
+    console.log('🔧 AppContext: updateConfig chamado com:', newConfig);
+    console.log('🔧 AppContext: config atual antes update:', config);
     const updatedConfig = { ...config, ...newConfig };
-    console.log('Config atualizado:', updatedConfig);
+    console.log('🔧 AppContext: config após merge:', updatedConfig);
     setConfig(updatedConfig);
     localStorage.setItem('appConfig', JSON.stringify(updatedConfig));
-    console.log('Salvo no localStorage:', JSON.parse(localStorage.getItem('appConfig')));
+    console.log('🔧 AppContext: salvo no localStorage:', JSON.parse(localStorage.getItem('appConfig')));
+    
+    // Forçar re-render dos componentes que dependem do config
+    console.log('🔧 AppContext: setConfig executado, componentes devem re-renderizar');
   };
 
   const updateEndpoint = (type, url) => {

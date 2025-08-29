@@ -7,6 +7,7 @@ import EditHotel from './pages/EditHotel';
 import Settings from './pages/Settings';
 import AI from './pages/AI';
 import AIConfiguracoes from './pages/AIConfiguracoes';
+import TestUpload from './components/TestUpload';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
             <Route path="ia" element={<AI />} />
             <Route path="ia/configuracoes" element={<AIConfiguracoes />} />
             <Route path="configuracoes" element={<Settings />} />
+            <Route path="teste-upload" element={<TestUpload />} />
           </Route>
         </Routes>
       </Router>

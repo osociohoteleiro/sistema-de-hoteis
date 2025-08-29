@@ -6,6 +6,10 @@ const Sidebar = () => {
   const location = useLocation();
   const { config } = useApp();
   const [iaMenuOpen, setIaMenuOpen] = useState(location.pathname.startsWith('/ia'));
+  
+  console.log('🔍 Sidebar: config.logo atual:', config.logo);
+  console.log('🔍 Sidebar: tipo do logo:', typeof config.logo);
+  console.log('🔍 Sidebar: config completo:', config);
 
   const menuItems = [
     {
