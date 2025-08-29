@@ -8,24 +8,24 @@ const DEFAULT_CONFIG = {
   companyName: 'Sistema de Hotéis',
   appDescription: 'Plataforma completa para gestão hoteleira com inteligência artificial integrada. Gerencie reservas, atendimento ao cliente e operações de forma eficiente e moderna.',
   apiEndpoints: {
-    listHotels: '',
+    listHotels: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/lista_hoteis',
     createHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/cadastra_hotel',
-    getHotel: '', // GET /hotel/{uuid}
-    updateHotel: '', // PUT /hotel/{uuid}
-    deleteHotel: '' // DELETE /hotel/{uuid}
+    getHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/busca_hotel', // GET /hotel/{uuid}
+    updateHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/atualiza_hotel', // PUT /hotel/{uuid}
+    deleteHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/deleta_hotel' // DELETE /hotel/{uuid}
   },
   aiEndpoints: {
-    createIntegration: '',
-    getIntegrations: '',
-    updateIntegration: '', // PUT /integration/{id}
-    deleteIntegration: '', // DELETE /integration/{id}
-    getAiStats: ''
+    createIntegration: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/create_integration',
+    getIntegrations: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/get_integrations',
+    updateIntegration: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/update_integration', // PUT /integration/{id}
+    deleteIntegration: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/delete_integration', // DELETE /integration/{id}
+    getAiStats: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/get_ai_stats'
   },
   marketingEndpoints: {
-    createMessage: '',
-    getMessages: '', // GET /marketing/messages/{hotel_uuid}
-    updateMessage: '', // PUT /marketing/messages/{id}
-    deleteMessage: '' // DELETE /marketing/messages/{id}
+    createMessage: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/create_marketing_message',
+    getMessages: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/get_marketing_messages', // GET /marketing/messages/{hotel_uuid}
+    updateMessage: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/update_marketing_message', // PUT /marketing/messages/{id}
+    deleteMessage: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/delete_marketing_message' // DELETE /marketing/messages/{id}
   },
   botFieldsEndpoints: {
     getBotFields: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/05e590dd-8185-424b-9658-d839ca38c481/lista_botfields_onenode_mysql/:hotel_uuid', // GET /bot-fields/{hotel_uuid}
@@ -39,8 +39,8 @@ const DEFAULT_CONFIG = {
   controlEndpoints: {
     saveEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/endpoints_create', // POST /endpoints/save
     listEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/lista_endpoints', // GET /endpoints/list
-    getEndpoints: '', // GET /endpoints/{hotel_uuid}
-    updateEndpoints: '' // PUT /endpoints/{hotel_uuid}
+    getEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/get_endpoints', // GET /endpoints/{hotel_uuid}
+    updateEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/update_endpoints' // PUT /endpoints/{hotel_uuid}
   },
   uploadConfig: {
     service: 'aws-s3', // 'aws-s3', 'imgbb', 'cloudinary', 'custom', 'base64'

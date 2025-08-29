@@ -98,6 +98,21 @@ const Settings = () => {
     });
   }, [config]);
 
+  // Carregar endpoints automaticamente ao inicializar
+  useEffect(() => {
+    const loadEndpointsOnInit = async () => {
+      try {
+        console.log('🚀 Carregando endpoints automaticamente ao inicializar Settings...');
+        await handleLoadAllEndpoints();
+      } catch (error) {
+        console.log('ℹ️ Não foi possível carregar endpoints automaticamente:', error.message);
+      }
+    };
+
+    // Carregar apenas uma vez quando o componente monta
+    loadEndpointsOnInit();
+  }, []); // Dependências vazias = executa apenas uma vez
+
   const handleSaveGeneral = () => {
     updateConfig({
       logo: logoInput.trim() || null,
