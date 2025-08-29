@@ -36,6 +36,12 @@ const DEFAULT_CONFIG = {
     getKnowledge: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/66c91822-d03a-4250-8719-51f2a55d56a3/lista_cerebro_ia/:hotel_uuid', // GET /knowledge/{hotel_uuid}
     updateKnowledge: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/alimenta_qdrant_unidades_base_conhecimento' // POST /knowledge/update
   },
+  controlEndpoints: {
+    saveEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/endpoints_create', // POST /endpoints/save
+    listEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/lista_endpoints', // GET /endpoints/list
+    getEndpoints: '', // GET /endpoints/{hotel_uuid}
+    updateEndpoints: '' // PUT /endpoints/{hotel_uuid}
+  },
   uploadConfig: {
     service: 'base64', // 'imgbb', 'cloudinary', 'custom', 'base64'
     maxSize: 5 * 1024 * 1024, // 5MB
@@ -123,6 +129,13 @@ export const AppProvider = ({ children }) => {
     const updatedEndpoints = { ...config.knowledgeEndpoints, [type]: url };
     console.log('Knowledge Endpoints atualizados:', updatedEndpoints);
     updateConfig({ knowledgeEndpoints: updatedEndpoints });
+  };
+
+  const updateControlEndpoint = (type, url) => {
+    console.log('updateControlEndpoint chamado:', type, url);
+    const updatedEndpoints = { ...config.controlEndpoints, [type]: url };
+    console.log('Control Endpoints atualizados:', updatedEndpoints);
+    updateConfig({ controlEndpoints: updatedEndpoints });
   };
 
   const selectHotel = (hotelUuid) => {
@@ -626,6 +639,169 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Control Endpoints Functions
+  const saveAllEndpoints = async (hotelUuid) => {
+    setLoading(true);
+    try {
+      const endpoint = config.controlEndpoints.saveEndpoints;
+      if (!endpoint) {
+        throw new Error('Endpoint de salvamento de endpoints não configurado');
+      }
+
+      // Preparar todos os endpoints em um payload estruturado
+      const endpointsPayload = {
+        hotel_uuid: hotelUuid || selectedHotelUuid,
+        endpoints: {
+          hotels: config.apiEndpoints,
+          ai: config.aiEndpoints,
+          marketing: config.marketingEndpoints,
+          botFields: config.botFieldsEndpoints,
+          knowledge: config.knowledgeEndpoints,
+          control: config.controlEndpoints
+        },
+        timestamp: new Date().toISOString(),
+        system_info: {
+          app_name: config.companyName,
+          version: '1.0.0'
+        }
+      };
+
+      console.log('💾 Salvando todos os endpoints:', { endpoint, payload: endpointsPayload });
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(endpointsPayload)
+      });
+
+      console.log('📥 Resposta da API (salvar endpoints):', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Erro na resposta:', errorData);
+        throw new Error(errorData.message || `Erro ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Endpoints salvos com sucesso:', result);
+
+      return result;
+    } catch (error) {
+      console.error('❌ Error saving all endpoints:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAllEndpoints = async () => {
+    setLoading(true);
+    try {
+      const endpoint = config.controlEndpoints.listEndpoints;
+      if (!endpoint) {
+        throw new Error('Endpoint de listagem de endpoints não configurado');
+      }
+
+      console.log('📥 Carregando endpoints da API:', endpoint);
+      
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      console.log('📥 Resposta da API (listar endpoints):', response.status, response.statusText);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Erro na resposta:', errorData);
+        throw new Error(errorData.message || `Erro ${response.status}: ${response.statusText}`);
+      }
+
+      const endpointsData = await response.json();
+      console.log('✅ Endpoints carregados:', endpointsData);
+
+      // Aplicar os endpoints carregados aos respectivos campos
+      // A API retorna um array de objetos com: { id, category, name, url }
+      
+      if (endpointsData.endpoints && Array.isArray(endpointsData.endpoints)) {
+        const endpointsArray = endpointsData.endpoints;
+        
+        // Organizar endpoints por categoria
+        const organizedEndpoints = {
+          hotels: {},
+          ai: {},
+          marketing: {},
+          botFields: {},
+          knowledge: {},
+          control: {}
+        };
+        
+        // Mapear cada endpoint para sua categoria correspondente
+        endpointsArray.forEach(endpoint => {
+          const { category, name, url } = endpoint;
+          
+          if (organizedEndpoints[category]) {
+            organizedEndpoints[category][name] = url;
+          } else {
+            console.warn(`⚠️ Categoria desconhecida: ${category}`, endpoint);
+          }
+        });
+        
+        console.log('📋 Endpoints organizados por categoria:', organizedEndpoints);
+        
+        // Atualizar configuração com os novos endpoints
+        const newConfig = { ...config };
+        
+        if (Object.keys(organizedEndpoints.hotels).length > 0) {
+          newConfig.apiEndpoints = { ...config.apiEndpoints, ...organizedEndpoints.hotels };
+        }
+        
+        if (Object.keys(organizedEndpoints.ai).length > 0) {
+          newConfig.aiEndpoints = { ...config.aiEndpoints, ...organizedEndpoints.ai };
+        }
+        
+        if (Object.keys(organizedEndpoints.marketing).length > 0) {
+          newConfig.marketingEndpoints = { ...config.marketingEndpoints, ...organizedEndpoints.marketing };
+        }
+        
+        if (Object.keys(organizedEndpoints.botFields).length > 0) {
+          newConfig.botFieldsEndpoints = { ...config.botFieldsEndpoints, ...organizedEndpoints.botFields };
+        }
+        
+        if (Object.keys(organizedEndpoints.knowledge).length > 0) {
+          newConfig.knowledgeEndpoints = { ...config.knowledgeEndpoints, ...organizedEndpoints.knowledge };
+        }
+        
+        if (Object.keys(organizedEndpoints.control).length > 0) {
+          newConfig.controlEndpoints = { ...config.controlEndpoints, ...organizedEndpoints.control };
+        }
+
+        // Atualizar a configuração completa
+        updateConfig(newConfig);
+        
+        console.log('🔄 Endpoints aplicados à configuração:', newConfig);
+        console.log('✅ Total de endpoints processados:', endpointsArray.length);
+      } else {
+        // Se a API retorna uma estrutura diferente, mapear conforme necessário
+        console.log('⚠️ Estrutura de resposta não reconhecida. Dados recebidos:', endpointsData);
+        console.log('ℹ️ Esperado: { endpoints: [{ id, category, name, url }] }');
+      }
+
+      return endpointsData;
+    } catch (error) {
+      console.error('❌ Error loading all endpoints:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value = {
     config,
     updateConfig,
@@ -634,6 +810,7 @@ export const AppProvider = ({ children }) => {
     updateMarketingEndpoint,
     updateBotFieldsEndpoint,
     updateKnowledgeEndpoint,
+    updateControlEndpoint,
     loading,
     setLoading,
     // Hotel selection
@@ -663,7 +840,10 @@ export const AppProvider = ({ children }) => {
     fetchMarketingMessages,
     updateMarketingMessage,
     deleteMarketingMessage,
-    setMarketingMessages
+    setMarketingMessages,
+    // Control Endpoints functions
+    saveAllEndpoints,
+    loadAllEndpoints
   };
 
   return (

@@ -4,7 +4,7 @@ import ImageUpload from '../components/ImageUpload';
 import toast from 'react-hot-toast';
 
 const Settings = () => {
-  const { config, updateConfig, updateEndpoint, updateAiEndpoint, updateMarketingEndpoint, updateBotFieldsEndpoint, updateKnowledgeEndpoint } = useApp();
+  const { config, updateConfig, updateEndpoint, updateAiEndpoint, updateMarketingEndpoint, updateBotFieldsEndpoint, updateKnowledgeEndpoint, updateControlEndpoint, saveAllEndpoints, loadAllEndpoints } = useApp();
   const [activeTab, setActiveTab] = useState('general');
   const [logoInput, setLogoInput] = useState(config.logo || '');
   const [companyNameInput, setCompanyNameInput] = useState(config.companyName || '');
@@ -31,13 +31,20 @@ const Settings = () => {
     getKnowledge: '',
     updateKnowledge: ''
   });
+  const [controlEndpoints, setControlEndpoints] = useState(config.controlEndpoints || {
+    saveEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/endpoints_create',
+    listEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/lista_endpoints',
+    getEndpoints: '',
+    updateEndpoints: ''
+  });
   const [uploadSettings, setUploadSettings] = useState(config.uploadConfig || {});
   const [expandedSections, setExpandedSections] = useState({
     hotels: false,
     aiIntegrations: false,
     marketingMessages: false,
     botFields: false,
-    knowledge: false
+    knowledge: false,
+    control: false
   });
 
   const tabs = [
@@ -49,7 +56,9 @@ const Settings = () => {
 
   // Sincronizar com as mudanças do contexto
   useEffect(() => {
-    setEndpoints(config.apiEndpoints);
+    console.log('🔄 Sincronizando estados locais com config atualizado:', config);
+    
+    setEndpoints(config.apiEndpoints || {});
     setAiEndpoints(config.aiEndpoints || {
       createIntegration: '',
       getIntegrations: '',
@@ -71,6 +80,21 @@ const Settings = () => {
     setKnowledgeEndpoints(config.knowledgeEndpoints || {
       getKnowledge: '',
       updateKnowledge: ''
+    });
+    setControlEndpoints(config.controlEndpoints || {
+      saveEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/endpoints_create',
+      listEndpoints: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/lista_endpoints',
+      getEndpoints: '',
+      updateEndpoints: ''
+    });
+    
+    console.log('✅ Estados locais atualizados:', {
+      endpoints: config.apiEndpoints,
+      aiEndpoints: config.aiEndpoints,
+      marketingEndpoints: config.marketingEndpoints,
+      botFieldsEndpoints: config.botFieldsEndpoints,
+      knowledgeEndpoints: config.knowledgeEndpoints,
+      controlEndpoints: config.controlEndpoints
     });
   }, [config]);
 
@@ -530,6 +554,71 @@ const Settings = () => {
     const descriptions = {
       getKnowledge: 'Endpoint para buscar conhecimento da IA de um hotel específico. Use :hotel_uuid onde será substituído pelo hotel_uuid (ex: /webhook/lista_cerebro_ia/:hotel_uuid)',
       updateKnowledge: 'Endpoint POST para atualizar conhecimento da IA. Envia {conteudo: texto, hotel_uuid: uuid} no body da requisição.'
+    };
+    return descriptions[type] || '';
+  };
+
+  // Control Endpoints Management Functions
+  const handleControlEndpointChange = (type, value) => {
+    setControlEndpoints(prev => ({ ...prev, [type]: value }));
+  };
+
+  const handleSaveControlEndpoint = (type) => {
+    const url = controlEndpoints[type].trim();
+    updateControlEndpoint(type, url);
+    console.log(`Endpoint de ${getControlEndpointLabel(type)} salvo com sucesso!`);
+  };
+
+  const handleSaveAllEndpoints = async () => {
+    try {
+      await saveAllEndpoints();
+      console.log('Todos os endpoints foram salvos com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar endpoints:', error.message);
+    }
+  };
+
+  const handleLoadAllEndpoints = async () => {
+    try {
+      const result = await loadAllEndpoints();
+      console.log('✅ Todos os endpoints foram carregados e aplicados com sucesso!');
+      console.log('🔄 Inputs serão atualizados automaticamente pelo useEffect');
+      
+      // Mostrar quantos endpoints foram processados
+      if (result && result.endpoints && Array.isArray(result.endpoints)) {
+        console.log(`📊 Total de ${result.endpoints.length} endpoints carregados da API`);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar endpoints:', error.message);
+    }
+  };
+
+  const getControlEndpointLabel = (type) => {
+    const labels = {
+      saveEndpoints: 'Salvar Todos os Endpoints',
+      listEndpoints: 'Listar Todos os Endpoints',
+      getEndpoints: 'Buscar Endpoints',
+      updateEndpoints: 'Atualizar Endpoints'
+    };
+    return labels[type] || type;
+  };
+
+  const getControlEndpointMethod = (type) => {
+    const methods = {
+      saveEndpoints: 'POST',
+      listEndpoints: 'GET',
+      getEndpoints: 'GET',
+      updateEndpoints: 'PUT'
+    };
+    return methods[type] || 'GET';
+  };
+
+  const getControlEndpointDescription = (type) => {
+    const descriptions = {
+      saveEndpoints: 'Endpoint principal para salvar todos os endpoints configurados no sistema. Envia todos os endpoints em um payload estruturado.',
+      listEndpoints: 'Endpoint para listar todos os endpoints salvos. Retorna todos os endpoints que podem ser aplicados automaticamente aos campos.',
+      getEndpoints: 'Endpoint para buscar endpoints salvos de um hotel específico. Use :hotel_uuid onde será substituído pelo hotel_uuid',
+      updateEndpoints: 'Endpoint para atualizar endpoints salvos. Use :hotel_uuid onde será substituído pelo hotel_uuid'
     };
     return descriptions[type] || '';
   };
@@ -1016,6 +1105,117 @@ const Settings = () => {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+
+              {/* Control Endpoints Section */}
+              <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSections(prev => ({ ...prev, control: !prev.control }))}
+                  className="w-full p-6 text-left hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-2 bg-orange-500/20 rounded-lg">
+                        <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <h3 className="text-white font-semibold text-lg">Endpoints de Controle</h3>
+                        <p className="text-sidebar-400 text-sm mt-1">Configure endpoints para gerenciar e salvar todos os outros endpoints</p>
+                      </div>
+                    </div>
+                    <svg
+                      className={`w-5 h-5 text-sidebar-400 transition-transform duration-200 ${
+                        expandedSections.control ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </button>
+
+                {expandedSections.control && (
+                  <div className="px-6 pb-6 space-y-6 border-t border-white/10">
+                    {/* Control Endpoints */}
+                    {Object.entries(controlEndpoints).map(([type, url]) => (
+                      <div key={type} className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-white font-medium">{getControlEndpointLabel(type)}</h4>
+                            <p className="text-sidebar-400 text-sm">{getControlEndpointDescription(type)}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            getControlEndpointMethod(type) === 'GET' ? 'bg-green-500/20 text-green-300' :
+                            getControlEndpointMethod(type) === 'POST' ? 'bg-blue-500/20 text-blue-300' :
+                            getControlEndpointMethod(type) === 'PUT' ? 'bg-yellow-500/20 text-yellow-300' :
+                            'bg-red-500/20 text-red-300'
+                          }`}>
+                            {getControlEndpointMethod(type)}
+                          </span>
+                        </div>
+
+                        <div className="flex space-x-2">
+                          <input
+                            type="url"
+                            value={url}
+                            onChange={(e) => handleControlEndpointChange(type, e.target.value)}
+                            className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            placeholder="https://api.exemplo.com/control/endpoint"
+                          />
+                          <button
+                            onClick={() => handleSaveControlEndpoint(type)}
+                            className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
+                          >
+                            Salvar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Save All Endpoints Button */}
+                    <div className="mt-8 pt-6 border-t border-white/10">
+                      <div className="bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/20 rounded-lg p-4">
+                        <div className="flex items-start space-x-3">
+                          <svg className="w-5 h-5 text-orange-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3 3-3M12 10v10" />
+                          </svg>
+                          <div className="flex-1">
+                            <h4 className="text-orange-300 font-medium">Salvar Todos os Endpoints</h4>
+                            <p className="text-orange-200 text-sm mt-1">
+                              Envia todos os endpoints configurados para a API de controle. Inclui endpoints de hotéis, IA, marketing, campos do bot, conhecimento e controle.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <button
+                            onClick={handleSaveAllEndpoints}
+                            className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3 3-3M12 10v10" />
+                            </svg>
+                            <span>Salvar Todos os Endpoints na API</span>
+                          </button>
+
+                          <button
+                            onClick={handleLoadAllEndpoints}
+                            className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            <span>Carregar e Aplicar Endpoints da API</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
