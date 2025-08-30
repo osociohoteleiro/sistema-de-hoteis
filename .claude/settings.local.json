@@ -20,7 +20,10 @@
       "Bash(git merge:*)",
       "Bash(npx kill-port:*)",
       "Bash(git remote add:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(mkdir:*)",
+      "Bash(curl:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []
