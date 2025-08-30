@@ -163,20 +163,38 @@ const Settings = () => {
     setEndpoints(prev => ({ ...prev, [type]: value }));
   };
 
-  const handleSaveEndpoint = (type) => {
+  const handleSaveEndpoint = async (type) => {
     const url = endpoints[type].trim();
     updateEndpoint(type, url);
-    toast.success(`Endpoint de ${getEndpointLabel(type)} salvo com sucesso!`);
+    
+    try {
+      // Salvar também na API para persistir no banco de dados
+      await saveAllEndpoints();
+      console.log('✅ Endpoint de Hotel salvo no localStorage e na API');
+      toast.success(`Endpoint de ${getEndpointLabel(type)} salvo com sucesso!`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar endpoint na API:', error);
+      toast.error('Endpoint salvo localmente, mas houve erro ao sincronizar com a API');
+    }
   };
 
   const handleAiEndpointChange = (type, value) => {
     setAiEndpoints(prev => ({ ...prev, [type]: value }));
   };
 
-  const handleSaveAiEndpoint = (type) => {
+  const handleSaveAiEndpoint = async (type) => {
     const url = aiEndpoints[type].trim();
     updateAiEndpoint(type, url);
-    toast.success(`Endpoint de ${getAiEndpointLabel(type)} salvo com sucesso!`);
+    
+    try {
+      // Salvar também na API para persistir no banco de dados
+      await saveAllEndpoints();
+      console.log('✅ Endpoint de IA salvo no localStorage e na API');
+      toast.success(`Endpoint de ${getAiEndpointLabel(type)} salvo com sucesso!`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar endpoint na API:', error);
+      toast.error('Endpoint salvo localmente, mas houve erro ao sincronizar com a API');
+    }
   };
 
   const toggleSection = (section) => {
@@ -415,15 +433,39 @@ const Settings = () => {
     }
   };
 
+  const handleSaveMarketingEndpoint = async (type) => {
+    const url = marketingEndpoints[type].trim();
+    updateMarketingEndpoint(type, url);
+    
+    try {
+      // Salvar também na API para persistir no banco de dados
+      await saveAllEndpoints();
+      console.log('✅ Endpoint de Marketing salvo no localStorage e na API');
+      toast.success(`Endpoint de ${getMarketingEndpointLabel(type)} salvo com sucesso!`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar endpoint na API:', error);
+      toast.error('Endpoint salvo localmente, mas houve erro ao sincronizar com a API');
+    }
+  };
+
   // Bot Fields Endpoint Management Functions
   const handleBotFieldsEndpointChange = (type, value) => {
     setBotFieldsEndpoints(prev => ({ ...prev, [type]: value }));
   };
 
-  const handleSaveBotFieldsEndpoint = (type) => {
+  const handleSaveBotFieldsEndpoint = async (type) => {
     const url = botFieldsEndpoints[type].trim();
     updateBotFieldsEndpoint(type, url);
-    toast.success(`Endpoint de ${getBotFieldsEndpointLabel(type)} salvo com sucesso!`);
+    
+    try {
+      // Salvar também na API para persistir no banco de dados
+      await saveAllEndpoints();
+      console.log('✅ Endpoint de Bot Fields salvo no localStorage e na API');
+      toast.success(`Endpoint de ${getBotFieldsEndpointLabel(type)} salvo com sucesso!`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar endpoint na API:', error);
+      toast.error('Endpoint salvo localmente, mas houve erro ao sincronizar com a API');
+    }
   };
 
   const handleTestBotFieldsEndpoint = async (type) => {
@@ -495,10 +537,19 @@ const Settings = () => {
     setKnowledgeEndpoints(prev => ({ ...prev, [type]: value }));
   };
 
-  const handleSaveKnowledgeEndpoint = (type) => {
+  const handleSaveKnowledgeEndpoint = async (type) => {
     const url = knowledgeEndpoints[type].trim();
     updateKnowledgeEndpoint(type, url);
-    toast.success(`Endpoint de ${getKnowledgeEndpointLabel(type)} salvo com sucesso!`);
+    
+    try {
+      // Salvar também na API para persistir no banco de dados
+      await saveAllEndpoints();
+      console.log('✅ Endpoint de Knowledge salvo no localStorage e na API');
+      toast.success(`Endpoint de ${getKnowledgeEndpointLabel(type)} salvo com sucesso!`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar endpoint na API:', error);
+      toast.error('Endpoint salvo localmente, mas houve erro ao sincronizar com a API');
+    }
   };
 
   const handleTestKnowledgeEndpoint = async (type) => {
@@ -603,10 +654,19 @@ const Settings = () => {
     setControlEndpoints(prev => ({ ...prev, [type]: value }));
   };
 
-  const handleSaveControlEndpoint = (type) => {
+  const handleSaveControlEndpoint = async (type) => {
     const url = controlEndpoints[type].trim();
     updateControlEndpoint(type, url);
-    console.log(`Endpoint de ${getControlEndpointLabel(type)} salvo com sucesso!`);
+    
+    try {
+      // Salvar também na API para persistir no banco de dados
+      await saveAllEndpoints();
+      console.log('✅ Endpoint de Control salvo no localStorage e na API');
+      toast.success(`Endpoint de ${getControlEndpointLabel(type)} salvo com sucesso!`);
+    } catch (error) {
+      console.error('❌ Erro ao salvar endpoint na API:', error);
+      toast.error('Endpoint salvo localmente, mas houve erro ao sincronizar com a API');
+    }
   };
 
   const handleSaveAllEndpoints = async () => {
@@ -980,7 +1040,7 @@ const Settings = () => {
                             Testar
                           </button>
                           <button
-                            onClick={() => updateMarketingEndpoint(type, marketingEndpoints[type])}
+                            onClick={() => handleSaveMarketingEndpoint(type)}
                             className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
                           >
                             Salvar
