@@ -29,7 +29,8 @@
       "Bash(git clean:*)",
       "WebSearch",
       "WebFetch(domain:doc.evolution-api.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm run migrate:*)"
     ],
     "deny": [],
     "ask": []

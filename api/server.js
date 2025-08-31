@@ -102,6 +102,9 @@ const setupRoutes = require('./routes/setup');
 const evolutionRoutes = require('./routes/evolution');
 const flowiseRoutes = require('./routes/flowise');
 const onenodeRoutes = require('./routes/onenode');
+const pmsMotorChannelRoutes = require('./routes/pms-motor-channel');
+const systemsCatalogRoutes = require('./routes/systems-catalog');
+// const migrateRoutes = require('./routes/migrate'); // Removido por segurança
 
 // Rotas da API
 app.use('/api/auth', authRoutes);
@@ -112,6 +115,9 @@ app.use('/api/setup', setupRoutes);
 app.use('/api/evolution', evolutionRoutes);
 app.use('/api/flowise', flowiseRoutes);
 app.use('/api/onenode', onenodeRoutes);
+app.use('/api/pms-motor-channel', pmsMotorChannelRoutes);
+app.use('/api/systems-catalog', systemsCatalogRoutes);
+// app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
 // Middleware de erro global
 app.use((err, req, res, next) => {

@@ -362,3 +362,24 @@ CREATE TABLE IF NOT EXISTS flowise_bots (
 INSERT IGNORE INTO evolution_instances (instance_name, api_key, hotel_uuid, host_url, active) 
 SELECT 'instancia-principal', '429683C4C977415CAAFCCE10F7D57E11', uuid, 'https://osh-ia-evolution-api.d32pnk.easypanel.host/', TRUE 
 FROM hotels WHERE name = 'Hotel Exemplo 1' LIMIT 1;
+
+-- ============================================
+-- CANAIS PMS, MOTOR E CHANNEL
+-- ============================================
+
+-- Tabela para gerenciar canais PMS, Motor e Channel
+CREATE TABLE IF NOT EXISTS pms_motor_channel (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    type ENUM('pms', 'motor', 'channel') NOT NULL,
+    type_connect ENUM('api', 'link') NOT NULL,
+    hotel_uuid VARCHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (hotel_uuid) REFERENCES hotels(hotel_uuid) ON DELETE CASCADE,
+    INDEX idx_hotel_uuid (hotel_uuid),
+    INDEX idx_type (type),
+    INDEX idx_type_connect (type_connect),
+    INDEX idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
