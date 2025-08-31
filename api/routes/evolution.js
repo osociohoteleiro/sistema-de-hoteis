@@ -97,6 +97,58 @@ router.get('/connect/:instanceName', async (req, res) => {
 });
 
 /**
+ * GET /api/evolution/qrcode/:instanceName
+ * Obter QR Code para conexão (interface)
+ */
+router.get('/qrcode/:instanceName', async (req, res) => {
+  try {
+    const { instanceName } = req.params;
+
+    console.log(`📱 Obtendo QR Code para: ${instanceName}`);
+
+    const result = await evolutionService.connectInstance(instanceName);
+
+    if (result.success && result.data) {
+      // A Evolution API retorna QR Code diretamente ou dentro de um campo qrcode
+      const qrcodeData = result.data.qrcode || result.data;
+      
+      if (qrcodeData.base64) {
+        // Retornar dados formatados para a interface
+        res.json({
+          success: true,
+          data: {
+            instanceName,
+            qrcode: {
+              base64: qrcodeData.base64,
+              code: qrcodeData.code,
+              pairingCode: qrcodeData.pairingCode
+            },
+            status: result.data.status || 'connecting'
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: 'QR Code não disponível'
+        });
+      }
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error || 'QR Code não disponível'
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na rota qrcode:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+/**
  * GET /api/evolution/status/:instanceName
  * Verificar status da conexão
  */
@@ -214,6 +266,40 @@ router.delete('/delete/:instanceName', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erro na rota delete:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+/**
+ * POST /api/evolution/logout/:instanceName
+ * Desconectar instância do WhatsApp
+ */
+router.post('/logout/:instanceName', async (req, res) => {
+  try {
+    const { instanceName } = req.params;
+
+    console.log(`🔌 Desconectando instância: ${instanceName}`);
+
+    const result = await evolutionService.logoutInstance(instanceName);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Instância desconectada com sucesso!',
+        data: result.data
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na rota logout:', error);
     res.status(500).json({
       success: false,
       error: 'Erro interno do servidor'

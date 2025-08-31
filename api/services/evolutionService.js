@@ -83,10 +83,13 @@ class EvolutionService {
 
       console.log('✅ Instância criada na Evolution:', response.data);
 
+      // Extrair a API key individual da instância criada
+      const instanceApiKey = response.data.hash || this.apiKey;
+      
       // 2. Salvar no banco de dados
       const dbData = {
         instance_name: instanceName,
-        api_key: this.apiKey,
+        api_key: instanceApiKey, // API key individual da instância
         hotel_uuid,
         host_url: this.baseURL,
         evolution_instance_id: response.data.instance?.instanceId || null,
@@ -100,7 +103,8 @@ class EvolutionService {
           alwaysOnline,
           readMessages,
           readStatus,
-          syncFullHistory
+          syncFullHistory,
+          qrcode_data: response.data.qrcode || null // Salvar dados do QR Code
         }),
         active: true
       };
@@ -283,6 +287,42 @@ class EvolutionService {
 
     } catch (error) {
       console.error('❌ Erro ao deletar instância:', error);
+      
+      return {
+        success: false,
+        error: {
+          message: error.message,
+          response: error.response?.data || null,
+          status: error.response?.status || null
+        }
+      };
+    }
+  }
+
+  /**
+   * Desconectar instância (logout)
+   */
+  async logoutInstance(instanceName) {
+    try {
+      console.log(`🔌 Desconectando instância: ${instanceName}`);
+
+      const response = await axios.delete(
+        `${this.baseURL}/instance/logout/${instanceName}`,
+        {
+          headers: {
+            'apikey': this.apiKey
+          },
+          timeout: 30000
+        }
+      );
+
+      return {
+        success: true,
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao desconectar instância:', error);
       
       return {
         success: false,
