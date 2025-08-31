@@ -128,6 +128,31 @@ class EvolutionService {
 
       console.log('✅ Instância salva no banco de dados');
 
+      // 3. Inserir na tabela Integracoes
+      try {
+        await db.query(
+          `INSERT INTO Integracoes (
+            integration_name,
+            hotel_uuid,
+            apikey,
+            instancia_name,
+            url_api
+          ) VALUES (?, ?, ?, ?, ?)`,
+          [
+            'Evolution',
+            dbData.hotel_uuid,
+            dbData.api_key,
+            dbData.instance_name,
+            dbData.host_url
+          ]
+        );
+
+        console.log('✅ Integração Evolution adicionada à tabela Integracoes');
+      } catch (integrationError) {
+        console.warn('⚠️ Aviso: Erro ao inserir na tabela Integracoes:', integrationError.message);
+        // Não interrompe o processo, apenas registra o aviso
+      }
+
       return {
         success: true,
         data: {
@@ -278,6 +303,18 @@ class EvolutionService {
         [instanceName]
       );
 
+      // 3. Remover da tabela Integracoes
+      try {
+        await db.query(
+          'DELETE FROM Integracoes WHERE integration_name = ? AND instancia_name = ?',
+          ['Evolution', instanceName]
+        );
+
+        console.log('✅ Integração Evolution removida da tabela Integracoes');
+      } catch (integrationError) {
+        console.warn('⚠️ Aviso: Erro ao remover da tabela Integracoes:', integrationError.message);
+      }
+
       console.log('✅ Instância deletada com sucesso');
 
       return {
@@ -330,6 +367,376 @@ class EvolutionService {
           message: error.message,
           response: error.response?.data || null,
           status: error.response?.status || null
+        }
+      };
+    }
+  }
+
+  /**
+   * Importar instâncias existentes da Evolution API para o banco de dados
+   */
+  async importExistingInstances() {
+    try {
+      console.log('📥 Importando instâncias existentes da Evolution API...');
+
+      // 1. Buscar todas as instâncias da Evolution API
+      const result = await this.fetchInstances();
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Erro ao buscar instâncias da Evolution API');
+      }
+
+      const evolutionInstances = result.data;
+      console.log(`📊 Encontradas ${evolutionInstances.length} instâncias na Evolution API`);
+
+      if (evolutionInstances.length === 0) {
+        return {
+          success: true,
+          message: 'Nenhuma instância encontrada na Evolution API',
+          data: { imported: 0, skipped: 0, errors: 0 }
+        };
+      }
+
+      // 2. Buscar instâncias já existentes no banco
+      const dbInstances = await db.query('SELECT instance_name, api_key FROM evolution_instances');
+      const existingInstances = new Set();
+      const existingApiKeys = new Set();
+      
+      dbInstances.forEach(instance => {
+        existingInstances.add(instance.instance_name);
+        existingApiKeys.add(instance.api_key);
+      });
+
+      let imported = 0;
+      let skipped = 0;
+      let errors = 0;
+
+      // 3. Para cada instância da Evolution, tentar importar
+      for (const instance of evolutionInstances) {
+        try {
+          const instanceName = instance.name || instance.instance?.instanceName || instance.instanceName;
+          const instanceId = instance.id || instance.instance?.instanceId || instance.instanceId;
+          const apiKey = instance.token || instance.instance?.hash || instance.hash || instance.apikey;
+
+          if (!instanceName) {
+            console.warn(`⚠️ Instância sem nome encontrada:`, instance);
+            errors++;
+            continue;
+          }
+
+          // Verificar se já existe no banco (por nome ou API key)
+          if (existingInstances.has(instanceName) || existingApiKeys.has(apiKey)) {
+            console.log(`⏭️ Instância '${instanceName}' já existe no banco, pulando...`);
+            skipped++;
+            continue;
+          }
+
+          // Como não temos hotel_uuid da API, vamos deixar NULL para serem relacionadas depois
+          const dbData = {
+            instance_name: instanceName,
+            api_key: apiKey || this.apiKey, // Usar API key da instância ou a global
+            hotel_uuid: null, // Será relacionado manualmente depois
+            host_url: this.baseURL,
+            evolution_instance_id: instanceId || null,
+            webhook_url: null,
+            settings: JSON.stringify({
+              integration: 'WHATSAPP-BAILEYS',
+              qrcode: true,
+              imported: true,
+              imported_at: new Date().toISOString()
+            }),
+            active: true
+          };
+
+          await db.query(
+            `INSERT INTO evolution_instances (
+              instance_name, api_key, hotel_uuid, host_url, 
+              evolution_instance_id, webhook_url, settings, active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              dbData.instance_name,
+              dbData.api_key,
+              dbData.hotel_uuid,
+              dbData.host_url,
+              dbData.evolution_instance_id,
+              dbData.webhook_url,
+              dbData.settings,
+              dbData.active
+            ]
+          );
+
+          console.log(`✅ Instância '${instanceName}' importada com sucesso`);
+          imported++;
+
+        } catch (instanceError) {
+          console.error(`❌ Erro ao importar instância:`, instanceError);
+          errors++;
+        }
+      }
+
+      const summary = {
+        success: true,
+        message: `Importação concluída: ${imported} importadas, ${skipped} existentes, ${errors} erros`,
+        data: {
+          total: evolutionInstances.length,
+          imported,
+          skipped,
+          errors,
+          summary: `${imported} instâncias foram importadas com sucesso. ${skipped} já existiam no banco de dados.`
+        }
+      };
+
+      console.log('✅ Importação concluída:', summary.data);
+      return summary;
+
+    } catch (error) {
+      console.error('❌ Erro ao importar instâncias:', error);
+      return {
+        success: false,
+        error: {
+          message: error.message,
+          details: 'Erro ao importar instâncias existentes da Evolution API'
+        }
+      };
+    }
+  }
+
+  /**
+   * Listar instâncias disponíveis para relacionamento
+   */
+  async getAvailableInstances() {
+    try {
+      console.log('📋 Buscando instâncias disponíveis...');
+      
+      // Buscar todas as instâncias do banco de dados
+      const instances = await db.query(`
+        SELECT 
+          id,
+          instance_name,
+          api_key,
+          hotel_uuid,
+          evolution_instance_id,
+          active,
+          settings,
+          created_at
+        FROM evolution_instances 
+        WHERE active = 1
+        ORDER BY instance_name
+      `);
+      
+      // Buscar informações dos hotéis relacionados
+      const hotelUuids = instances
+        .filter(instance => instance.hotel_uuid)
+        .map(instance => instance.hotel_uuid);
+      
+      let hotels = [];
+      if (hotelUuids.length > 0) {
+        const placeholders = hotelUuids.map(() => '?').join(',');
+        hotels = await db.query(`
+          SELECT hotel_uuid as uuid, hotel_nome as name FROM hotels WHERE hotel_uuid IN (${placeholders})
+        `, hotelUuids);
+      }
+      
+      // Criar mapa de hotéis
+      const hotelMap = new Map();
+      hotels.forEach(hotel => {
+        hotelMap.set(hotel.uuid, hotel.name);
+      });
+      
+      // Processar instâncias
+      const processedInstances = instances.map(instance => {
+        let settings = {};
+        try {
+          settings = JSON.parse(instance.settings || '{}');
+        } catch (e) {
+          settings = {};
+        }
+        
+        return {
+          id: instance.id,
+          instance_name: instance.instance_name,
+          api_key: instance.api_key,
+          hotel_uuid: instance.hotel_uuid,
+          hotel_name: instance.hotel_uuid ? hotelMap.get(instance.hotel_uuid) : null,
+          evolution_instance_id: instance.evolution_instance_id,
+          is_related: !!instance.hotel_uuid,
+          is_imported: !!settings.imported,
+          created_at: instance.created_at,
+          settings: settings
+        };
+      });
+      
+      console.log(`✅ Encontradas ${processedInstances.length} instâncias`);
+      return {
+        success: true,
+        total: processedInstances.length,
+        instances: processedInstances,
+        message: 'Instâncias listadas com sucesso'
+      };
+    } catch (error) {
+      console.error('❌ Erro ao buscar instâncias disponíveis:', error);
+      return {
+        success: false,
+        error: {
+          message: error.message
+        }
+      };
+    }
+  }
+
+  /**
+   * Relacionar uma instância a um hotel
+   */
+  async relateInstanceToHotel(instanceName, hotelUuid) {
+    try {
+      console.log(`🔗 Relacionando instância ${instanceName} ao hotel ${hotelUuid}...`);
+      
+      // Verificar se o hotel existe
+      const hotelRows = await db.query(`
+        SELECT id, hotel_nome as name FROM hotels WHERE hotel_uuid = ?
+      `, [hotelUuid]);
+      
+      if (hotelRows.length === 0) {
+        throw new Error('Hotel não encontrado');
+      }
+      
+      const hotel = hotelRows[0];
+      
+      // Verificar se a instância existe e não está já relacionada a outro hotel
+      const instanceRows = await db.query(`
+        SELECT id, instance_name, hotel_uuid FROM evolution_instances 
+        WHERE instance_name = ?
+      `, [instanceName]);
+      
+      if (instanceRows.length === 0) {
+        throw new Error(`Instância '${instanceName}' não encontrada`);
+      }
+      
+      const instance = instanceRows[0];
+      
+      if (instance.hotel_uuid && instance.hotel_uuid !== hotelUuid) {
+        throw new Error(`Instância '${instanceName}' já está relacionada a outro hotel`);
+      }
+      
+      if (instance.hotel_uuid === hotelUuid) {
+        throw new Error(`Instância '${instanceName}' já está relacionada a este hotel`);
+      }
+      
+      // Atualizar o relacionamento
+      await db.query(`
+        UPDATE evolution_instances SET
+          hotel_uuid = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE instance_name = ?
+      `, [hotelUuid, instanceName]);
+      
+      console.log(`✅ Instância ${instanceName} relacionada ao hotel ${hotel.name}`);
+      
+      // Criar/atualizar integração automaticamente
+      try {
+        const instanceData = await db.query(`
+          SELECT api_key FROM evolution_instances WHERE instance_name = ?
+        `, [instanceName]);
+        
+        if (instanceData.length > 0) {
+          await db.query(`
+            INSERT INTO Integracoes (
+              integration_name,
+              hotel_uuid,
+              apikey,
+              instancia_name,
+              url_api
+            ) VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              apikey = VALUES(apikey),
+              instancia_name = VALUES(instancia_name),
+              url_api = VALUES(url_api)
+          `, [
+            'Evolution',
+            hotelUuid,
+            instanceData[0].api_key,
+            instanceName,
+            this.baseURL
+          ]);
+          
+          console.log(`✅ Integração Evolution criada/atualizada para ${instanceName}`);
+        }
+      } catch (integrationError) {
+        console.warn('⚠️ Aviso: Erro ao criar integração:', integrationError.message);
+      }
+      
+      return {
+        success: true,
+        instance_name: instanceName,
+        hotel_uuid: hotelUuid,
+        hotel_name: hotel.name,
+        message: `Instância '${instanceName}' relacionada ao hotel '${hotel.name}' com sucesso`
+      };
+      
+    } catch (error) {
+      console.error(`❌ Erro ao relacionar instância ${instanceName}:`, error);
+      return {
+        success: false,
+        error: {
+          message: error.message
+        }
+      };
+    }
+  }
+
+  /**
+   * Desrelacionar uma instância de um hotel
+   */
+  async unrelateInstanceFromHotel(instanceName, hotelUuid) {
+    try {
+      console.log(`🔓 Desrelacionando instância ${instanceName} do hotel ${hotelUuid}...`);
+      
+      // Verificar se a instância está relacionada ao hotel especificado
+      const instanceRows = await db.query(`
+        SELECT id, instance_name, hotel_uuid FROM evolution_instances 
+        WHERE instance_name = ? AND hotel_uuid = ?
+      `, [instanceName, hotelUuid]);
+      
+      if (instanceRows.length === 0) {
+        throw new Error(`Instância '${instanceName}' não está relacionada a este hotel`);
+      }
+      
+      // Remover o relacionamento
+      await db.query(`
+        UPDATE evolution_instances SET
+          hotel_uuid = NULL,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE instance_name = ? AND hotel_uuid = ?
+      `, [instanceName, hotelUuid]);
+      
+      console.log(`✅ Instância ${instanceName} desrelacionada do hotel`);
+      
+      // Remover integração
+      try {
+        await db.query(`
+          DELETE FROM Integracoes 
+          WHERE integration_name = 'Evolution' 
+          AND hotel_uuid = ? 
+          AND instancia_name = ?
+        `, [hotelUuid, instanceName]);
+        
+        console.log(`✅ Integração Evolution removida para ${instanceName}`);
+      } catch (integrationError) {
+        console.warn('⚠️ Aviso: Erro ao remover integração:', integrationError.message);
+      }
+      
+      return {
+        success: true,
+        instance_name: instanceName,
+        hotel_uuid: hotelUuid,
+        message: `Instância '${instanceName}' desrelacionada com sucesso`
+      };
+      
+    } catch (error) {
+      console.error(`❌ Erro ao desrelacionar instância ${instanceName}:`, error);
+      return {
+        success: false,
+        error: {
+          message: error.message
         }
       };
     }

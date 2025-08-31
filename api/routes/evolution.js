@@ -308,6 +308,146 @@ router.post('/logout/:instanceName', async (req, res) => {
 });
 
 /**
+ * POST /api/evolution/import
+ * Importar instâncias existentes da Evolution API para o banco de dados
+ */
+router.post('/import', async (req, res) => {
+  try {
+    console.log('📥 Importando instâncias da Evolution API...');
+
+    const result = await evolutionService.importExistingInstances();
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Instâncias importadas com sucesso!',
+        data: result.data
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na rota import:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+/**
+ * GET /api/evolution/instances/available
+ * Listar instâncias disponíveis para relacionamento
+ */
+router.get('/instances/available', async (req, res) => {
+  try {
+    const result = await evolutionService.getAvailableInstances();
+
+    if (result.success) {
+      res.json({
+        success: true,
+        data: result.instances || result.data
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na rota instances/available:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+/**
+ * POST /api/evolution/instances/relate
+ * Relacionar uma instância a um hotel
+ */
+router.post('/instances/relate', async (req, res) => {
+  try {
+    const { instance_name, hotel_uuid } = req.body;
+
+    if (!instance_name || !hotel_uuid) {
+      return res.status(400).json({
+        success: false,
+        error: 'instance_name e hotel_uuid são obrigatórios'
+      });
+    }
+
+    const result = await evolutionService.relateInstanceToHotel(instance_name, hotel_uuid);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Instância relacionada com sucesso!',
+        data: result.data
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na rota instances/relate:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+/**
+ * DELETE /api/evolution/instances/unrelate
+ * Desrelacionar uma instância de um hotel
+ */
+router.delete('/instances/unrelate', async (req, res) => {
+  try {
+    const { instance_name, hotel_uuid } = req.body;
+
+    if (!instance_name || !hotel_uuid) {
+      return res.status(400).json({
+        success: false,
+        error: 'instance_name e hotel_uuid são obrigatórios'
+      });
+    }
+
+    const result = await evolutionService.unrelateInstanceFromHotel(instance_name, hotel_uuid);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Instância desrelacionada com sucesso!',
+        data: result.data
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na rota instances/unrelate:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+
+/**
  * POST /api/evolution/test
  * Testar conexão com Evolution API
  */

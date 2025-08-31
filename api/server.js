@@ -100,6 +100,7 @@ const configRoutes = require('./routes/config');
 const qdrantRoutes = require('./routes/qdrant');
 const setupRoutes = require('./routes/setup');
 const evolutionRoutes = require('./routes/evolution');
+const flowiseRoutes = require('./routes/flowise');
 
 // Rotas da API
 app.use('/api/auth', authRoutes);
@@ -108,6 +109,7 @@ app.use('/api/config', configRoutes);
 app.use('/api/qdrant', qdrantRoutes);
 app.use('/api/setup', setupRoutes);
 app.use('/api/evolution', evolutionRoutes);
+app.use('/api/flowise', flowiseRoutes);
 
 // Middleware de erro global
 app.use((err, req, res, next) => {

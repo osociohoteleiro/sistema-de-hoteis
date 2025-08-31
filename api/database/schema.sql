@@ -332,6 +332,32 @@ INSERT IGNORE INTO hotels (uuid, name, checkin_time, checkout_time, cover_image,
 (UUID(), 'Hotel Exemplo 2', '15:00:00', '11:00:00', 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400&h=300&fit=crop&crop=center', 'Segundo hotel de exemplo', 'ACTIVE'),
 (UUID(), 'Hotel Teste S3', '16:00:00', '10:00:00', NULL, 'Hotel para testes de upload S3', 'ACTIVE');
 
+-- Tabela para bots do Flowise
+CREATE TABLE IF NOT EXISTS flowise_bots (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bot_name VARCHAR(255) NOT NULL,
+    bot_description TEXT,
+    bot_type VARCHAR(100) NOT NULL,
+    prediction_url VARCHAR(500) NOT NULL,
+    upsert_url VARCHAR(500) NOT NULL,
+    bot_id VARCHAR(255) NOT NULL,
+    hotel_uuid VARCHAR(36) NOT NULL,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (hotel_uuid) REFERENCES hotels(hotel_uuid) ON DELETE CASCADE,
+    UNIQUE KEY unique_hotel_bot (hotel_uuid, bot_id),
+    INDEX idx_hotel_uuid (hotel_uuid),
+    INDEX idx_bot_id (bot_id),
+    INDEX idx_bot_type (bot_type),
+    INDEX idx_active (active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- DADOS INICIAIS
+-- ============================================
+
 -- Inserir instância padrão da Evolution API para Hotel Exemplo 1
 INSERT IGNORE INTO evolution_instances (instance_name, api_key, hotel_uuid, host_url, active) 
 SELECT 'instancia-principal', '429683C4C977415CAAFCCE10F7D57E11', uuid, 'https://osh-ia-evolution-api.d32pnk.easypanel.host/', TRUE 

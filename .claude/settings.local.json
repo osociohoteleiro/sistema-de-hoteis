@@ -28,7 +28,8 @@
       "Bash(git rev-parse:*)",
       "Bash(git clean:*)",
       "WebSearch",
-      "WebFetch(domain:doc.evolution-api.com)"
+      "WebFetch(domain:doc.evolution-api.com)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
