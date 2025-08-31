@@ -23,7 +23,10 @@
       "Bash(git pull:*)",
       "Bash(mkdir:*)",
       "Bash(curl:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git clean:*)"
     ],
     "deny": [],
     "ask": []
