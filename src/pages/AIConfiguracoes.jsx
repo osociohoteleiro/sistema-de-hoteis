@@ -113,6 +113,110 @@ const AIConfiguracoes = () => {
         </div>
       </div>
 
+      {/* Integration Types Section */}
+      {selectedHotelUuid && (
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+          <div className="mb-6">
+            <h3 className="text-xl font-semibold text-white">Tipos de integrações</h3>
+            <p className="text-sidebar-300 text-sm mt-1">
+              Conheça os tipos de integrações disponíveis para seu hotel
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            {/* Artax */}
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10 hover:bg-white/10 transition-colors">
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Artax</h4>
+                  <p className="text-sidebar-400 text-xs mt-1">Sistema de gestão hoteleira</p>
+                </div>
+                <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
+                  Disponível
+                </span>
+              </div>
+            </div>
+
+            {/* Evolution */}
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10 hover:bg-white/10 transition-colors">
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Evolution</h4>
+                  <p className="text-sidebar-400 text-xs mt-1">API de WhatsApp</p>
+                </div>
+                <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
+                  Disponível
+                </span>
+              </div>
+            </div>
+
+            {/* Qdrant */}
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10 hover:bg-white/10 transition-colors">
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Qdrant</h4>
+                  <p className="text-sidebar-400 text-xs mt-1">Base de dados vetorial</p>
+                </div>
+                <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
+                  Disponível
+                </span>
+              </div>
+            </div>
+
+            {/* Flowise */}
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10 hover:bg-white/10 transition-colors">
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Flowise</h4>
+                  <p className="text-sidebar-400 text-xs mt-1">Fluxos de IA visuais</p>
+                </div>
+                <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
+                  Disponível
+                </span>
+              </div>
+            </div>
+
+            {/* Onenode */}
+            <div className="bg-white/5 rounded-lg p-4 border border-white/10 hover:bg-white/10 transition-colors">
+              <div className="flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 bg-cyan-500/20 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-white text-sm">Onenode</h4>
+                  <p className="text-sidebar-400 text-xs mt-1">Automação de processos</p>
+                </div>
+                <span className="px-2 py-1 rounded-full text-xs bg-green-500/20 text-green-300">
+                  Disponível
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Integration and Bot Fields Management */}
       {selectedHotelUuid && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

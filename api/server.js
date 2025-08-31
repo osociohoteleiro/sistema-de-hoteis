@@ -97,11 +97,17 @@ app.get('/api/db-test', async (req, res) => {
 const authRoutes = require('./routes/auth');
 const hotelRoutes = require('./routes/hotels');
 const configRoutes = require('./routes/config');
+const qdrantRoutes = require('./routes/qdrant');
+const setupRoutes = require('./routes/setup');
+const evolutionRoutes = require('./routes/evolution');
 
 // Rotas da API
 app.use('/api/auth', authRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/qdrant', qdrantRoutes);
+app.use('/api/setup', setupRoutes);
+app.use('/api/evolution', evolutionRoutes);
 
 // Middleware de erro global
 app.use((err, req, res, next) => {

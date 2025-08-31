@@ -141,6 +141,48 @@ CREATE TABLE IF NOT EXISTS api_endpoints (
 -- SISTEMA DE IA
 -- ============================================
 
+-- Tabela para instâncias da Evolution API
+CREATE TABLE IF NOT EXISTS evolution_instances (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    instance_name VARCHAR(255) NOT NULL,
+    api_key TEXT NOT NULL,
+    hotel_uuid VARCHAR(36) NOT NULL,
+    host_url VARCHAR(500) DEFAULT 'https://osh-ia-evolution-api.d32pnk.easypanel.host/',
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (hotel_uuid) REFERENCES hotels(uuid) ON DELETE CASCADE,
+    UNIQUE KEY unique_hotel_instance (hotel_uuid, instance_name),
+    INDEX idx_hotel_uuid (hotel_uuid),
+    INDEX idx_instance_name (instance_name),
+    INDEX idx_active (active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tabela para gerenciar Collections do Qdrant
+CREATE TABLE IF NOT EXISTS vector_collections (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    collection_name VARCHAR(255) NOT NULL,
+    hotel_id INT NULL, -- NULL = collection global
+    hotel_uuid VARCHAR(36) NULL, -- UUID do hotel para facilitar relacionamento
+    description TEXT,
+    vector_size INT DEFAULT 1536, -- Tamanho do vetor (OpenAI embeddings = 1536)
+    distance_metric ENUM('Cosine', 'Euclidean', 'Dot') DEFAULT 'Cosine',
+    qdrant_status ENUM('ACTIVE', 'INACTIVE', 'ERROR', 'SYNCING') DEFAULT 'INACTIVE',
+    total_vectors INT DEFAULT 0,
+    last_sync TIMESTAMP NULL,
+    config JSON, -- Configurações específicas da collection
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_collection_name (collection_name),
+    INDEX idx_hotel_id (hotel_id),
+    INDEX idx_hotel_uuid (hotel_uuid),
+    INDEX idx_status (qdrant_status),
+    INDEX idx_collection_name (collection_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Base de conhecimento da IA
 CREATE TABLE IF NOT EXISTS ai_knowledge (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -289,3 +331,8 @@ INSERT IGNORE INTO hotels (uuid, name, checkin_time, checkout_time, cover_image,
 (UUID(), 'Hotel Exemplo 1', '14:00:00', '12:00:00', 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=300&fit=crop&crop=center', 'Hotel de exemplo para desenvolvimento', 'ACTIVE'),
 (UUID(), 'Hotel Exemplo 2', '15:00:00', '11:00:00', 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400&h=300&fit=crop&crop=center', 'Segundo hotel de exemplo', 'ACTIVE'),
 (UUID(), 'Hotel Teste S3', '16:00:00', '10:00:00', NULL, 'Hotel para testes de upload S3', 'ACTIVE');
+
+-- Inserir instância padrão da Evolution API para Hotel Exemplo 1
+INSERT IGNORE INTO evolution_instances (instance_name, api_key, hotel_uuid, host_url, active) 
+SELECT 'instancia-principal', '429683C4C977415CAAFCCE10F7D57E11', uuid, 'https://osh-ia-evolution-api.d32pnk.easypanel.host/', TRUE 
+FROM hotels WHERE name = 'Hotel Exemplo 1' LIMIT 1;

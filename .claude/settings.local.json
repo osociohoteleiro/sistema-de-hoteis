@@ -26,7 +26,9 @@
       "Bash(git stash:*)",
       "Bash(git ls-tree:*)",
       "Bash(git rev-parse:*)",
-      "Bash(git clean:*)"
+      "Bash(git clean:*)",
+      "WebSearch",
+      "WebFetch(domain:doc.evolution-api.com)"
     ],
     "deny": [],
     "ask": []
