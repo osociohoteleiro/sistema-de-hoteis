@@ -248,6 +248,45 @@ class Hotel {
     return result;
   }
 
+  // Workspace methods
+  async getWorkspaces(filters = {}) {
+    const Workspace = require('./Workspace');
+    return await Workspace.findByHotel(this.id, filters);
+  }
+
+  async createWorkspace(name, description = null, settings = {}) {
+    const Workspace = require('./Workspace');
+    const workspace = new Workspace({
+      hotel_id: this.id,
+      hotel_uuid: this.uuid,
+      name,
+      description,
+      settings,
+      active: true
+    });
+    await workspace.save();
+    return workspace;
+  }
+
+  async getDefaultWorkspace() {
+    const Workspace = require('./Workspace');
+    const workspaces = await Workspace.findByHotel(this.id, { active: true });
+    return workspaces.find(w => w.getSetting('isDefault', false)) || workspaces[0] || null;
+  }
+
+  async ensureDefaultWorkspace() {
+    const defaultWorkspace = await this.getDefaultWorkspace();
+    if (!defaultWorkspace) {
+      return await Workspace.createDefaultForHotel(this.id, this.uuid, this.name);
+    }
+    return defaultWorkspace;
+  }
+
+  async countWorkspaces() {
+    const Workspace = require('./Workspace');
+    return await Workspace.countByHotel(this.id);
+  }
+
   // Utility methods
   parseConfigValue(value, type) {
     switch (type) {

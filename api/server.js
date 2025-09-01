@@ -20,9 +20,16 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS
+// CORS - Permitir todas as portas locais para desenvolvimento
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
+  origin: function (origin, callback) {
+    // Permitir requisições sem origin (como Postman) e qualquer localhost
+    if (!origin || origin.startsWith('http://localhost:')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Não permitido pelo CORS'));
+    }
+  },
   credentials: true
 }));
 
@@ -105,6 +112,10 @@ const onenodeRoutes = require('./routes/onenode');
 const pmsMotorChannelRoutes = require('./routes/pms-motor-channel');
 const systemsCatalogRoutes = require('./routes/systems-catalog');
 const botFieldsRoutes = require('./routes/botFields');
+const workspacesRoutes = require('./routes/workspaces');
+const botsRoutes = require('./routes/bots');
+const foldersRoutes = require('./routes/folders');
+const flowsRoutes = require('./routes/flows');
 // const migrateRoutes = require('./routes/migrate'); // Removido por segurança
 
 // Rotas da API
@@ -119,6 +130,10 @@ app.use('/api/onenode', onenodeRoutes);
 app.use('/api/pms-motor-channel', pmsMotorChannelRoutes);
 app.use('/api/systems-catalog', systemsCatalogRoutes);
 app.use('/api/bot-fields', botFieldsRoutes);
+app.use('/api/workspaces', workspacesRoutes);
+app.use('/api/bots', botsRoutes);
+app.use('/api/folders', foldersRoutes);
+app.use('/api/flows', flowsRoutes);
 // app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
 // Middleware de erro global
