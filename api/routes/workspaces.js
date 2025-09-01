@@ -194,7 +194,7 @@ router.post('/', async (req, res) => {
     // Criar workspace
     const workspace = new Workspace({
       hotel_id: hotel.id,
-      hotel_uuid: hotel.uuid,
+      hotel_uuid: hotel.hotel_uuid,
       name: name.trim(),
       description: description?.trim() || null,
       settings: settings || {},

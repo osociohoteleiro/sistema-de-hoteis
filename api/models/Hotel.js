@@ -3,7 +3,7 @@ const db = require('../config/database');
 class Hotel {
   constructor(data = {}) {
     this.id = data.id;
-    this.uuid = data.uuid;
+    this.uuid = data.hotel_uuid;
     this.name = data.name;
     this.checkin_time = data.checkin_time || '14:00:00';
     this.checkout_time = data.checkout_time || '12:00:00';
@@ -113,7 +113,7 @@ class Hotel {
       
       // Get the generated UUID
       const newHotel = await Hotel.findById(this.id);
-      this.uuid = newHotel.uuid;
+      this.uuid = newHotel.hotel_uuid;
       
       return result;
     }

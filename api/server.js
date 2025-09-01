@@ -116,6 +116,9 @@ const workspacesRoutes = require('./routes/workspaces');
 const botsRoutes = require('./routes/bots');
 const foldersRoutes = require('./routes/folders');
 const flowsRoutes = require('./routes/flows');
+const reportsRoutes = require('./routes/reports');
+const webhooksRoutes = require('./routes/webhooks');
+const metaRoutes = require('./routes/meta');
 // const migrateRoutes = require('./routes/migrate'); // Removido por segurança
 
 // Rotas da API
@@ -134,6 +137,9 @@ app.use('/api/workspaces', workspacesRoutes);
 app.use('/api/bots', botsRoutes);
 app.use('/api/folders', foldersRoutes);
 app.use('/api/flows', flowsRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/webhooks', webhooksRoutes);
+app.use('/api/meta', metaRoutes);
 // app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
 // Middleware de erro global

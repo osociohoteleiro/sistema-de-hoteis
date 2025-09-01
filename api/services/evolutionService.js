@@ -564,7 +564,7 @@ class EvolutionService {
       // Criar mapa de hotéis
       const hotelMap = new Map();
       hotels.forEach(hotel => {
-        hotelMap.set(hotel.uuid, hotel.name);
+        hotelMap.set(hotel.hotel_uuid, hotel.name);
       });
       
       // Processar instâncias

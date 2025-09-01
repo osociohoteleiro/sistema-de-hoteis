@@ -11,6 +11,27 @@ const authenticateToken = async (req, res, next) => {
     });
   }
 
+  // Em desenvolvimento, aceitar tokens fake do sistema de fallback
+  if (process.env.NODE_ENV === 'development' && token.startsWith('fake_token_')) {
+    console.log('🔧 [DEV] Usando token fake para desenvolvimento');
+    
+    // Extrair user_id do token fake (formato: fake_token_{id}_{timestamp})
+    const parts = token.split('_');
+    const userId = parseInt(parts[2]);
+    
+    // Criar usuário mockado baseado no ID
+    const mockUser = {
+      id: userId,
+      name: userId === 1 ? 'Super Admin (Dev)' : userId === 2 ? 'Admin (Dev)' : 'Hotel User (Dev)',
+      email: userId === 1 ? 'superadmin@hotel.com' : userId === 2 ? 'admin@hotel.com' : 'hotel@hotel.com',
+      user_type: userId === 1 ? 'SUPER_ADMIN' : userId === 2 ? 'ADMIN' : 'HOTEL',
+      active: true
+    };
+    
+    req.user = mockUser;
+    return next();
+  }
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     

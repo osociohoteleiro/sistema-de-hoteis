@@ -23,7 +23,7 @@ const updateHotelSchema = Joi.object({
 // GET /api/hotels - Listar hotéis
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { page = 1, limit = 10, search } = req.query;
+    const { page = 1, limit = 20, search } = req.query;
     const offset = (page - 1) * limit;
 
     let query = 'SELECT * FROM hotels WHERE 1=1';
@@ -145,15 +145,21 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // POST /api/hotels - Criar novo hotel
 router.post('/', authenticateToken, requireRole(['SUPER_ADMIN', 'ADMIN']), async (req, res) => {
   try {
+    console.log('🏨 [POST /hotels] Dados recebidos:', req.body);
+    console.log('🖼️ [POST /hotels] hotel_capa recebida:', req.body.hotel_capa);
+    
     const { error, value } = hotelSchema.validate(req.body);
     if (error) {
+      console.log('❌ [POST /hotels] Erro de validação:', error.details[0].message);
       return res.status(400).json({
         error: 'Dados inválidos',
         details: error.details[0].message
       });
     }
 
+    console.log('✅ [POST /hotels] Dados validados:', value);
     const { hotel_nome, hotel_capa, hora_checkin, hora_checkout } = value;
+    console.log('🖼️ [POST /hotels] URL da imagem após validação:', hotel_capa);
 
     // Verificar se já existe hotel com o mesmo nome
     const existingHotel = await db.query(
