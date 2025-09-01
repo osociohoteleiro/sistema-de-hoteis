@@ -104,6 +104,7 @@ const flowiseRoutes = require('./routes/flowise');
 const onenodeRoutes = require('./routes/onenode');
 const pmsMotorChannelRoutes = require('./routes/pms-motor-channel');
 const systemsCatalogRoutes = require('./routes/systems-catalog');
+const botFieldsRoutes = require('./routes/botFields');
 // const migrateRoutes = require('./routes/migrate'); // Removido por segurança
 
 // Rotas da API
@@ -117,6 +118,7 @@ app.use('/api/flowise', flowiseRoutes);
 app.use('/api/onenode', onenodeRoutes);
 app.use('/api/pms-motor-channel', pmsMotorChannelRoutes);
 app.use('/api/systems-catalog', systemsCatalogRoutes);
+app.use('/api/bot-fields', botFieldsRoutes);
 // app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
 // Middleware de erro global

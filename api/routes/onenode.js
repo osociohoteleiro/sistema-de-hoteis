@@ -238,6 +238,33 @@ router.post('/workspaces', async (req, res) => {
             // Não interrompe o processo, apenas registra o aviso
         }
         
+        // Sincronizar campos personalizados do OneNode automaticamente
+        try {
+            console.log('🔄 Sincronizando campos personalizados do OneNode...');
+            
+            // Chamar endpoint interno de sincronização
+            const syncResponse = await fetch('http://localhost:3001/api/bot-fields/sync-from-onenode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    hotel_uuid: hotel_uuid,
+                    workspace_id: result.insertId
+                })
+            });
+            
+            if (syncResponse.ok) {
+                const syncResult = await syncResponse.json();
+                console.log('✅ Campos do OneNode sincronizados automaticamente:', syncResult.inserted_count, 'campos');
+            } else {
+                console.warn('⚠️ Aviso: Erro ao sincronizar campos do OneNode automaticamente');
+            }
+        } catch (syncError) {
+            console.warn('⚠️ Aviso: Erro ao sincronizar campos do OneNode automaticamente:', syncError.message);
+            // Não interrompe o processo, apenas registra o aviso
+        }
+        
         res.status(201).json({
             success: true,
             data: newWorkspace[0],

@@ -383,3 +383,29 @@ CREATE TABLE IF NOT EXISTS pms_motor_channel (
     INDEX idx_type_connect (type_connect),
     INDEX idx_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Campos personalizados do OneNode por hotel
+CREATE TABLE IF NOT EXISTS onenode_bot_fields (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    hotel_uuid VARCHAR(36) NOT NULL,
+    workspace_id INT,
+    field_key VARCHAR(100) NOT NULL,
+    field_value TEXT,
+    field_type ENUM('STRING', 'NUMBER', 'BOOLEAN', 'JSON', 'DATE', 'TIME', 'OBJECT') DEFAULT 'STRING',
+    description TEXT,
+    category VARCHAR(100),
+    is_required BOOLEAN DEFAULT FALSE,
+    is_custom BOOLEAN DEFAULT TRUE,
+    active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (hotel_uuid) REFERENCES hotels(hotel_uuid) ON DELETE CASCADE,
+    FOREIGN KEY (workspace_id) REFERENCES onenode_workspaces(id) ON DELETE SET NULL,
+    UNIQUE KEY unique_hotel_field (hotel_uuid, field_key),
+    INDEX idx_hotel_uuid (hotel_uuid),
+    INDEX idx_workspace_id (workspace_id),
+    INDEX idx_field_key (field_key),
+    INDEX idx_category (category),
+    INDEX idx_active (active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
