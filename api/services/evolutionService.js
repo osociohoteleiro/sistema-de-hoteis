@@ -128,28 +128,53 @@ class EvolutionService {
 
       console.log('✅ Instância salva no banco de dados');
 
-      // 3. Inserir na tabela Integracoes
+      // 3. Inserir/atualizar na tabela Integracoes
       try {
-        await db.query(
-          `INSERT INTO Integracoes (
-            integration_name,
-            hotel_uuid,
-            apikey,
-            instancia_name,
-            url_api
-          ) VALUES (?, ?, ?, ?, ?)`,
-          [
-            'Evolution',
-            dbData.hotel_uuid,
+        // Verificar se já existe uma integração Evolution para este hotel
+        const existingIntegrations = await db.query(`
+          SELECT id, instancia_name FROM Integracoes 
+          WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+        `, [dbData.hotel_uuid]);
+        
+        if (existingIntegrations.length > 0) {
+          // Atualizar integração existente
+          await db.query(`
+            UPDATE Integracoes SET
+              apikey = ?,
+              instancia_name = ?,
+              url_api = ?
+            WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+          `, [
             dbData.api_key,
             dbData.instance_name,
-            dbData.host_url
-          ]
-        );
+            dbData.host_url,
+            dbData.hotel_uuid
+          ]);
+          
+          console.log(`✅ Integração Evolution atualizada para ${dbData.instance_name} (substituindo ${existingIntegrations[0].instancia_name})`);
+        } else {
+          // Criar nova integração
+          await db.query(
+            `INSERT INTO Integracoes (
+              integration_name,
+              hotel_uuid,
+              apikey,
+              instancia_name,
+              url_api
+            ) VALUES (?, ?, ?, ?, ?)`,
+            [
+              'Evolution',
+              dbData.hotel_uuid,
+              dbData.api_key,
+              dbData.instance_name,
+              dbData.host_url
+            ]
+          );
 
-        console.log('✅ Integração Evolution adicionada à tabela Integracoes');
+          console.log('✅ Nova integração Evolution criada na tabela Integracoes');
+        }
       } catch (integrationError) {
-        console.warn('⚠️ Aviso: Erro ao inserir na tabela Integracoes:', integrationError.message);
+        console.warn('⚠️ Aviso: Erro ao processar integração na tabela Integracoes:', integrationError.message);
         // Não interrompe o processo, apenas registra o aviso
       }
 
@@ -601,7 +626,7 @@ class EvolutionService {
       
       const hotel = hotelRows[0];
       
-      // Verificar se a instância existe e não está já relacionada a outro hotel
+      // Verificar se a instância existe
       const instanceRows = await db.query(`
         SELECT id, instance_name, hotel_uuid FROM evolution_instances 
         WHERE instance_name = ?
@@ -613,12 +638,24 @@ class EvolutionService {
       
       const instance = instanceRows[0];
       
+      // Verificar se a instância já está relacionada a outro hotel
       if (instance.hotel_uuid && instance.hotel_uuid !== hotelUuid) {
         throw new Error(`Instância '${instanceName}' já está relacionada a outro hotel`);
       }
       
+      // Verificar se a instância já está relacionada a este hotel
       if (instance.hotel_uuid === hotelUuid) {
         throw new Error(`Instância '${instanceName}' já está relacionada a este hotel`);
+      }
+      
+      // NOVA VALIDAÇÃO: Verificar se o hotel já possui uma instância relacionada
+      const existingHotelInstances = await db.query(`
+        SELECT instance_name FROM evolution_instances 
+        WHERE hotel_uuid = ? AND instance_name != ?
+      `, [hotelUuid, instanceName]);
+      
+      if (existingHotelInstances.length > 0) {
+        throw new Error(`Este hotel já possui uma instância Evolution relacionada: ${existingHotelInstances[0].instance_name}. Um hotel só pode ter uma instância por vez. Desrelacione a instância atual primeiro.`);
       }
       
       // Atualizar o relacionamento
@@ -638,27 +675,48 @@ class EvolutionService {
         `, [instanceName]);
         
         if (instanceData.length > 0) {
-          await db.query(`
-            INSERT INTO Integracoes (
-              integration_name,
-              hotel_uuid,
-              apikey,
-              instancia_name,
-              url_api
-            ) VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-              apikey = VALUES(apikey),
-              instancia_name = VALUES(instancia_name),
-              url_api = VALUES(url_api)
-          `, [
-            'Evolution',
-            hotelUuid,
-            instanceData[0].api_key,
-            instanceName,
-            this.baseURL
-          ]);
+          // Verificar se já existe uma integração Evolution para este hotel
+          const existingIntegrations = await db.query(`
+            SELECT id, instancia_name FROM Integracoes 
+            WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+          `, [hotelUuid]);
           
-          console.log(`✅ Integração Evolution criada/atualizada para ${instanceName}`);
+          if (existingIntegrations.length > 0) {
+            // Atualizar integração existente
+            await db.query(`
+              UPDATE Integracoes SET
+                apikey = ?,
+                instancia_name = ?,
+                url_api = ?
+              WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+            `, [
+              instanceData[0].api_key,
+              instanceName,
+              this.baseURL,
+              hotelUuid
+            ]);
+            
+            console.log(`✅ Integração Evolution atualizada para ${instanceName} (substituindo ${existingIntegrations[0].instancia_name})`);
+          } else {
+            // Criar nova integração
+            await db.query(`
+              INSERT INTO Integracoes (
+                integration_name,
+                hotel_uuid,
+                apikey,
+                instancia_name,
+                url_api
+              ) VALUES (?, ?, ?, ?, ?)
+            `, [
+              'Evolution',
+              hotelUuid,
+              instanceData[0].api_key,
+              instanceName,
+              this.baseURL
+            ]);
+            
+            console.log(`✅ Nova integração Evolution criada para ${instanceName}`);
+          }
         }
       } catch (integrationError) {
         console.warn('⚠️ Aviso: Erro ao criar integração:', integrationError.message);

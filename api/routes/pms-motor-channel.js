@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const crypto = require('crypto');
 const { getSystemConfig, validateCredentials, sanitizeCredentials } = require('../config/systems');
+const pmsService = require('../services/pmsService');
 
 // Função auxiliar para criptografar credenciais
 function encryptCredentials(credentials) {
@@ -91,6 +92,7 @@ router.get('/:hotel_uuid', async (req, res) => {
         const query = `
             SELECT 
                 id,
+                system_id,
                 name,
                 type,
                 type_connect,
@@ -113,13 +115,45 @@ router.get('/:hotel_uuid', async (req, res) => {
             if (record.credentials) {
                 try {
                     const decrypted = decryptCredentials(JSON.parse(record.credentials));
-                    // Retornar apenas as chaves, não os valores
+                    
+                    // Retornar campos de identificação (não senhas)
+                    const accountInfo = {};
+                    if (decrypted) {
+                        // Campos de identificação comuns (não incluir senhas/tokens)
+                        const identifierFields = ['clientId', 'client_id', 'username', 'user', 'email', 'hotelId', 'hotel_id', 'account', 'accountId', 'account_id', 'empresa', 'company'];
+                        
+                        for (const field of identifierFields) {
+                            if (decrypted[field]) {
+                                accountInfo[field] = decrypted[field];
+                            }
+                        }
+                        
+                        // Se não encontrou nenhum campo identificador, pegar o primeiro campo não-senha
+                        if (Object.keys(accountInfo).length === 0) {
+                            const nonPasswordFields = Object.keys(decrypted).filter(key => 
+                                !key.toLowerCase().includes('password') && 
+                                !key.toLowerCase().includes('senha') && 
+                                !key.toLowerCase().includes('token') &&
+                                !key.toLowerCase().includes('secret') &&
+                                !key.toLowerCase().includes('key')
+                            );
+                            if (nonPasswordFields.length > 0) {
+                                accountInfo[nonPasswordFields[0]] = decrypted[nonPasswordFields[0]];
+                            }
+                        }
+                    }
+                    
+                    record.account_info = accountInfo;
                     record.credentials_fields = decrypted ? Object.keys(decrypted) : [];
                     delete record.credentials;
                 } catch (e) {
+                    record.account_info = {};
                     record.credentials_fields = [];
                     delete record.credentials;
                 }
+            } else {
+                record.account_info = {};
+                record.credentials_fields = [];
             }
             return record;
         });
@@ -271,6 +305,18 @@ router.post('/', async (req, res) => {
         
         console.log('✅ Registro PMS/Motor/Channel criado:', newRecord[0]);
         
+        // Criar integração PMS automaticamente (especialmente para Artax)
+        try {
+            if (credentials) {
+                const processedCredentials = await pmsService.processSystemCredentials(name, credentials, finalAuthType);
+                await pmsService.createPMSIntegration(hotel_uuid, name, processedCredentials);
+                console.log('✅ Integração PMS criada automaticamente');
+            }
+        } catch (integrationError) {
+            console.warn('⚠️ Aviso: Erro ao criar integração PMS automaticamente:', integrationError.message);
+            // Não interrompe o processo, apenas registra o aviso
+        }
+        
         res.status(201).json({
             success: true,
             message: 'Registro criado com sucesso',
@@ -392,6 +438,19 @@ router.put('/:id', async (req, res) => {
         const updatedRecord = await db.query(selectQuery, [id]);
         
         console.log('✅ Registro PMS/Motor/Channel atualizado:', updatedRecord[0]);
+        
+        // Atualizar integração PMS automaticamente (especialmente para Artax)
+        try {
+            if (credentials !== undefined && updatedRecord[0]) {
+                const processedCredentials = credentials ? 
+                    await pmsService.processSystemCredentials(name, credentials, auth_type || updatedRecord[0].auth_type) : {};
+                await pmsService.createPMSIntegration(updatedRecord[0].hotel_uuid, name, processedCredentials);
+                console.log('✅ Integração PMS atualizada automaticamente');
+            }
+        } catch (integrationError) {
+            console.warn('⚠️ Aviso: Erro ao atualizar integração PMS automaticamente:', integrationError.message);
+            // Não interrompe o processo, apenas registra o aviso
+        }
         
         res.json({
             success: true,

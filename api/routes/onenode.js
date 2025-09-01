@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mysql = require('mysql2/promise');
+const onenodeService = require('../services/onenodeService');
 
 // Configuração do banco de dados
 const dbConfig = {
@@ -199,6 +200,21 @@ router.post('/workspaces', async (req, res) => {
             });
         }
         
+        // Verificar se o hotel existe
+        const [hotelRows] = await connection.execute(
+            'SELECT hotel_uuid FROM hotels WHERE hotel_uuid = ?',
+            [hotel_uuid]
+        );
+        
+        if (hotelRows.length === 0) {
+            await connection.end();
+            return res.status(404).json({
+                success: false,
+                error: 'Hotel não encontrado',
+                message: 'Hotel UUID inválido'
+            });
+        }
+        
         // Inserir novo workspace
         const [result] = await connection.execute(
             'INSERT INTO onenode_workspaces (name, api_key, url, hotel_uuid, active) VALUES (?, ?, ?, ?, 1)',
@@ -212,6 +228,15 @@ router.post('/workspaces', async (req, res) => {
         );
         
         await connection.end();
+        
+        // Criar integração OneNode automaticamente
+        try {
+            await onenodeService.createOnenodeIntegration(hotel_uuid, name, api_key, workspaceUrl);
+            console.log('✅ Integração OneNode criada automaticamente');
+        } catch (integrationError) {
+            console.warn('⚠️ Aviso: Erro ao criar integração OneNode automaticamente:', integrationError.message);
+            // Não interrompe o processo, apenas registra o aviso
+        }
         
         res.status(201).json({
             success: true,
@@ -284,6 +309,17 @@ router.put('/workspaces/:id', async (req, res) => {
         );
         
         await connection.end();
+        
+        // Atualizar integração OneNode automaticamente
+        try {
+            if (updatedWorkspace[0] && updatedWorkspace[0].hotel_uuid) {
+                await onenodeService.createOnenodeIntegration(updatedWorkspace[0].hotel_uuid, name, api_key, workspaceUrl);
+                console.log('✅ Integração OneNode atualizada automaticamente');
+            }
+        } catch (integrationError) {
+            console.warn('⚠️ Aviso: Erro ao atualizar integração OneNode automaticamente:', integrationError.message);
+            // Não interrompe o processo, apenas registra o aviso
+        }
         
         res.json({
             success: true,

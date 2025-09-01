@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const { syncFlowiseBots } = require('../scripts/sync-flowise-bots');
+const flowiseService = require('../services/flowiseService');
 
 // GET /api/flowise/bots/count/:hotel_uuid - Buscar contagem de chatbots por hotel
 router.get('/bots/count/:hotel_uuid', async (req, res) => {
@@ -226,6 +227,15 @@ router.post('/relate', async (req, res) => {
     ]);
     
     console.log(`✅ Chatbot ${bot_id} relacionado com hotel ${hotel_uuid} com sucesso`);
+    
+    // Criar integração Flowise automaticamente
+    try {
+      await flowiseService.createFlowiseIntegration(hotel_uuid, chatflowData.name, prediction_url);
+      console.log('✅ Integração Flowise criada automaticamente');
+    } catch (integrationError) {
+      console.warn('⚠️ Aviso: Erro ao criar integração Flowise automaticamente:', integrationError.message);
+      // Não interrompe o processo, apenas registra o aviso
+    }
     
     res.json({
       success: true,
@@ -519,6 +529,15 @@ router.put('/replace/:hotel_uuid', async (req, res) => {
     ]);
     
     console.log(`✅ Chatbot do hotel ${hotel_uuid} substituído: ${oldBot.bot_name} → ${newBotData.name}`);
+    
+    // Atualizar integração Flowise automaticamente
+    try {
+      await flowiseService.createFlowiseIntegration(hotel_uuid, newBotData.name, prediction_url);
+      console.log('✅ Integração Flowise atualizada automaticamente');
+    } catch (integrationError) {
+      console.warn('⚠️ Aviso: Erro ao atualizar integração Flowise automaticamente:', integrationError.message);
+      // Não interrompe o processo, apenas registra o aviso
+    }
     
     res.json({
       success: true,

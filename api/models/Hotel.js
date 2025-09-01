@@ -24,7 +24,7 @@ class Hotel {
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM hotels WHERE uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM hotels WHERE hotel_uuid = ?', [uuid]);
     return result.length > 0 ? new Hotel(result[0]) : null;
   }
 
