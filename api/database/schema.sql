@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS hotels (
     address TEXT,
     phone VARCHAR(20),
     email VARCHAR(255),
+    accommodation_units INT DEFAULT 0 COMMENT 'Quantidade de unidades habitacionais',
+    city VARCHAR(100) DEFAULT NULL COMMENT 'Cidade do hotel',
+    state VARCHAR(100) DEFAULT NULL COMMENT 'Estado do hotel',
+    responsible_name VARCHAR(255) DEFAULT NULL COMMENT 'Nome do responsável pelo hotel',
     website VARCHAR(255),
     status ENUM('ACTIVE', 'INACTIVE', 'MAINTENANCE') DEFAULT 'ACTIVE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -76,7 +80,10 @@ CREATE TABLE IF NOT EXISTS hotels (
     
     INDEX idx_uuid (uuid),
     INDEX idx_status (status),
-    INDEX idx_name (name)
+    INDEX idx_name (name),
+    INDEX idx_city (city),
+    INDEX idx_state (state),
+    INDEX idx_city_state (city, state)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Relação usuários-hotéis (muitos para muitos)
