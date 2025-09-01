@@ -12,20 +12,24 @@ import {
 import 'reactflow/dist/style.css';
 
 import StartNode from '../Nodes/StartNode';
-import DelayNode from '../Nodes/DelayNode';
-import ImageNode from '../Nodes/ImageNode';
-import VideoNode from '../Nodes/VideoNode';
-import AudioNode from '../Nodes/AudioNode';
-import WebhookNode from '../Nodes/WebhookNode';
+import MessageNode from '../Nodes/MessageNode';
+import QuestionNode from '../Nodes/QuestionNode';
+import ActionNode from '../Nodes/ActionNode';
+import ConditionNode from '../Nodes/ConditionNode';
+import EmailNode from '../Nodes/EmailNode';
+import GoToNode from '../Nodes/GoToNode';
 import CustomEdge from '../Edges/CustomEdge';
+import NodeSelectorModal from './NodeSelectorModal';
+import NodeConfigSidebar from './NodeConfigSidebar';
 
 const nodeTypes = {
   startNode: StartNode,
-  delayNode: DelayNode,
-  imageNode: ImageNode,
-  videoNode: VideoNode,
-  audioNode: AudioNode,
-  webhookNode: WebhookNode,
+  messageNode: MessageNode,
+  questionNode: QuestionNode,
+  actionNode: ActionNode,
+  conditionNode: ConditionNode,
+  emailNode: EmailNode,
+  goToNode: GoToNode,
 };
 
 const edgeTypes = {
@@ -38,6 +42,13 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [modalPosition, setModalPosition] = useState({ x: 100, y: 100 });
+  const [pendingConnection, setPendingConnection] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
+  const [selectedNodeType, setSelectedNodeType] = useState(null);
+  const [selectedNodeData, setSelectedNodeData] = useState(null);
 
   useEffect(() => {
     if (flowData && flowData.data) {
@@ -56,7 +67,18 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
         };
         setNodes([startNode]);
       } else {
-        setNodes(parsedData.nodes);
+        // Adicionar funções aos nós existentes
+        const nodesWithHandlers = parsedData.nodes.map(node => ({
+          ...node,
+          data: {
+            ...node.data,
+            // Não adicionar onDelete para nós de início
+            ...(node.type !== 'startNode' && { onDelete: handleNodeDelete }),
+            // Adicionar função de clique para todos os nós (exceto startNode)
+            ...(node.type !== 'startNode' && { onNodeClick: handleNodeClick })
+          }
+        }));
+        setNodes(nodesWithHandlers);
       }
       
       if (parsedData.edges) setEdges(parsedData.edges);
@@ -88,6 +110,43 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
     },
     [setEdges, readOnly]
   );
+
+  const onConnectStart = useCallback((_, { nodeId, handleId, handleType }) => {
+    setPendingConnection({ nodeId, handleId, handleType });
+  }, []);
+
+  const onConnectEnd = useCallback((event) => {
+    if (!readOnly && pendingConnection && reactFlowInstance) {
+      const targetIsPane = event.target.classList.contains('react-flow__pane');
+      
+      if (targetIsPane) {
+        // Conexão foi solta em área vazia - mostrar modal
+        // Posicionar para que o centro do header fique exatamente no cursor
+        
+        // Converter coordenadas da tela para coordenadas do flow
+        const flowPosition = reactFlowInstance.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY
+        });
+        
+        // Ajustar para que o centro do header (largura 320px, altura header ~56px) 
+        // fique no ponto do cursor
+        const adjustedPosition = {
+          x: flowPosition.x - 160,  // 320px / 2 = 160px para centralizar horizontalmente
+          y: flowPosition.y - 28    // ~56px / 2 = 28px para centralizar no meio do header
+        };
+        
+        console.log('📍 Cursor em tela:', { x: event.clientX, y: event.clientY });
+        console.log('📍 Posição no flow:', flowPosition);
+        console.log('📍 Posição ajustada modal:', adjustedPosition);
+        console.log('🎯 ReactFlow instance:', reactFlowInstance);
+        
+        setModalPosition(adjustedPosition);
+        setShowModal(true);
+      }
+    }
+    setPendingConnection(null);
+  }, [readOnly, pendingConnection, reactFlowInstance]);
 
   const handleEdgeDelete = useCallback(
     (edgeId) => {
@@ -121,7 +180,9 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
         position,
         data: { 
           label: getDefaultLabel(type),
-          config: getDefaultConfig(type)
+          config: getDefaultConfig(type),
+          onDelete: handleNodeDelete,
+          onNodeClick: handleNodeClick
         },
       };
 
@@ -133,11 +194,12 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
   const getDefaultLabel = (nodeType) => {
     const labels = {
       startNode: 'Início',
-      delayNode: 'Atraso',
-      imageNode: 'Imagem',
-      videoNode: 'Vídeo',
-      audioNode: 'Áudio',
-      webhookNode: 'Webhook',
+      messageNode: 'Mensagem',
+      questionNode: 'Pergunta',
+      actionNode: 'Ação',
+      conditionNode: 'Condição',
+      emailNode: 'Email',
+      goToNode: 'Ir Para',
     };
     return labels[nodeType] || 'Nó';
   };
@@ -145,11 +207,12 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
   const getDefaultConfig = (nodeType) => {
     const configs = {
       startNode: { message: 'Bem-vindo!' },
-      delayNode: { delay: 1000 },
-      imageNode: { url: '', alt: 'Imagem' },
-      videoNode: { url: '', title: 'Vídeo' },
-      audioNode: { url: '', title: 'Áudio' },
-      webhookNode: { url: '', method: 'POST' },
+      messageNode: { messages: [''] },
+      questionNode: { question: '', variable: '', validation: 'none' },
+      actionNode: { actionType: 'set_variable', variable: '', value: '' },
+      conditionNode: { condition: '', variable: '', operator: 'equals', value: '' },
+      emailNode: { to: '', subject: '', body: '' },
+      goToNode: { targetFlow: '', targetNode: '' },
     };
     return configs[nodeType] || {};
   };
@@ -164,6 +227,56 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
       onSave(flowData);
     }
   };
+
+  const handleModalNodeSelect = (nodeType, nodeLabel) => {
+    console.log('🎯 Componente selecionado no modal:', nodeType, nodeLabel);
+    
+    // Fechar o modal
+    setShowModal(false);
+    setPendingConnection(null);
+    
+    // Abrir a sidebar com as informações do componente selecionado
+    setSelectedNodeId(null); // Não há nó criado ainda
+    setSelectedNodeType(nodeLabel); // Usar o label legível
+    setSelectedNodeData({ 
+      label: nodeLabel,
+      config: getDefaultConfig(nodeType) 
+    });
+    setShowSidebar(true);
+  };
+
+  const handleModalClose = () => {
+    setShowModal(false);
+    setPendingConnection(null);
+  };
+
+  const handleNodeDelete = useCallback((nodeId) => {
+    console.log('🗑️ Excluindo nó:', nodeId);
+    
+    // Remover todas as conexões relacionadas ao nó
+    setEdges((edges) => edges.filter((edge) => 
+      edge.source !== nodeId && edge.target !== nodeId
+    ));
+    
+    // Remover o nó
+    setNodes((nodes) => nodes.filter((node) => node.id !== nodeId));
+  }, [setEdges, setNodes]);
+
+  const handleNodeClick = useCallback((nodeId, nodeType, nodeData) => {
+    console.log('🎯 Clique no nó:', { nodeId, nodeType, nodeData });
+    
+    setSelectedNodeId(nodeId);
+    setSelectedNodeType(nodeType);
+    setSelectedNodeData(nodeData);
+    setShowSidebar(true);
+  }, []);
+
+  const handleSidebarClose = useCallback(() => {
+    setShowSidebar(false);
+    setSelectedNodeId(null);
+    setSelectedNodeType(null);
+    setSelectedNodeData(null);
+  }, []);
 
   const onNodeDragStart = (event, node) => {
     event.dataTransfer.setData('application/reactflow', node.type);
@@ -186,7 +299,7 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
       <style>{`
         .flow-editor-container {
           width: 100%;
-          height: 600px;
+          height: 100%;
           position: relative;
           border-radius: 12px;
           overflow: hidden;
@@ -246,136 +359,29 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
         
         .flow-editor-container .react-flow__handle {
           background: #547af1 !important;
-          border: 2px solid white !important;
-          width: 8px !important;
-          height: 8px !important;
+          border: 3px solid white !important;
+          width: 16px !important;
+          height: 16px !important;
+          border-radius: 50% !important;
         }
         
         .flow-editor-container .react-flow__handle:hover {
           background: #2d47d3 !important;
-          transform: scale(1.2) !important;
+          transform: scale(1.3) !important;
+          box-shadow: 0 4px 12px rgba(84, 122, 241, 0.4) !important;
         }
         
-        .flow-editor-toolbar {
-          display: flex;
-          gap: 8px;
-          padding: 12px;
-          background: rgba(255, 255, 255, 0.9);
-          border-bottom: 1px solid rgba(84, 122, 241, 0.2);
-          backdrop-filter: blur(8px);
-        }
-        
-        .flow-editor-node-palette {
-          display: flex;
-          gap: 8px;
-        }
-        
-        .node-palette-item {
-          padding: 8px 12px;
-          background: rgba(84, 122, 241, 0.1);
-          border: 1px solid rgba(84, 122, 241, 0.3);
-          border-radius: 6px;
-          cursor: grab;
-          font-size: 12px;
-          font-weight: 500;
-          color: #2d47d3;
-          transition: all 0.2s ease;
-          user-select: none;
-        }
-        
-        .node-palette-item:hover {
-          background: rgba(84, 122, 241, 0.2);
-          transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(45, 71, 211, 0.15);
-        }
-        
-        .node-palette-item:active {
-          cursor: grabbing;
-        }
-        
-        .flow-editor-save-btn {
-          padding: 8px 16px;
-          background: linear-gradient(145deg, #547af1 0%, #2d47d3 100%);
-          color: white;
-          border: none;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          margin-left: auto;
-        }
-        
-        .flow-editor-save-btn:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(45, 71, 211, 0.3);
-        }
-        
-        .flow-editor-save-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-          transform: none;
-        }
         
         .flow-editor-loading {
           padding: 20px;
         }
       `}</style>
       
-      {!readOnly && (
-        <div className="flow-editor-toolbar">
-          <div className="flow-editor-node-palette">
-            <div 
-              className="node-palette-item"
-              draggable
-              onDragStart={(e) => e.dataTransfer.setData('application/reactflow', 'delayNode')}
-            >
-              ⏱️ Atraso
-            </div>
-            <div 
-              className="node-palette-item"
-              draggable
-              onDragStart={(e) => e.dataTransfer.setData('application/reactflow', 'imageNode')}
-            >
-              🖼️ Imagem
-            </div>
-            <div 
-              className="node-palette-item"
-              draggable
-              onDragStart={(e) => e.dataTransfer.setData('application/reactflow', 'videoNode')}
-            >
-              🎥 Vídeo
-            </div>
-            <div 
-              className="node-palette-item"
-              draggable
-              onDragStart={(e) => e.dataTransfer.setData('application/reactflow', 'audioNode')}
-            >
-              🎵 Áudio
-            </div>
-            <div 
-              className="node-palette-item"
-              draggable
-              onDragStart={(e) => e.dataTransfer.setData('application/reactflow', 'webhookNode')}
-            >
-              🔗 Webhook
-            </div>
-          </div>
-          
-          <button 
-            className="flow-editor-save-btn"
-            onClick={handleSave}
-            disabled={!onSave}
-          >
-            💾 Salvar Fluxo
-          </button>
-        </div>
-      )}
       
       <div 
         className="reactflow-wrapper" 
         ref={reactFlowWrapper}
-        style={{ width: '100%', height: readOnly ? '100%' : 'calc(100% - 60px)' }}
+        style={{ width: '100%', height: '100%' }}
       >
         <ReactFlow
           nodes={nodes}
@@ -383,6 +389,8 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
           onNodesChange={readOnly ? undefined : onNodesChange}
           onEdgesChange={readOnly ? undefined : onEdgesChange}
           onConnect={readOnly ? undefined : onConnect}
+          onConnectStart={readOnly ? undefined : onConnectStart}
+          onConnectEnd={readOnly ? undefined : onConnectEnd}
           onInit={setReactFlowInstance}
           onDrop={readOnly ? undefined : onDrop}
           onDragOver={readOnly ? undefined : onDragOver}
@@ -399,6 +407,26 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
           <Background color="#547af1" gap={20} size={1} />
         </ReactFlow>
       </div>
+
+      <NodeSelectorModal
+        isVisible={showModal}
+        onClose={handleModalClose}
+        onNodeSelect={handleModalNodeSelect}
+        position={modalPosition}
+      />
+
+      <NodeConfigSidebar
+        isVisible={showSidebar}
+        nodeId={selectedNodeId}
+        nodeType={selectedNodeType}
+        nodeData={selectedNodeData}
+        onClose={handleSidebarClose}
+        onSave={(nodeId, newData) => {
+          // TODO: Implementar salvamento das configurações do nó
+          console.log('💾 Salvando configurações:', { nodeId, newData });
+          handleSidebarClose();
+        }}
+      />
     </div>
   );
 };

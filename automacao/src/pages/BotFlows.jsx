@@ -290,41 +290,44 @@ const BotFlows = () => {
   // Se há um fluxo selecionado, mostrar o editor
   if (selectedFlow) {
     return (
-      <div className="space-y-6">
-        {/* Header do Editor */}
-        <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-6 shadow-blue-elegant">
+      <div className="space-y-2">
+        {/* Header compacto do Editor */}
+        <div className="bg-gradient-card-blue backdrop-blur-md rounded-lg border border-sapphire-200/40 px-4 py-2 shadow-blue-elegant">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <button 
-                  onClick={() => setSelectedFlow(null)}
-                  className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
-                >
-                  ← Voltar aos Fluxos
-                </button>
-              </div>
-              <h1 className="text-3xl font-bold text-midnight-950">
-                Editando: {selectedFlow.name}
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setSelectedFlow(null)}
+                className="text-sapphire-600 hover:text-sapphire-700 text-xs font-medium"
+              >
+                ← Voltar
+              </button>
+              <h1 className="text-sm font-semibold text-midnight-950">
+                {selectedFlow.name}
               </h1>
-              <p className="text-steel-700 mt-2">
-                {selectedFlow.description || 'Editor de fluxo visual'}
-              </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(selectedFlow.status)}`}>
-                {selectedFlow.status}
-              </span>
+              <button 
+                className="px-3 py-1 bg-gradient-to-r from-sapphire-500 to-sapphire-600 text-white text-xs font-medium rounded-md hover:from-sapphire-600 hover:to-sapphire-700 transition-all duration-200"
+                onClick={() => {
+                  // TODO: Implementar salvamento
+                  console.log('💾 Salvando fluxo...');
+                }}
+              >
+                💾 Salvar Fluxo
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Editor de Fluxo */}
-        <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 shadow-blue-elegant">
-          <FlowEditor 
-            flowData={selectedFlow} 
-            onSave={handleSaveFlow}
-            readOnly={false}
-          />
+        {/* Editor de Fluxo - Altura expandida */}
+        <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 shadow-blue-elegant" style={{ height: 'calc(100vh - 180px)' }}>
+          <div style={{ height: '100%', width: '100%' }}>
+            <FlowEditor 
+              flowData={selectedFlow} 
+              onSave={handleSaveFlow}
+              readOnly={false}
+            />
+          </div>
         </div>
       </div>
     );

@@ -1,7 +1,7 @@
 import { Handle, Position } from 'reactflow';
 import { useState } from 'react';
 
-const StartNode = ({ data, isConnectable }) => {
+const StartNode = ({ data, isConnectable, id }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   return (
@@ -56,12 +56,51 @@ const StartNode = ({ data, isConnectable }) => {
         .start-node:hover .start-node-label {
           opacity: 1;
         }
+        
+        .start-node-info {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          width: 24px;
+          height: 24px;
+          background: linear-gradient(145deg, #3b82f6 0%, #2563eb 100%);
+          border: 2px solid white;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: help;
+          font-size: 12px;
+          color: white;
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+          transition: all 0.2s ease;
+          opacity: 0;
+          transform: scale(0.8);
+        }
+        
+        .start-node:hover .start-node-info {
+          opacity: 1;
+          transform: scale(1);
+        }
+        
+        .start-node-info:hover {
+          transform: scale(1.1);
+          box-shadow: 0 6px 16px rgba(59, 130, 246, 0.6);
+        }
       `}</style>
       
       <div className="start-node-play"></div>
       
       <div className="start-node-label">
         INÍCIO
+      </div>
+
+      {/* Ícone de informação */}
+      <div 
+        className="start-node-info"
+        title="Nó obrigatório - não pode ser excluído"
+      >
+        i
       </div>
       
       <Handle
@@ -71,10 +110,11 @@ const StartNode = ({ data, isConnectable }) => {
         isConnectable={isConnectable}
         style={{
           background: '#ffffff',
-          border: '2px solid #10b981',
-          width: '12px',
-          height: '12px',
-          right: '-6px',
+          border: '3px solid #10b981',
+          width: '16px',
+          height: '16px',
+          borderRadius: '50%',
+          right: '-8px',
         }}
       />
     </div>
