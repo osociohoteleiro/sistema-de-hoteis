@@ -34,7 +34,8 @@
       "Bash(copy \"Hotels_backup.jsx\" \"Hotels.jsx\")",
       "Bash(wmic:*)",
       "Bash(npm start)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(git config:*)"
     ],
     "deny": [],
     "ask": []

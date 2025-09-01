@@ -4,27 +4,83 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-This appears to be an empty repository with no source code, configuration files, or documentation present. The directory contains only the basic directory structure.
+Este é um sistema de gestão de hotéis OSH (Onscreen Hotels) composto por uma aplicação frontend React e uma API backend Node.js/Express.
+
+## Estrutura do Projeto
+
+```
+/
+├── hotel-app/          # Aplicação React frontend (porta 5173/5174)
+│   ├── src/           # Código fonte React
+│   ├── public/        # Assets públicos
+│   ├── package.json   # Dependências frontend
+│   └── ...
+├── api/               # API backend Node.js/Express (porta 3001)
+│   ├── routes/        # Rotas da API
+│   ├── models/        # Modelos de dados
+│   ├── services/      # Serviços
+│   ├── package.json   # Dependências backend
+│   └── server.js      # Servidor principal
+├── .git/              # Controle de versão
+└── CLAUDE.md          # Este arquivo
+```
 
 ## Getting Started
 
-Since this is an empty repository, you'll need to:
+### Frontend (hotel-app)
+```bash
+cd hotel-app
+npm install
+npm run dev
+```
 
-1. Initialize the project structure based on the intended technology stack
-2. Add appropriate configuration files (package.json, requirements.txt, etc.)
-3. Set up build and development tooling
-4. Create initial source code structure
+### Backend (api)
+```bash
+cd api
+npm install
+npm run dev
+```
 
 ## Development Workflow
 
-No specific development commands or workflows have been established yet. Once the project is initialized, this file should be updated with:
+### Comandos de Desenvolvimento
+- `cd hotel-app && npm run dev` - Inicia servidor de desenvolvimento React
+- `cd api && npm run dev` - Inicia servidor de desenvolvimento da API
+- `cd hotel-app && npm run build` - Build da aplicação frontend
+- `cd hotel-app && npm run lint` - Verificação de código frontend
 
-- Build commands
-- Test execution commands
-- Linting and formatting commands
-- Development server startup
-- Deployment procedures
+### Estrutura da API
+- Porta padrão: 3001
+- Banco de dados: MariaDB/MySQL
+- Autenticação: JWT
+- CORS configurado para desenvolvimento
+
+### Tecnologias Frontend
+- React 19.1.1
+- Vite para build/dev
+- Tailwind CSS
+- React Router DOM
+- Axios para API calls
+- AWS S3 SDK
 
 ## Architecture
 
-No architecture has been established yet. This section should be updated once the codebase structure is defined.
+### Frontend (React)
+- Estrutura baseada em componentes
+- Context API para gerenciamento de estado global
+- Roteamento com React Router
+- Integração com AWS S3 para uploads
+- Sistema de autenticação JWT
+
+### Backend (Express)
+- API RESTful
+- Middleware de autenticação
+- Validação com Joi
+- Integração com serviços externos (Evolution, Qdrant, Flowise)
+- Sistema de upload para S3
+
+### Integrações
+- WhatsApp via Evolution API
+- Vector database via Qdrant
+- AI/Chatbot via Flowise
+- Cloud storage via AWS S3
