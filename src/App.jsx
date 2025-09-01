@@ -8,12 +8,14 @@ import Settings from './pages/Settings';
 import AI from './pages/AI';
 import AIConfiguracoes from './pages/AIConfiguracoes';
 import TestUpload from './components/TestUpload';
+import Login from './pages/Login';
 
 function App() {
   return (
     <AppProvider>
       <Router>
         <Routes>
+          <Route path="/login" element={<Login />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />

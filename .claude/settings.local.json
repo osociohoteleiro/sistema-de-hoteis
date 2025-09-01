@@ -30,7 +30,11 @@
       "WebSearch",
       "WebFetch(domain:doc.evolution-api.com)",
       "Bash(find:*)",
-      "Bash(npm run migrate:*)"
+      "Bash(npm run migrate:*)",
+      "Bash(copy \"Hotels_backup.jsx\" \"Hotels.jsx\")",
+      "Bash(wmic:*)",
+      "Bash(npm start)",
+      "Bash(npm run:*)"
     ],
     "deny": [],
     "ask": []

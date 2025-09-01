@@ -8,11 +8,11 @@ const DEFAULT_CONFIG = {
   companyName: 'Sistema de Hotéis',
   appDescription: 'Plataforma completa para gestão hoteleira com inteligência artificial integrada. Gerencie reservas, atendimento ao cliente e operações de forma eficiente e moderna.',
   apiEndpoints: {
-    listHotels: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/lista_hoteis',
-    createHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/cadastra_hotel',
-    getHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/busca_hotel', // GET /hotel/{uuid}
-    updateHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/atualiza_hotel', // PUT /hotel/{uuid}
-    deleteHotel: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/deleta_hotel' // DELETE /hotel/{uuid}
+    listHotels: 'http://localhost:3001/api/hotels',
+    createHotel: 'http://localhost:3001/api/hotels',
+    getHotel: 'http://localhost:3001/api/hotels/:id', // GET /hotels/{id}
+    updateHotel: 'http://localhost:3001/api/hotels/:id', // PUT /hotels/{id}
+    deleteHotel: 'http://localhost:3001/api/hotels/:id' // DELETE /hotels/{id}
   },
   aiEndpoints: {
     createIntegration: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/create_integration',

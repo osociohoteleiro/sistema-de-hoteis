@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import HotelDrawer from '../components/HotelDrawer';
 import HotelForm from '../components/HotelForm';
+import apiService from '../services/api';
+import toast from 'react-hot-toast';
 
 const Hotels = () => {
-  const { config, loading, setLoading, selectedHotelUuid, selectHotel } = useApp();
+  const { loading, setLoading, selectedHotelUuid, selectHotel } = useApp();
   const [hotels, setHotels] = useState([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -16,13 +18,22 @@ const Hotels = () => {
     setLoading(true);
     
     try {
-      // Se não há endpoint configurado, usar dados de exemplo para desenvolvimento
-      if (!config.apiEndpoints.listHotels) {
-        console.log('📝 Nenhum endpoint de listagem configurado, usando dados de exemplo...');
-        
-        // Dados de exemplo para desenvolvimento
+      const response = await apiService.getHotels();
+      
+      // A API retorna { hotels: [...], pagination: {...} }
+      const hotelsData = response.hotels || [];
+      
+      console.log('Hotéis carregados:', hotelsData);
+      setHotels(hotelsData);
+    } catch (error) {
+      console.error('Erro ao carregar hotéis:', error);
+      
+      // Se não houver token, mostrar dados de exemplo
+      if (error.message.includes('401') || error.message.includes('403')) {
+        console.log('Sem autenticação, usando dados de exemplo');
         const exampleHotels = [
           {
+            id: 1,
             hotel_uuid: 'hotel-exemplo-1',
             hotel_nome: 'Hotel Exemplo 1',
             hora_checkin: '14:00:00',
@@ -30,6 +41,7 @@ const Hotels = () => {
             hotel_capa: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=300&fit=crop&crop=center'
           },
           {
+            id: 2,
             hotel_uuid: 'hotel-exemplo-2', 
             hotel_nome: 'Hotel Exemplo 2',
             hora_checkin: '15:00:00',
@@ -37,32 +49,19 @@ const Hotels = () => {
             hotel_capa: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400&h=300&fit=crop&crop=center'
           },
           {
+            id: 3,
             hotel_uuid: 'hotel-exemplo-3',
-            hotel_nome: 'Hotel Teste S3',
+            hotel_nome: 'Hotel Teste',
             hora_checkin: '16:00:00', 
             hora_checkout: '10:00:00',
-            hotel_capa: null // Para testar upload
+            hotel_capa: null
           }
         ];
-        
-        setTimeout(() => {
-          setHotels(exampleHotels);
-          setLoading(false);
-        }, 500);
-        return;
-      }
-
-      // Usar endpoint configurado se disponível
-      const response = await fetch(config.apiEndpoints.listHotels);
-      if (response.ok) {
-        const data = await response.json();
-        setHotels(Array.isArray(data) ? data : []);
+        setHotels(exampleHotels);
       } else {
-        throw new Error('Erro ao carregar hotéis');
+        toast.error('Erro ao carregar hotéis');
+        setHotels([]);
       }
-    } catch (error) {
-      console.error('Erro ao carregar hotéis da API:', error);
-      setHotels([]);
     } finally {
       setLoading(false);
     }
@@ -70,29 +69,18 @@ const Hotels = () => {
 
   useEffect(() => {
     fetchHotels();
-  }, [config.apiEndpoints.listHotels]);
+  }, []);
 
   const handleDeleteHotel = async (hotelId) => {
-    if (!config.apiEndpoints.deleteHotel) {
-      console.error('Endpoint de exclusão não configurado');
-      return;
-    }
-
     if (!confirm('Tem certeza que deseja excluir este hotel?')) return;
 
     try {
-      const response = await fetch(`${config.apiEndpoints.deleteHotel}/${hotelId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        console.log('Hotel excluído com sucesso!');
-        setHotels(hotels.filter(hotel => hotel.hotel_uuid !== hotelId));
-      } else {
-        throw new Error('Erro ao excluir hotel');
-      }
+      await apiService.deleteHotel(hotelId);
+      toast.success('Hotel excluído com sucesso!');
+      setHotels(hotels.filter(hotel => hotel.id !== hotelId));
     } catch (error) {
       console.error('Erro ao excluir hotel:', error);
+      toast.error('Erro ao excluir hotel');
     }
   };
 
@@ -161,7 +149,7 @@ const Hotels = () => {
               </button>
             )}
             <Link
-              to={`/hoteis/editar/${hotel.hotel_uuid}`}
+              to={`/hoteis/editar/${hotel.id || hotel.hotel_uuid}`}
               className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg transition-colors"
               title="Editar hotel"
             >
@@ -170,7 +158,7 @@ const Hotels = () => {
               </svg>
             </Link>
             <button
-              onClick={() => handleDeleteHotel(hotel.hotel_uuid)}
+              onClick={() => handleDeleteHotel(hotel.id)}
               className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
               title="Excluir hotel"
             >
@@ -227,7 +215,7 @@ const Hotels = () => {
           </div>
           <h3 className="text-lg font-semibold text-white mb-2">Nenhum hotel cadastrado</h3>
           <p className="text-sidebar-300 mb-6">
-            Comece cadastrando seu primeiro hotel ou configure o endpoint de listagem nas configurações.
+            Comece cadastrando seu primeiro hotel.
           </p>
           <button
             onClick={openDrawer}
@@ -241,8 +229,8 @@ const Hotels = () => {
       {/* Hotels Grid */}
       {!loading && hotels.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {hotels.map((hotel, index) => (
-            <HotelCard key={hotel.hotel_uuid || index} hotel={hotel} />
+          {hotels.map((hotel) => (
+            <HotelCard key={hotel.id || hotel.hotel_uuid} hotel={hotel} />
           ))}
         </div>
       )}

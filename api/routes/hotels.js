@@ -8,17 +8,17 @@ const router = express.Router();
 // Validação schemas
 const hotelSchema = Joi.object({
   hotel_nome: Joi.string().min(2).max(255).required(),
-  hotel_capa: Joi.string().uri().allow(null, ''),
+  hotel_capa: Joi.string().allow(null, '').optional(),
   hora_checkin: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/).default('14:00:00'),
   hora_checkout: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/).default('12:00:00')
 });
 
 const updateHotelSchema = Joi.object({
-  hotel_nome: Joi.string().min(2).max(255),
-  hotel_capa: Joi.string().uri().allow(null, ''),
-  hora_checkin: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/),
-  hora_checkout: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/)
-});
+  hotel_nome: Joi.string().min(2).max(255).optional(),
+  hotel_capa: Joi.string().allow(null, '').optional(),
+  hora_checkin: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/).optional(),
+  hora_checkout: Joi.string().pattern(/^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/).optional()
+}).min(1).unknown(true); // Permitir campos desconhecidos
 
 // GET /api/hotels - Listar hotéis
 router.get('/', authenticateToken, async (req, res) => {
@@ -202,8 +202,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    console.log('Dados recebidos para atualização:', req.body);
+    
     const { error, value } = updateHotelSchema.validate(req.body);
     if (error) {
+      console.error('Erro de validação:', error.details[0].message);
+      console.error('Dados que falharam:', req.body);
       return res.status(400).json({
         error: 'Dados inválidos',
         details: error.details[0].message

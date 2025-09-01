@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { useApp } from '../context/AppContext';
 import ImageUpload from './ImageUpload';
+import apiService from '../services/api';
 
 const HotelForm = ({ onClose, onSuccess }) => {
-  const { config } = useApp();
   const [formData, setFormData] = useState({
-    nome_hotel: '',
+    hotel_nome: '',
     hora_checkin: '',
     hora_checkout: '',
-    img_capa: ''
+    hotel_capa: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -24,45 +23,57 @@ const HotelForm = ({ onClose, onSuccess }) => {
   const handleImageChange = (imageUrl) => {
     setFormData(prev => ({
       ...prev,
-      img_capa: imageUrl
+      hotel_capa: imageUrl
     }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.nome_hotel || !formData.hora_checkin || !formData.hora_checkout || !formData.img_capa) {
-      toast.error('Todos os campos são obrigatórios');
+    if (!formData.hotel_nome || !formData.hora_checkin || !formData.hora_checkout) {
+      toast.error('Preencha todos os campos obrigatórios');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(config.apiEndpoints.createHotel, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      // Formatar dados para a API
+      const hotelData = {
+        hotel_nome: formData.hotel_nome,
+        hotel_capa: formData.hotel_capa || '',
+        hora_checkin: formData.hora_checkin + ':00', // Adicionar segundos
+        hora_checkout: formData.hora_checkout + ':00' // Adicionar segundos
+      };
 
-      if (response.ok) {
-        toast.success('Hotel cadastrado com sucesso!');
-        setFormData({
-          nome_hotel: '',
-          hora_checkin: '',
-          hora_checkout: '',
-          img_capa: ''
-        });
-        onClose();
-        if (onSuccess) onSuccess();
-      } else {
-        throw new Error('Erro na resposta do servidor');
-      }
+      const response = await apiService.createHotel(hotelData);
+
+      toast.success(response.message || 'Hotel cadastrado com sucesso!');
+      
+      // Limpar formulário
+      setFormData({
+        hotel_nome: '',
+        hora_checkin: '',
+        hora_checkout: '',
+        hotel_capa: ''
+      });
+      
+      onClose();
+      if (onSuccess) onSuccess();
     } catch (error) {
-      toast.error('Erro ao cadastrar hotel. Tente novamente.');
-      console.error('Error:', error);
+      console.error('Erro ao cadastrar hotel:', error);
+      
+      let errorMessage = 'Erro ao cadastrar hotel. Tente novamente.';
+      
+      if (error.message.includes('401')) {
+        errorMessage = 'Sessão expirada. Por favor, faça login novamente.';
+      } else if (error.message.includes('403')) {
+        errorMessage = 'Você não tem permissão para cadastrar hotéis.';
+      } else if (error.message.includes('409')) {
+        errorMessage = 'Já existe um hotel com esse nome.';
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -71,62 +82,65 @@ const HotelForm = ({ onClose, onSuccess }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="nome_hotel" className="block text-sm font-medium text-gray-700 mb-2">
-          Nome do Hotel
+        <label htmlFor="hotel_nome" className="block text-sm font-medium text-white mb-2">
+          Nome do Hotel *
         </label>
         <input
           type="text"
-          id="nome_hotel"
-          name="nome_hotel"
-          value={formData.nome_hotel}
+          id="hotel_nome"
+          name="hotel_nome"
+          value={formData.hotel_nome}
           onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           placeholder="Digite o nome do hotel"
           required
         />
       </div>
 
-      <div>
-        <label htmlFor="hora_checkin" className="block text-sm font-medium text-gray-700 mb-2">
-          Horário de Check-in
-        </label>
-        <input
-          type="time"
-          id="hora_checkin"
-          name="hora_checkin"
-          value={formData.hora_checkin}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          required
-        />
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="hora_checkin" className="block text-sm font-medium text-white mb-2">
+            Horário de Check-in *
+          </label>
+          <input
+            type="time"
+            id="hora_checkin"
+            name="hora_checkin"
+            value={formData.hora_checkin}
+            onChange={handleChange}
+            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            required
+          />
+        </div>
 
-      <div>
-        <label htmlFor="hora_checkout" className="block text-sm font-medium text-gray-700 mb-2">
-          Horário de Check-out
-        </label>
-        <input
-          type="time"
-          id="hora_checkout"
-          name="hora_checkout"
-          value={formData.hora_checkout}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          required
-        />
+        <div>
+          <label htmlFor="hora_checkout" className="block text-sm font-medium text-white mb-2">
+            Horário de Check-out *
+          </label>
+          <input
+            type="time"
+            id="hora_checkout"
+            name="hora_checkout"
+            value={formData.hora_checkout}
+            onChange={handleChange}
+            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            required
+          />
+        </div>
       </div>
 
       <ImageUpload
-        value={formData.img_capa}
+        value={formData.hotel_capa}
         onChange={handleImageChange}
-        label="Imagem de Capa do Hotel"
+        label="Imagem de Capa do Hotel (Opcional)"
+        hotelName={formData.hotel_nome}
       />
 
       <div className="flex gap-3 pt-4">
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="flex-1 px-4 py-2 text-sm font-medium text-sidebar-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/20 hover:border-white/30 rounded-lg transition-colors"
           disabled={isSubmitting}
         >
           Cancelar
@@ -134,7 +148,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-500 border border-transparent rounded-md shadow-sm hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 border border-transparent rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Cadastrando...' : 'Cadastrar'}
         </button>
