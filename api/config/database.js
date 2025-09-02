@@ -27,12 +27,15 @@ class DatabaseConnection {
           password: process.env.DB_PASSWORD,
           database: process.env.DB_NAME,
           waitForConnections: true,
-          connectionLimit: 10,
+          connectionLimit: 15,
           queueLimit: 0,
-          acquireTimeout: 60000,
-          timeout: 60000,
+          acquireTimeout: 30000,
+          timeout: 20000,
+          idleTimeout: 300000,
           charset: 'utf8mb4',
-          timezone: 'Z'
+          timezone: 'Z',
+          keepAliveInitialDelay: 0,
+          enableKeepAlive: true
         };
 
         this.pool = mysql.createPool(config);
@@ -64,7 +67,7 @@ class DatabaseConnection {
     return fallbackDatabase;
   }
 
-  async query(sql, params = []) {
+  async query(sql, params = [], retryCount = 0) {
     if (!this.isConnected) {
       await this.connect();
     }
@@ -78,6 +81,25 @@ class DatabaseConnection {
       return rows;
     } catch (error) {
       console.error('Erro na query:', error);
+      
+      // Retry logic para erros de conexão
+      if ((error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') && retryCount < 2) {
+        console.log(`🔄 Tentando reconectar... (tentativa ${retryCount + 1}/3)`);
+        
+        // Reset connection
+        if (this.pool) {
+          try { await this.pool.end(); } catch (e) {}
+          this.pool = null;
+          this.isConnected = false;
+        }
+        
+        // Aguardar um pouco antes de tentar novamente
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        
+        // Tentar novamente
+        return await this.query(sql, params, retryCount + 1);
+      }
+      
       throw error;
     }
   }

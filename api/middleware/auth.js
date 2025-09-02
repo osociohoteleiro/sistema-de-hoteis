@@ -1,6 +1,35 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// Cache simples para usuários (expire em 5 minutos)
+const userCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+const getCachedUser = (userId) => {
+  const cached = userCache.get(userId);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    return cached.user;
+  }
+  return null;
+};
+
+const setCachedUser = (userId, user) => {
+  userCache.set(userId, {
+    user: user,
+    timestamp: Date.now()
+  });
+  
+  // Limpar cache antigo periodicamente
+  if (userCache.size > 100) {
+    const now = Date.now();
+    for (const [key, value] of userCache.entries()) {
+      if ((now - value.timestamp) > CACHE_TTL) {
+        userCache.delete(key);
+      }
+    }
+  }
+};
+
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -35,8 +64,18 @@ const authenticateToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Buscar usuário no banco para verificar se ainda existe e está ativo
-    const user = await User.findById(decoded.userId);
+    // Tentar buscar no cache primeiro
+    let user = getCachedUser(decoded.userId);
+    
+    if (!user) {
+      // Se não está no cache, buscar no banco
+      user = await User.findById(decoded.userId);
+      
+      if (user && user.active) {
+        // Adicionar ao cache
+        setCachedUser(decoded.userId, user);
+      }
+    }
     
     if (!user || !user.active) {
       return res.status(401).json({ 
@@ -45,7 +84,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     // Adicionar dados do usuário à requisição
-    req.user = user.toJSON();
+    req.user = user.toJSON ? user.toJSON() : user;
     next();
     
   } catch (error) {
