@@ -100,6 +100,7 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
+
 // Importar rotas
 const authRoutes = require('./routes/auth');
 const hotelRoutes = require('./routes/hotels');

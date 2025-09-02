@@ -44,7 +44,8 @@
       "Bash(dir:*)",
       "Bash(cp:*)",
       "Bash(ping:*)",
-      "Bash(telnet:*)"
+      "Bash(telnet:*)",
+      "Bash(mysql:*)"
     ],
     "deny": [],
     "ask": []

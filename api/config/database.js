@@ -1,4 +1,5 @@
 const mysql = require('mysql2/promise');
+const { fallbackDatabase } = require('./fallback-data');
 require('dotenv').config();
 
 class DatabaseConnection {
@@ -6,6 +7,7 @@ class DatabaseConnection {
     this.pool = null;
     this.isConnected = false;
     this.currentHost = null;
+    this.usingFallback = false;
   }
 
   async connect() {
@@ -54,12 +56,21 @@ class DatabaseConnection {
       }
     }
     
-    throw new Error('Não foi possível conectar a nenhum host do banco de dados');
+    // Se não conseguiu conectar a nenhum host, usar fallback
+    console.log('⚠️ Não foi possível conectar ao banco real. Usando dados de fallback para desenvolvimento...');
+    this.usingFallback = true;
+    this.isConnected = true;
+    this.currentHost = 'fallback-memory';
+    return fallbackDatabase;
   }
 
   async query(sql, params = []) {
-    if (!this.pool || !this.isConnected) {
+    if (!this.isConnected) {
       await this.connect();
+    }
+    
+    if (this.usingFallback) {
+      return await fallbackDatabase.query(sql, params);
     }
     
     try {
@@ -72,9 +83,14 @@ class DatabaseConnection {
   }
 
   async getConnection() {
-    if (!this.pool || !this.isConnected) {
+    if (!this.isConnected) {
       await this.connect();
     }
+    
+    if (this.usingFallback) {
+      return fallbackDatabase;
+    }
+    
     return await this.pool.getConnection();
   }
 
@@ -91,7 +107,8 @@ class DatabaseConnection {
     return {
       connected: this.isConnected,
       host: this.currentHost,
-      database: process.env.DB_NAME
+      database: this.usingFallback ? 'fallback-memory' : process.env.DB_NAME,
+      usingFallback: this.usingFallback
     };
   }
 }
