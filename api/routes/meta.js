@@ -4,6 +4,8 @@ const { authenticateToken } = require('../middleware/auth');
 const metaAdsAPI = require('../services/metaAdsAPI');
 const db = require('../config/database');
 const moment = require('moment');
+const axios = require('axios');
+const crypto = require('crypto');
 
 // Middleware de validação de acesso ao hotel
 const validateHotelAccess = async (req, res, next) => {
@@ -340,6 +342,279 @@ router.delete('/credentials/:hotelUuid', authenticateToken, validateHotelAccess,
 
   } catch (error) {
     console.error('Error removing Meta credentials:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// === OAUTH ROUTES ===
+
+// GET /api/meta/oauth/url/:hotelUuid - Gerar URL de autorização OAuth
+router.get('/oauth/url/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
+  try {
+    const { hotelUuid } = req.params;
+    
+    if (!process.env.FACEBOOK_APP_ID) {
+      return res.status(500).json({
+        error: 'Configuração do Facebook não encontrada'
+      });
+    }
+
+    // Gerar state para segurança
+    const state = crypto.randomBytes(32).toString('hex');
+    
+    // Salvar state temporariamente (cache ou banco)
+    await db.query(`
+      INSERT INTO oauth_states (state, hotel_uuid, created_at, expires_at)
+      VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 10 MINUTE))
+      ON DUPLICATE KEY UPDATE
+        hotel_uuid = VALUES(hotel_uuid),
+        created_at = NOW(),
+        expires_at = VALUES(expires_at)
+    `, [state, hotelUuid]);
+
+    const redirectUri = `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/meta/oauth/callback`;
+    
+    // Scopes necessários para Meta Ads
+    const scopes = [
+      'ads_management',
+      'ads_read',
+      'read_insights',
+      'business_management'
+    ].join(',');
+
+    const authUrl = `https://www.facebook.com/v18.0/dialog/oauth` +
+      `?client_id=${process.env.FACEBOOK_APP_ID}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&scope=${encodeURIComponent(scopes)}` +
+      `&response_type=code` +
+      `&state=${state}`;
+
+    res.json({
+      success: true,
+      authUrl,
+      state
+    });
+
+  } catch (error) {
+    console.error('Error generating OAuth URL:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// GET /api/meta/oauth/callback - Callback do OAuth
+router.get('/oauth/callback', async (req, res) => {
+  try {
+    const { code, state, error, error_description } = req.query;
+
+    // Verificar se houve erro na autorização
+    if (error) {
+      console.error('OAuth error:', error, error_description);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=${encodeURIComponent(error_description || error)}`);
+    }
+
+    if (!code || !state) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=missing_parameters`);
+    }
+
+    // Validar state
+    const [stateRecord] = await db.query(`
+      SELECT hotel_uuid, expires_at
+      FROM oauth_states 
+      WHERE state = ? AND expires_at > NOW()
+      LIMIT 1
+    `, [state]);
+
+    if (!stateRecord) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=invalid_state`);
+    }
+
+    const hotelUuid = stateRecord.hotel_uuid;
+
+    // Trocar código por access token
+    const tokenResponse = await axios.post('https://graph.facebook.com/v18.0/oauth/access_token', {
+      client_id: process.env.FACEBOOK_APP_ID,
+      client_secret: process.env.FACEBOOK_APP_SECRET,
+      redirect_uri: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/meta/oauth/callback`,
+      code: code
+    });
+
+    const { access_token, expires_in } = tokenResponse.data;
+
+    // Obter informações do usuário e contas de anúncios
+    const meResponse = await axios.get('https://graph.facebook.com/v18.0/me', {
+      params: {
+        access_token,
+        fields: 'id,name,email'
+      }
+    });
+
+    const adAccountsResponse = await axios.get('https://graph.facebook.com/v18.0/me/adaccounts', {
+      params: {
+        access_token,
+        fields: 'id,name,account_status,currency,business'
+      }
+    });
+
+    // Se só tem uma conta, usar ela automaticamente
+    let selectedAdAccount = null;
+    if (adAccountsResponse.data.data.length === 1) {
+      selectedAdAccount = adAccountsResponse.data.data[0];
+    }
+
+    // Calcular data de expiração do token
+    const tokenExpiresAt = moment().add(expires_in || 3600, 'seconds').format('YYYY-MM-DD HH:mm:ss');
+
+    // Salvar credenciais
+    await metaAdsAPI.setCredentials(hotelUuid, {
+      appId: process.env.FACEBOOK_APP_ID,
+      appSecret: process.env.FACEBOOK_APP_SECRET,
+      accessToken: access_token,
+      adAccountId: selectedAdAccount?.id?.replace('act_', '') || null,
+      businessManagerId: selectedAdAccount?.business?.id || null,
+      tokenExpiresAt
+    });
+
+    // Salvar informações adicionais do OAuth
+    await db.query(`
+      INSERT INTO meta_oauth_info (
+        hotel_uuid, facebook_user_id, facebook_name, facebook_email,
+        available_ad_accounts, selected_ad_account, oauth_completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, NOW())
+      ON DUPLICATE KEY UPDATE
+        facebook_user_id = VALUES(facebook_user_id),
+        facebook_name = VALUES(facebook_name),
+        facebook_email = VALUES(facebook_email),
+        available_ad_accounts = VALUES(available_ad_accounts),
+        selected_ad_account = VALUES(selected_ad_account),
+        oauth_completed_at = NOW()
+    `, [
+      hotelUuid,
+      meResponse.data.id,
+      meResponse.data.name,
+      meResponse.data.email,
+      JSON.stringify(adAccountsResponse.data.data),
+      selectedAdAccount ? JSON.stringify(selectedAdAccount) : null
+    ]);
+
+    // Limpar state usado
+    await db.query('DELETE FROM oauth_states WHERE state = ?', [state]);
+
+    console.log(`✅ OAuth completed successfully for hotel: ${hotelUuid}`);
+
+    // Redirecionar com sucesso
+    const redirectUrl = selectedAdAccount 
+      ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?success=1&connected=1`
+      : `${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?success=1&select_account=1`;
+    
+    res.redirect(redirectUrl);
+
+  } catch (error) {
+    console.error('OAuth callback error:', error);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=oauth_failed`);
+  }
+});
+
+// GET /api/meta/oauth/accounts/:hotelUuid - Obter contas de anúncios disponíveis
+router.get('/oauth/accounts/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
+  try {
+    const { hotelUuid } = req.params;
+
+    const [oauthInfo] = await db.query(`
+      SELECT available_ad_accounts, selected_ad_account
+      FROM meta_oauth_info 
+      WHERE hotel_uuid = ?
+      ORDER BY oauth_completed_at DESC
+      LIMIT 1
+    `, [hotelUuid]);
+
+    if (!oauthInfo) {
+      return res.status(404).json({
+        error: 'Informações OAuth não encontradas'
+      });
+    }
+
+    res.json({
+      success: true,
+      accounts: JSON.parse(oauthInfo.available_ad_accounts || '[]'),
+      selectedAccount: oauthInfo.selected_ad_account ? JSON.parse(oauthInfo.selected_ad_account) : null
+    });
+
+  } catch (error) {
+    console.error('Error getting OAuth accounts:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// POST /api/meta/oauth/select-account/:hotelUuid - Selecionar conta de anúncios
+router.post('/oauth/select-account/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
+  try {
+    const { hotelUuid } = req.params;
+    const { adAccountId } = req.body;
+
+    if (!adAccountId) {
+      return res.status(400).json({
+        error: 'ID da conta de anúncios é obrigatório'
+      });
+    }
+
+    // Obter informações OAuth
+    const [oauthInfo] = await db.query(`
+      SELECT available_ad_accounts
+      FROM meta_oauth_info 
+      WHERE hotel_uuid = ?
+      ORDER BY oauth_completed_at DESC
+      LIMIT 1
+    `, [hotelUuid]);
+
+    if (!oauthInfo) {
+      return res.status(404).json({
+        error: 'Informações OAuth não encontradas'
+      });
+    }
+
+    const availableAccounts = JSON.parse(oauthInfo.available_ad_accounts || '[]');
+    const selectedAccount = availableAccounts.find(acc => acc.id === adAccountId);
+
+    if (!selectedAccount) {
+      return res.status(400).json({
+        error: 'Conta de anúncios não encontrada'
+      });
+    }
+
+    // Atualizar credenciais com a conta selecionada
+    await db.query(`
+      UPDATE meta_credentials 
+      SET ad_account_id = ?, 
+          business_manager_id = ?, 
+          updated_at = NOW()
+      WHERE hotel_uuid = ?
+    `, [
+      selectedAccount.id.replace('act_', ''),
+      selectedAccount.business?.id || null,
+      hotelUuid
+    ]);
+
+    // Atualizar informações OAuth
+    await db.query(`
+      UPDATE meta_oauth_info 
+      SET selected_ad_account = ?
+      WHERE hotel_uuid = ?
+    `, [JSON.stringify(selectedAccount), hotelUuid]);
+
+    res.json({
+      success: true,
+      message: 'Conta de anúncios selecionada com sucesso',
+      account: selectedAccount
+    });
+
+  } catch (error) {
+    console.error('Error selecting ad account:', error);
     res.status(500).json({
       error: 'Erro interno do servidor'
     });

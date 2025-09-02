@@ -39,7 +39,12 @@
       "Bash(dir)",
       "Bash(rd:*)",
       "Bash(del /q *.*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(dir models)",
+      "Bash(dir:*)",
+      "Bash(cp:*)",
+      "Bash(ping:*)",
+      "Bash(telnet:*)"
     ],
     "deny": [],
     "ask": []
