@@ -105,41 +105,50 @@ router.post('/credentials/:hotelUuid', authenticateToken, validateHotelAccess, a
   }
 });
 
-// GET /api/meta/credentials/:hotelUuid - Obter status das credenciais
+// GET /api/meta/credentials/:hotelUuid - Obter status das credenciais (APENAS contas conectadas)
 router.get('/credentials/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
   try {
     const { hotelUuid } = req.params;
 
-    const [credentials] = await db.query(`
+    // Buscar APENAS contas efetivamente conectadas (com status active)
+    const connectedAccounts = await db.query(`
       SELECT 
-        app_id, ad_account_id, business_manager_id, 
-        status, token_expires_at, last_sync_at,
-        created_at, updated_at
-      FROM meta_credentials 
-      WHERE hotel_uuid = ?
-      ORDER BY updated_at DESC
-      LIMIT 1
+        id, ad_account_id, ad_account_name, status, business_name, created_at, updated_at
+      FROM meta_connected_accounts 
+      WHERE hotel_uuid = ? AND status = 'active'
+      ORDER BY created_at ASC
     `, [hotelUuid]);
 
-    if (!credentials) {
+    if (!connectedAccounts || connectedAccounts.length === 0) {
       return res.status(404).json({
-        error: 'Credenciais Meta não encontradas para este hotel'
+        success: false,
+        error: 'Nenhuma conta Meta conectada para este hotel'
       });
     }
 
-    // Verificar se o token vai expirar em breve
-    const expiresIn = credentials.token_expires_at ? 
-      moment(credentials.token_expires_at).diff(moment(), 'days') : null;
+    // Pegar a primeira conta como principal para compatibilidade
+    const primaryAccount = connectedAccounts[0];
 
     res.json({
       success: true,
       credentials: {
-        ...credentials,
-        app_secret: '***',  // Não retornar o secret
-        access_token: '***', // Não retornar o token
-        expires_in_days: expiresIn,
-        needs_refresh: expiresIn !== null && expiresIn < 7
-      }
+        app_id: process.env.FACEBOOK_APP_ID,
+        ad_account_id: primaryAccount.ad_account_id,
+        created_at: primaryAccount.created_at,
+        updated_at: primaryAccount.updated_at,
+        // Não retornar tokens por segurança
+        app_secret: '***',
+        access_token: '***',
+        expires_in_days: null,
+        needs_refresh: false
+      },
+      connected_accounts: connectedAccounts.map(acc => ({
+        id: acc.id,
+        ad_account_id: acc.ad_account_id,
+        ad_account_name: acc.ad_account_name,
+        status: acc.status,
+        business_name: acc.business_name
+      }))
     });
 
   } catch (error) {
@@ -378,10 +387,8 @@ router.get('/oauth/url/:hotelUuid', authenticateToken, validateHotelAccess, asyn
     
     // Scopes necessários para Meta Ads
     const scopes = [
-      'ads_management',
       'ads_read',
-      'read_insights',
-      'business_management'
+      'ads_management'
     ].join(',');
 
     const authUrl = `https://www.facebook.com/v18.0/dialog/oauth` +
@@ -459,58 +466,56 @@ router.get('/oauth/callback', async (req, res) => {
       }
     });
 
-    // Se só tem uma conta, usar ela automaticamente
-    let selectedAdAccount = null;
-    if (adAccountsResponse.data.data.length === 1) {
-      selectedAdAccount = adAccountsResponse.data.data[0];
-    }
-
     // Calcular data de expiração do token
     const tokenExpiresAt = moment().add(expires_in || 3600, 'seconds').format('YYYY-MM-DD HH:mm:ss');
 
-    // Salvar credenciais
-    await metaAdsAPI.setCredentials(hotelUuid, {
-      appId: process.env.FACEBOOK_APP_ID,
-      appSecret: process.env.FACEBOOK_APP_SECRET,
-      accessToken: access_token,
-      adAccountId: selectedAdAccount?.id?.replace('act_', '') || null,
-      businessManagerId: selectedAdAccount?.business?.id || null,
-      tokenExpiresAt
-    });
-
-    // Salvar informações adicionais do OAuth
+    // Salvar todas as contas DISPONÍVEIS (não conectadas ainda)
+    const availableAccounts = adAccountsResponse.data.data;
+    
+    // Limpar contas disponíveis antigas deste hotel primeiro (reconexão)
     await db.query(`
-      INSERT INTO meta_oauth_info (
-        hotel_uuid, facebook_user_id, facebook_name, facebook_email,
-        available_ad_accounts, selected_ad_account, oauth_completed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, NOW())
-      ON DUPLICATE KEY UPDATE
-        facebook_user_id = VALUES(facebook_user_id),
-        facebook_name = VALUES(facebook_name),
-        facebook_email = VALUES(facebook_email),
-        available_ad_accounts = VALUES(available_ad_accounts),
-        selected_ad_account = VALUES(selected_ad_account),
-        oauth_completed_at = NOW()
-    `, [
-      hotelUuid,
-      meResponse.data.id,
-      meResponse.data.name,
-      meResponse.data.email,
-      JSON.stringify(adAccountsResponse.data.data),
-      selectedAdAccount ? JSON.stringify(selectedAdAccount) : null
-    ]);
+      DELETE FROM meta_available_accounts 
+      WHERE hotel_uuid = ?
+    `, [hotelUuid]);
+
+    // Inserir cada conta como DISPONÍVEL (não conectada)
+    for (const account of availableAccounts) {
+      await db.query(`
+        INSERT INTO meta_available_accounts (
+          hotel_uuid, ad_account_id, ad_account_name, business_id, business_name,
+          account_status, currency, access_token, token_expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          ad_account_name = VALUES(ad_account_name),
+          business_id = VALUES(business_id),
+          business_name = VALUES(business_name),
+          account_status = VALUES(account_status),
+          currency = VALUES(currency),
+          access_token = VALUES(access_token),
+          token_expires_at = VALUES(token_expires_at),
+          updated_at = NOW()
+      `, [
+        hotelUuid,
+        account.id.replace('act_', ''),
+        account.name,
+        account.business?.id || '',
+        account.business?.name || '',
+        account.account_status || 1,
+        account.currency || '',
+        access_token,
+        tokenExpiresAt
+      ]);
+    }
+
+    console.log(`✅ Salvou ${availableAccounts.length} contas DISPONÍVEIS para hotel: ${hotelUuid}`);
 
     // Limpar state usado
     await db.query('DELETE FROM oauth_states WHERE state = ?', [state]);
 
     console.log(`✅ OAuth completed successfully for hotel: ${hotelUuid}`);
 
-    // Redirecionar com sucesso
-    const redirectUrl = selectedAdAccount 
-      ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?success=1&connected=1`
-      : `${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?success=1&select_account=1`;
-    
-    res.redirect(redirectUrl);
+    // Redirecionar para seleção de contas (não conectar automaticamente)
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?oauth_success=1&select_accounts=1`);
 
   } catch (error) {
     console.error('OAuth callback error:', error);
@@ -518,29 +523,88 @@ router.get('/oauth/callback', async (req, res) => {
   }
 });
 
-// GET /api/meta/oauth/accounts/:hotelUuid - Obter contas de anúncios disponíveis
-router.get('/oauth/accounts/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
+// GET /api/meta/oauth/available-accounts/:hotelUuid - Obter contas disponíveis para seleção
+router.get('/oauth/available-accounts/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
   try {
     const { hotelUuid } = req.params;
 
-    const [oauthInfo] = await db.query(`
-      SELECT available_ad_accounts, selected_ad_account
-      FROM meta_oauth_info 
+    // Buscar contas disponíveis (após OAuth)
+    const availableAccounts = await db.query(`
+      SELECT ad_account_id, ad_account_name, business_id, business_name, 
+             account_status, currency, token_expires_at, created_at
+      FROM meta_available_accounts 
       WHERE hotel_uuid = ?
-      ORDER BY oauth_completed_at DESC
-      LIMIT 1
+      ORDER BY ad_account_name ASC
     `, [hotelUuid]);
 
-    if (!oauthInfo) {
-      return res.status(404).json({
-        error: 'Informações OAuth não encontradas'
+    // Buscar contas já conectadas
+    const connectedAccounts = await db.query(`
+      SELECT ad_account_id
+      FROM meta_connected_accounts 
+      WHERE hotel_uuid = ? AND status = 'active'
+    `, [hotelUuid]);
+
+    const connectedAccountIds = connectedAccounts.map(acc => acc.ad_account_id);
+
+    if (!availableAccounts || availableAccounts.length === 0) {
+      return res.json({
+        success: false,
+        message: 'Nenhuma conta disponível. Faça login no Facebook primeiro.',
+        accounts: [],
+        connectedAccountIds: connectedAccountIds
       });
     }
 
     res.json({
       success: true,
-      accounts: JSON.parse(oauthInfo.available_ad_accounts || '[]'),
-      selectedAccount: oauthInfo.selected_ad_account ? JSON.parse(oauthInfo.selected_ad_account) : null
+      accounts: availableAccounts.map(acc => ({
+        id: `act_${acc.ad_account_id}`,
+        account_id: acc.ad_account_id,
+        name: acc.ad_account_name,
+        business: {
+          id: acc.business_id,
+          name: acc.business_name
+        },
+        account_status: acc.account_status,
+        currency: acc.currency,
+        isConnected: connectedAccountIds.includes(acc.ad_account_id),
+        token_expires_at: acc.token_expires_at
+      })),
+      connectedAccountIds: connectedAccountIds,
+      total: availableAccounts.length
+    });
+
+  } catch (error) {
+    console.error('Error getting available accounts:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// GET /api/meta/oauth/accounts/:hotelUuid - Obter contas conectadas (compatibilidade)
+router.get('/oauth/accounts/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
+  try {
+    const { hotelUuid } = req.params;
+
+    // Buscar contas já conectadas
+    const connectedAccounts = await db.query(`
+      SELECT ad_account_id, ad_account_name
+      FROM meta_connected_accounts 
+      WHERE hotel_uuid = ? AND status = 'active'
+    `, [hotelUuid]);
+
+    res.json({
+      success: true,
+      accounts: connectedAccounts.map(acc => ({
+        id: `act_${acc.ad_account_id}`,
+        name: acc.ad_account_name || `Conta ${acc.ad_account_id}`
+      })),
+      selectedAccount: connectedAccounts.length > 0 ? {
+        id: `act_${connectedAccounts[0].ad_account_id}`,
+        name: connectedAccounts[0].ad_account_name
+      } : null,
+      connectedAccounts: connectedAccounts
     });
 
   } catch (error) {
@@ -551,8 +615,85 @@ router.get('/oauth/accounts/:hotelUuid', authenticateToken, validateHotelAccess,
   }
 });
 
-// POST /api/meta/oauth/select-account/:hotelUuid - Selecionar conta de anúncios
-router.post('/oauth/select-account/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
+// POST /api/meta/oauth/connect-accounts/:hotelUuid - Conectar contas selecionadas
+router.post('/oauth/connect-accounts/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
+  try {
+    const { hotelUuid } = req.params;
+    const { accountIds } = req.body;
+
+    if (!accountIds || !Array.isArray(accountIds) || accountIds.length === 0) {
+      return res.status(400).json({
+        error: 'Pelo menos uma conta deve ser selecionada'
+      });
+    }
+
+    const connectedAccounts = [];
+
+    // Conectar cada conta selecionada
+    for (const accountId of accountIds) {
+      const cleanAccountId = accountId.replace('act_', '');
+      
+      // Buscar dados da conta disponível
+      const [availableAccount] = await db.query(`
+        SELECT ad_account_id, ad_account_name, business_id, business_name,
+               access_token, token_expires_at
+        FROM meta_available_accounts 
+        WHERE hotel_uuid = ? AND ad_account_id = ?
+        LIMIT 1
+      `, [hotelUuid, cleanAccountId]);
+
+      if (!availableAccount) {
+        console.warn(`Conta ${accountId} não encontrada nas disponíveis`);
+        continue;
+      }
+
+      // Inserir na tabela de contas conectadas
+      await db.query(`
+        INSERT INTO meta_connected_accounts (
+          hotel_uuid, ad_account_id, ad_account_name, business_id, business_name,
+          status, access_token, token_expires_at
+        ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+        ON DUPLICATE KEY UPDATE
+          ad_account_name = VALUES(ad_account_name),
+          business_id = VALUES(business_id),
+          business_name = VALUES(business_name),
+          status = 'active',
+          access_token = VALUES(access_token),
+          token_expires_at = VALUES(token_expires_at),
+          updated_at = NOW()
+      `, [
+        hotelUuid,
+        availableAccount.ad_account_id,
+        availableAccount.ad_account_name,
+        availableAccount.business_id,
+        availableAccount.business_name,
+        availableAccount.access_token,
+        availableAccount.token_expires_at
+      ]);
+
+      connectedAccounts.push({
+        id: accountId,
+        name: availableAccount.ad_account_name
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `${connectedAccounts.length} conta(s) conectada(s) com sucesso!`,
+      connectedAccounts: connectedAccounts,
+      total: connectedAccounts.length
+    });
+
+  } catch (error) {
+    console.error('Error connecting accounts:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// POST /api/meta/oauth/disconnect-account/:hotelUuid - Desconectar conta específica
+router.post('/oauth/disconnect-account/:hotelUuid', authenticateToken, validateHotelAccess, async (req, res) => {
   try {
     const { hotelUuid } = req.params;
     const { adAccountId } = req.body;
@@ -563,58 +704,27 @@ router.post('/oauth/select-account/:hotelUuid', authenticateToken, validateHotel
       });
     }
 
-    // Obter informações OAuth
-    const [oauthInfo] = await db.query(`
-      SELECT available_ad_accounts
-      FROM meta_oauth_info 
-      WHERE hotel_uuid = ?
-      ORDER BY oauth_completed_at DESC
-      LIMIT 1
-    `, [hotelUuid]);
+    const cleanAccountId = adAccountId.replace('act_', '');
 
-    if (!oauthInfo) {
+    // Remover da tabela de conectadas
+    const result = await db.query(`
+      DELETE FROM meta_connected_accounts 
+      WHERE hotel_uuid = ? AND ad_account_id = ?
+    `, [hotelUuid, cleanAccountId]);
+
+    if (result.affectedRows === 0) {
       return res.status(404).json({
-        error: 'Informações OAuth não encontradas'
+        error: 'Conta não encontrada ou já desconectada'
       });
     }
-
-    const availableAccounts = JSON.parse(oauthInfo.available_ad_accounts || '[]');
-    const selectedAccount = availableAccounts.find(acc => acc.id === adAccountId);
-
-    if (!selectedAccount) {
-      return res.status(400).json({
-        error: 'Conta de anúncios não encontrada'
-      });
-    }
-
-    // Atualizar credenciais com a conta selecionada
-    await db.query(`
-      UPDATE meta_credentials 
-      SET ad_account_id = ?, 
-          business_manager_id = ?, 
-          updated_at = NOW()
-      WHERE hotel_uuid = ?
-    `, [
-      selectedAccount.id.replace('act_', ''),
-      selectedAccount.business?.id || null,
-      hotelUuid
-    ]);
-
-    // Atualizar informações OAuth
-    await db.query(`
-      UPDATE meta_oauth_info 
-      SET selected_ad_account = ?
-      WHERE hotel_uuid = ?
-    `, [JSON.stringify(selectedAccount), hotelUuid]);
 
     res.json({
       success: true,
-      message: 'Conta de anúncios selecionada com sucesso',
-      account: selectedAccount
+      message: 'Conta desconectada com sucesso'
     });
 
   } catch (error) {
-    console.error('Error selecting ad account:', error);
+    console.error('Error disconnecting account:', error);
     res.status(500).json({
       error: 'Erro interno do servidor'
     });
