@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Calendar, Users, Edit, Trash2, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Calendar, Users, Edit, Trash2, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Moon, DollarSign } from 'lucide-react';
 
 // Versão simplificada sem biblioteca externa por enquanto
 // import GSTC from 'gantt-schedule-timeline-calendar';
@@ -98,11 +98,11 @@ const CalendarioFullCalendar = () => {
 
   // Estado das reservas com procedência e status
   const [reservas, setReservas] = useState([
-    { id: 1, nome: 'João Silva', quarto: '101', inicio: 1.5, duracao: 3, procedencia: 'Booking.com', status: 'reservado' },
-    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 4.5, duracao: 3, procedencia: 'WhatsApp', status: 'checkin-nao-efetuado' },
-    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 0.5, duracao: 3, procedencia: 'Airbnb', status: 'hospedado' },
-    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 3.5, duracao: 3, procedencia: 'Telefone', status: 'checkout-nao-efetuado' },
-    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 2.5, duracao: 3, procedencia: 'Site Direto', status: 'pre-reserva' }
+    { id: 1, nome: 'João Silva', quarto: '101', inicio: 1.5, duracao: 3, procedencia: 'Booking.com', status: 'reservado', hospedes: 2, noites: 3, valorTotal: 450, valorPago: 450, pagamentoPendente: false },
+    { id: 2, nome: 'Carlos Lima da Silva Santos', quarto: '101', inicio: 4.5, duracao: 3, procedencia: 'WhatsApp', status: 'checkin-nao-efetuado', hospedes: 4, noites: 3, valorTotal: 750, valorPago: 200, pagamentoPendente: true },
+    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 0.5, duracao: 3, procedencia: 'Airbnb', status: 'hospedado', hospedes: 1, noites: 3, valorTotal: 390, valorPago: 390, pagamentoPendente: false },
+    { id: 4, nome: 'Ana Paula Ferreira dos Santos', quarto: '201', inicio: 3.5, duracao: 3, procedencia: 'Telefone', status: 'checkout-nao-efetuado', hospedes: 3, noites: 3, valorTotal: 600, valorPago: 300, pagamentoPendente: true },
+    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 2.5, duracao: 3, procedencia: 'Site Direto', status: 'pre-reserva', hospedes: 2, noites: 3, valorTotal: 480, valorPago: 0, pagamentoPendente: true }
   ]);
 
   // Estrutura de categorias de quartos
@@ -836,19 +836,21 @@ const CalendarioFullCalendar = () => {
                         return (
                           <div
                             key={reserva.id}
-                            className={`absolute h-10 ${getStatusColor(reserva.status)} ${getTextColor(reserva.status)} text-xs flex flex-col justify-center pl-2 pr-1 rounded cursor-move hover:opacity-90 transition-all select-none ${
+                            className={`absolute h-10 ${getStatusColor(reserva.status)} ${getTextColor(reserva.status)} text-xs flex items-center pl-4 pr-2 cursor-move hover:opacity-90 transition-all select-none ${
                               isDragging && draggedReserva?.id === reserva.id ? 'opacity-70 z-50 ring-2 ring-white' : 
                               selectedForMove?.id === reserva.id ? 'ring-2 ring-yellow-400 z-50' : 'z-10'
                             }`}
                             style={{
-                              top: '2px',
+                              top: '50%',
                               left: `${((currentInicio + 0.5) / 15) * 100}%`,
                               width: `${(reserva.duracao / 15) * 100}%`,
-                              transform: 'translateX(-50%)',
+                              transform: 'translate(-50%, -50%)',
                               transition: isDragging && draggedReserva?.id === reserva.id ? 'none' : 'all 0.2s ease',
-                              boxShadow: '3px 4px 8px rgba(0, 0, 0, 0.3)', // Sombra forte deslocada para direita e baixo
-                              marginLeft: '1px', // 1px de margem à esquerda
-                              marginRight: '1px' // 1px de margem à direita (total 2px entre cards)
+                              boxShadow: '3px 4px 8px rgba(0, 0, 0, 0.3)',
+                              marginLeft: '1px',
+                              marginRight: '1px',
+                              clipPath: 'polygon(5% 0%, 100% 0%, 95% 100%, 0% 100%)', // Chanfrado: início mais atrás, fim mais à frente
+                              borderRadius: '0' // Remove border-radius para que o clipPath funcione melhor
                             }}
                             title={`${reserva.nome} - ${reserva.duracao} dias - Arraste para mover | Duplo clique para modo pin`}
                             onMouseDown={(e) => handleMouseDown(e, reserva)}
@@ -867,17 +869,45 @@ const CalendarioFullCalendar = () => {
                             }}
                             draggable={true} // Manter HTML5 drag como backup
                           >
-                            <div className="font-medium leading-tight">
-                              {reserva.nome}
-                              {selectedForMove?.id === reserva.id && (
-                                <span className="ml-1">📍</span>
-                              )}
-                              {isDragging && draggedReserva?.id === reserva.id && (
-                                <span className="ml-1">🎯</span>
-                              )}
+                            {/* Informações principais à esquerda */}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium leading-tight">
+                                {reserva.nome.length > 15 ? reserva.nome.substring(0, 15) + '...' : reserva.nome}
+                                {selectedForMove?.id === reserva.id && (
+                                  <span className="ml-1">📍</span>
+                                )}
+                                {isDragging && draggedReserva?.id === reserva.id && (
+                                  <span className="ml-1">🎯</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] opacity-75 leading-tight">
+                                {reserva.procedencia}
+                              </div>
                             </div>
-                            <div className="text-[10px] opacity-75 leading-tight">
-                              {reserva.procedencia}
+
+                            {/* Ícones informativos à direita */}
+                            <div className="flex items-center space-x-1.5 flex-shrink-0 mr-2">
+                              {/* Número de hóspedes */}
+                              <div className="flex items-center">
+                                <User size={12} className="opacity-70" />
+                                <span className="text-[10px] ml-0.5">{reserva.hospedes}</span>
+                              </div>
+                              
+                              {/* Número de noites */}
+                              <div className="flex items-center">
+                                <Moon size={12} className="opacity-70" />
+                                <span className="text-[10px] ml-0.5">{reserva.noites}</span>
+                              </div>
+                              
+                              {/* Pagamento pendente */}
+                              {reserva.pagamentoPendente && (
+                                <div 
+                                  className="flex items-center cursor-help"
+                                  title={`Total: R$ ${reserva.valorTotal.toFixed(2)} | Pago: R$ ${reserva.valorPago.toFixed(2)} | Pendente: R$ ${(reserva.valorTotal - reserva.valorPago).toFixed(2)}`}
+                                >
+                                  <DollarSign size={12} className="opacity-70 text-yellow-300" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
