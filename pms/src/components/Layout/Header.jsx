@@ -19,10 +19,12 @@ const Header = () => {
       if (isCalendarPage) {
         headerRef.current.style.setProperty('position', 'absolute', 'important');
         headerRef.current.style.setProperty('top', 'auto', 'important');
-        headerRef.current.style.setProperty('z-index', 'auto', 'important');
+        headerRef.current.style.setProperty('z-index', '9999', 'important');
         headerRef.current.style.setProperty('transform', 'none', 'important');
-        headerRef.current.style.setProperty('left', 'auto', 'important');
-        headerRef.current.style.setProperty('right', 'auto', 'important');
+        headerRef.current.style.setProperty('left', '18rem', 'important'); // Largura da sidebar expandida
+        headerRef.current.style.setProperty('right', '0px', 'important');  
+        headerRef.current.style.setProperty('width', 'calc(100vw - 18rem)', 'important');
+        headerRef.current.style.setProperty('height', '63px', 'important');
         console.log('Header forçado para static');
       } else {
         headerRef.current.style.removeProperty('position');
@@ -31,6 +33,8 @@ const Header = () => {
         headerRef.current.style.removeProperty('transform');
         headerRef.current.style.removeProperty('left');
         headerRef.current.style.removeProperty('right');
+        headerRef.current.style.removeProperty('width');
+        headerRef.current.style.removeProperty('height');
         console.log('Header resetado para comportamento normal');
       }
     }

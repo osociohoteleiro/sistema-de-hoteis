@@ -12,6 +12,11 @@ const CalendarioFullCalendar = () => {
   const [draggedReserva, setDraggedReserva] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  
+  // Estados para redimensionamento
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeType, setResizeType] = useState(null); // 'start' ou 'end'
+  const [resizingReserva, setResizingReserva] = useState(null);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [tempPosition, setTempPosition] = useState(null);
   const [dragMoved, setDragMoved] = useState(false); // Para detectar se houve movimento real
@@ -252,15 +257,26 @@ const CalendarioFullCalendar = () => {
     setIsDragging(true);
     setDraggedReserva(reserva);
     setDragStartPos({ x: e.clientX, y: e.clientY });
-    setTempPosition({ inicio: reserva.inicio });
+    setTempPosition({ inicio: reserva.inicio, duracao: reserva.duracao });
     setDragMoved(false); // Reset do flag de movimento
+  };
+
+  // Sistema de redimensionamento
+  const handleResizeStart = (e, reserva, type) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsResizing(true);
+    setResizeType(type);
+    setResizingReserva(reserva);
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    setTempPosition({ inicio: reserva.inicio, duracao: reserva.duracao });
+    setDragMoved(false);
   };
 
   // Listeners globais usando useEffect
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (!isDragging || !draggedReserva) return;
-      
       const deltaX = e.clientX - dragStartPos.x;
       
       // Calcular nova posição
@@ -272,12 +288,26 @@ const CalendarioFullCalendar = () => {
       const pixelsPerDay = timelineWidth / 15;
       const dayOffset = deltaX / pixelsPerDay;
       
-      const novaInicio = Math.max(0, Math.min(14 - draggedReserva.duracao, draggedReserva.inicio + dayOffset));
-      setTempPosition({ inicio: novaInicio });
-      
       // Detectar se houve movimento significativo (mais que 5px)
       if (Math.abs(deltaX) > 5) {
         setDragMoved(true);
+      }
+
+      if (isDragging && draggedReserva) {
+        const novaInicio = Math.max(0.5, Math.min(14.5 - draggedReserva.duracao, draggedReserva.inicio + dayOffset));
+        setTempPosition({ inicio: novaInicio, duracao: draggedReserva.duracao });
+      }
+      
+      if (isResizing && resizingReserva) {
+        if (resizeType === 'start') {
+          // Redimensionar o início: alterar apenas o início, manter duração
+          const novoInicio = Math.max(0.5, resizingReserva.inicio + dayOffset);
+          setTempPosition({ inicio: novoInicio, duracao: resizingReserva.duracao });
+        } else if (resizeType === 'end') {
+          // Redimensionar o fim (manter início, alterar duração)
+          const novaDuracao = Math.max(1, Math.min(15 - resizingReserva.inicio, resizingReserva.duracao + dayOffset));
+          setTempPosition({ inicio: resizingReserva.inicio, duracao: novaDuracao });
+        }
       }
     };
 
@@ -304,14 +334,39 @@ const CalendarioFullCalendar = () => {
         }
       }
       
+      if (isResizing && resizingReserva && tempPosition && dragMoved) {
+        const snapInicio = Math.round(tempPosition.inicio - 0.5) + 0.5;
+        const snapDuracao = Math.max(1, Math.round(tempPosition.duracao));
+        
+        // Verificar se a nova posição/duração causaria sobreposição
+        const novaReserva = {
+          ...resizingReserva,
+          inicio: snapInicio,
+          duracao: snapDuracao
+        };
+        
+        if (verificarSobreposicao(novaReserva, resizingReserva)) {
+          alert(`❌ Conflito! Não é possível redimensionar "${resizingReserva.nome}" para esta posição pois há sobreposição com outra reserva.`);
+        } else {
+          setReservas(prev => prev.map(r => 
+            r.id === resizingReserva.id 
+              ? { ...r, inicio: snapInicio, duracao: snapDuracao, noites: snapDuracao }
+              : r
+          ));
+        }
+      }
+      
       // Limpar estados
       setIsDragging(false);
       setDraggedReserva(null);
+      setIsResizing(false);
+      setResizingReserva(null);
+      setResizeType(null);
       setTempPosition(null);
       setDragMoved(false);
     };
 
-    if (isDragging) {
+    if (isDragging || isResizing) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       
@@ -320,7 +375,7 @@ const CalendarioFullCalendar = () => {
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, draggedReserva, dragStartPos, tempPosition]);
+  }, [isDragging, draggedReserva, isResizing, resizingReserva, resizeType, dragStartPos, tempPosition]);
 
   // Funções de drag & drop HTML5 (backup)
   const handleDragStart = (e, reserva) => {
@@ -828,10 +883,17 @@ const CalendarioFullCalendar = () => {
                       
                       {/* Reservas dinâmicas com drag personalizado */}
                       {reservasDoQuarto.map(reserva => {
-                        // Usar posição temporária durante o drag ou posição atual
-                        const currentInicio = (isDragging && draggedReserva?.id === reserva.id && tempPosition) 
+                        // Usar posição temporária durante o drag/resize ou posição atual
+                        const isBeingDragged = isDragging && draggedReserva?.id === reserva.id;
+                        const isBeingResized = isResizing && resizingReserva?.id === reserva.id;
+                        
+                        const currentInicio = (isBeingDragged || isBeingResized) && tempPosition
                           ? tempPosition.inicio 
                           : reserva.inicio;
+                        
+                        const currentDuracao = (isBeingDragged || isBeingResized) && tempPosition
+                          ? tempPosition.duracao
+                          : reserva.duracao;
                         
                         return (
                           <div
@@ -843,13 +905,13 @@ const CalendarioFullCalendar = () => {
                             style={{
                               top: '50%',
                               left: `${((currentInicio + 0.5) / 15) * 100}%`,
-                              width: `${(reserva.duracao / 15) * 100}%`,
+                              width: `${(currentDuracao / 15) * 100}%`,
                               transform: 'translate(-50%, -50%)',
-                              transition: isDragging && draggedReserva?.id === reserva.id ? 'none' : 'all 0.2s ease',
+                              transition: (isBeingDragged || isBeingResized) ? 'none' : 'all 0.2s ease',
                               boxShadow: '3px 4px 8px rgba(0, 0, 0, 0.3)',
                               marginLeft: '1px',
                               marginRight: '1px',
-                              clipPath: 'polygon(5% 0%, 100% 0%, 95% 100%, 0% 100%)', // Chanfrado: início mais atrás, fim mais à frente
+                              clipPath: 'polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%)', // Chanfrado: 8px fixos independente do tamanho
                               borderRadius: '0' // Remove border-radius para que o clipPath funcione melhor
                             }}
                             title={`${reserva.nome} - ${reserva.duracao} dias - Arraste para mover | Duplo clique para modo pin`}
@@ -869,6 +931,13 @@ const CalendarioFullCalendar = () => {
                             }}
                             draggable={true} // Manter HTML5 drag como backup
                           >
+                            {/* Alça de redimensionamento esquerda */}
+                            <div
+                              className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize bg-white bg-opacity-20 hover:bg-opacity-40 transition-all z-20 border-r border-white border-opacity-30"
+                              onMouseDown={(e) => handleResizeStart(e, reserva, 'start')}
+                              title="Arraste para redimensionar o início"
+                            />
+
                             {/* Informações principais à esquerda */}
                             <div className="flex-1 min-w-0">
                               <div className="font-medium leading-tight">
@@ -878,6 +947,9 @@ const CalendarioFullCalendar = () => {
                                 )}
                                 {isDragging && draggedReserva?.id === reserva.id && (
                                   <span className="ml-1">🎯</span>
+                                )}
+                                {isResizing && resizingReserva?.id === reserva.id && (
+                                  <span className="ml-1">↔️</span>
                                 )}
                               </div>
                               <div className="text-[10px] opacity-75 leading-tight">
@@ -896,7 +968,7 @@ const CalendarioFullCalendar = () => {
                               {/* Número de noites */}
                               <div className="flex items-center">
                                 <Moon size={12} className="opacity-70" />
-                                <span className="text-[10px] ml-0.5">{reserva.noites}</span>
+                                <span className="text-[10px] ml-0.5">{currentDuracao}</span>
                               </div>
                               
                               {/* Pagamento pendente */}
@@ -909,6 +981,13 @@ const CalendarioFullCalendar = () => {
                                 </div>
                               )}
                             </div>
+
+                            {/* Alça de redimensionamento direita */}
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize bg-white bg-opacity-20 hover:bg-opacity-40 transition-all z-20 border-l border-white border-opacity-30"
+                              onMouseDown={(e) => handleResizeStart(e, reserva, 'end')}
+                              title="Arraste para redimensionar o fim"
+                            />
                           </div>
                         );
                       })}
