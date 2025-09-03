@@ -1,0 +1,627 @@
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Calendar, Users, Edit, Trash2, Settings } from 'lucide-react';
+
+// Versão simplificada sem biblioteca externa por enquanto
+// import GSTC from 'gantt-schedule-timeline-calendar';
+// import 'gantt-schedule-timeline-calendar/dist/style.css';
+
+const CalendarioGantt = () => {
+  const gstcRef = useRef(null);
+  const [selectedReserva, setSelectedReserva] = useState(null);
+  const [showNewReservaModal, setShowNewReservaModal] = useState(false);
+  const [draggedReserva, setDraggedReserva] = useState(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
+  const [tempPosition, setTempPosition] = useState(null);
+
+  // Estado das reservas (posicionadas no meio das células)
+  const [reservas, setReservas] = useState([
+    { id: 1, nome: 'João Silva', quarto: '101', inicio: 2.5, duracao: 3, cor: 'bg-blue-500' },
+    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 5.5, duracao: 3, cor: 'bg-orange-500' },
+    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 1.5, duracao: 3, cor: 'bg-green-500' },
+    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 4.5, duracao: 3, cor: 'bg-red-500' },
+    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 3.5, duracao: 3, cor: 'bg-purple-500' }
+  ]);
+
+  const quartos = ['101', '102', '201', '301'];
+
+  // Sistema de drag personalizado com mouse events - CORRIGIDO
+  const handleMouseDown = (e, reserva) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragging(true);
+    setDraggedReserva(reserva);
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    setTempPosition({ inicio: reserva.inicio }); // Inicializar com posição atual
+  };
+
+  // Listeners globais usando useEffect
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging || !draggedReserva) return;
+      
+      const deltaX = e.clientX - dragStartPos.x;
+      
+      // Calcular nova posição
+      const timelineElement = document.querySelector('.timeline-container');
+      if (!timelineElement) return;
+      
+      const timelineRect = timelineElement.getBoundingClientRect();
+      const timelineWidth = timelineRect.width - 192; // 192px = largura da coluna de quartos
+      const pixelsPerDay = timelineWidth / 15;
+      const dayOffset = deltaX / pixelsPerDay;
+      
+      const novaInicio = Math.max(0, Math.min(14 - draggedReserva.duracao, draggedReserva.inicio + dayOffset));
+      setTempPosition({ inicio: novaInicio });
+    };
+
+    const handleMouseUp = () => {
+      if (isDragging && draggedReserva && tempPosition) {
+        // Snap para o meio das células (0.5, 1.5, 2.5...)
+        const snapInicio = Math.round(tempPosition.inicio) + 0.5;
+        
+        setReservas(prev => prev.map(r => 
+          r.id === draggedReserva.id 
+            ? { ...r, inicio: snapInicio }
+            : r
+        ));
+      }
+      
+      // Limpar estados
+      setIsDragging(false);
+      setDraggedReserva(null);
+      setTempPosition(null);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, draggedReserva, dragStartPos, tempPosition]);
+
+  // Funções de drag & drop HTML5 (backup)
+  const handleDragStart = (e, reserva) => {
+    e.dataTransfer.setData('text/plain', JSON.stringify(reserva));
+    setDraggedReserva(reserva);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetQuarto, targetDia) => {
+    e.preventDefault();
+    if (draggedReserva) {
+      setReservas(prev => prev.map(r => 
+        r.id === draggedReserva.id 
+          ? { ...r, inicio: targetDia, quarto: targetQuarto }
+          : r
+      ));
+      setDraggedReserva(null);
+    }
+  };
+
+  // Função alternativa de clique para mover reservas
+  const [selectedForMove, setSelectedForMove] = useState(null);
+  
+  const handleReservaClick = (reserva) => {
+    if (selectedForMove && selectedForMove.id === reserva.id) {
+      setSelectedForMove(null); // Deselecionar
+    } else {
+      setSelectedForMove(reserva); // Selecionar para mover
+    }
+  };
+
+  const handleCellClick = (quarto, dia) => {
+    if (selectedForMove) {
+      // Mover a reserva selecionada para a célula clicada
+      setReservas(prev => prev.map(r => 
+        r.id === selectedForMove.id 
+          ? { ...r, inicio: dia, quarto: quarto }
+          : r
+      ));
+      setSelectedForMove(null);
+    }
+  };
+
+  // Configuração dos dados de quartos (recursos)
+  const rows = {
+    '101': {
+      id: '101',
+      label: 'Quarto 101 - Standard',
+      parentId: 'standard',
+      expanded: false,
+    },
+    '102': {
+      id: '102',
+      label: 'Quarto 102 - Standard',
+      parentId: 'standard',
+      expanded: false,
+    },
+    '103': {
+      id: '103',
+      label: 'Quarto 103 - Standard',
+      parentId: 'standard',
+      expanded: false,
+    },
+    'standard': {
+      id: 'standard',
+      label: '🏠 Standard',
+      expanded: true,
+    },
+    '201': {
+      id: '201',
+      label: 'Quarto 201 - Superior',
+      parentId: 'superior',
+      expanded: false,
+    },
+    '202': {
+      id: '202',
+      label: 'Quarto 202 - Superior', 
+      parentId: 'superior',
+      expanded: false,
+    },
+    'superior': {
+      id: 'superior',
+      label: '⭐ Superior',
+      expanded: true,
+    },
+    '301': {
+      id: '301',
+      label: 'Quarto 301 - Deluxe',
+      parentId: 'deluxe',
+      expanded: false,
+    },
+    '302': {
+      id: '302',
+      label: 'Quarto 302 - Deluxe',
+      parentId: 'deluxe',
+      expanded: false,
+    },
+    'deluxe': {
+      id: 'deluxe',
+      label: '💎 Deluxe',
+      expanded: true,
+    },
+    '401': {
+      id: '401',
+      label: 'Quarto 401 - Suíte',
+      parentId: 'suite',
+      expanded: false,
+    },
+    'suite': {
+      id: 'suite',
+      label: '👑 Suíte',
+      expanded: true,
+    },
+  };
+
+  // Dados das reservas (items) com encaixe perfeito
+  const items = {
+    'reserva1': {
+      id: 'reserva1',
+      label: 'João Silva',
+      rowId: '101',
+      time: {
+        start: new Date('2025-09-03T12:00:00').getTime(),
+        end: new Date('2025-09-06T12:00:00').getTime(),
+      },
+      style: {
+        background: '#3B82F6',
+        color: 'white',
+        borderRadius: '6px',
+        border: '2px solid #1E40AF'
+      }
+    },
+    'reserva2': {
+      id: 'reserva2',
+      label: 'Carlos Lima',
+      rowId: '101', // Mesmo quarto - encaixe perfeito
+      time: {
+        start: new Date('2025-09-06T12:00:00').getTime(), // Exatamente onde João Silva termina
+        end: new Date('2025-09-09T12:00:00').getTime(),
+      },
+      style: {
+        background: '#F59E0B',
+        color: 'white',
+        borderRadius: '6px',
+        border: '2px solid #D97706'
+      }
+    },
+    'reserva3': {
+      id: 'reserva3',
+      label: 'Maria Santos',
+      rowId: '201',
+      time: {
+        start: new Date('2025-09-02T12:00:00').getTime(),
+        end: new Date('2025-09-05T12:00:00').getTime(),
+      },
+      style: {
+        background: '#10B981',
+        color: 'white',
+        borderRadius: '6px',
+        border: '2px solid #047857'
+      }
+    },
+    'reserva4': {
+      id: 'reserva4',
+      label: 'Ana Paula',
+      rowId: '201', // Mesmo quarto - encaixe perfeito
+      time: {
+        start: new Date('2025-09-05T12:00:00').getTime(), // Exatamente onde Maria Santos termina
+        end: new Date('2025-09-08T12:00:00').getTime(),
+      },
+      style: {
+        background: '#EF4444',
+        color: 'white',
+        borderRadius: '6px',
+        border: '2px solid #DC2626'
+      }
+    },
+    'reserva5': {
+      id: 'reserva5',
+      label: 'Pedro Costa',
+      rowId: '301',
+      time: {
+        start: new Date('2025-09-04T12:00:00').getTime(),
+        end: new Date('2025-09-07T12:00:00').getTime(),
+      },
+      style: {
+        background: '#8B5CF6',
+        color: 'white',
+        borderRadius: '6px',
+        border: '2px solid #6D28D9'
+      }
+    },
+  };
+
+  // Configuração do Gantt Schedule Timeline Calendar
+  const config = {
+    height: 600,
+    list: {
+      rows,
+      items,
+    },
+    chart: {
+      time: {
+        from: new Date('2025-09-01').getTime(),
+        to: new Date('2025-09-30').getTime(),
+        zoom: 16, // Zoom para visualizar dias
+        period: 'day',
+      },
+      items: {
+        // Configuração para reservas hoteleiras
+        minWidth: 100,
+        maxWidth: 400,
+        gap: {
+          horizontal: 2,
+          vertical: 4,
+        }
+      }
+    },
+    locale: {
+      name: 'pt-BR',
+      weekdays: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'],
+      months: [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+      ]
+    },
+    plugins: [
+      // Plugin para permitir movimentação de reservas
+      'ItemMovement', 
+      // Plugin para permitir redimensionamento
+      'ItemResizing',
+      // Plugin para seleção
+      'Selection'
+    ]
+  };
+
+  // useEffect(() => {
+  //   if (gstcRef.current) {
+  //     // Inicializar o Gantt Schedule Timeline Calendar
+  //     const gstc = GSTC(gstcRef.current, config);
+
+  //     // Event listeners
+  //     if (gstc.state) {
+  //       gstc.state.subscribe('config.list.items', (items) => {
+  //         console.log('Reservas atualizadas:', items);
+  //       });
+  //     }
+
+  //     // Cleanup
+  //     return () => {
+  //       if (gstc && typeof gstc.destroy === 'function') {
+  //         gstc.destroy();
+  //       }
+  //     };
+  //   }
+  // }, []);
+
+  return (
+    <div className="flex flex-col h-full bg-slate-100">
+      {/* Header */}
+      <div className="bg-slate-200 border-b border-slate-300 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-800">
+              Calendário PMS - Gantt Timeline
+            </h1>
+            <p className="text-sm text-slate-600 mt-1">
+              Sistema especializado em reservas hoteleiras com encaixe perfeito
+            </p>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            {/* Legenda */}
+            <div className="flex items-center space-x-3 text-xs">
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
+                <span className="text-slate-700">Standard</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
+                <span className="text-slate-700">Superior</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-purple-500 rounded-sm"></div>
+                <span className="text-slate-700">Deluxe</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-yellow-500 rounded-sm"></div>
+                <span className="text-slate-700">Suíte</span>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setShowNewReservaModal(true)}
+              className="px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center space-x-1"
+            >
+              <Plus size={16} />
+              <span>Nova Reserva</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Gantt Timeline Container - Demonstração */}
+      <div className="flex-1 p-4">
+        <div className="bg-white rounded-lg shadow-sm border border-slate-200 h-full overflow-hidden">
+          <div className="h-full w-full flex flex-col">
+            {/* Header de datas */}
+            <div className="flex border-b border-slate-200 bg-slate-50">
+              <div className="w-48 p-3 font-semibold text-slate-700 border-r border-slate-200">
+                Quartos
+              </div>
+              <div className="flex-1 flex">
+                {Array.from({ length: 15 }, (_, i) => {
+                  const date = new Date('2025-09-01');
+                  date.setDate(date.getDate() + i);
+                  const isToday = i === 2; // 03/09
+                  
+                  return (
+                    <div 
+                      key={i}
+                      className={`flex-1 p-2 text-center text-xs border-r border-slate-200 relative ${
+                        isToday ? 'bg-blue-100 font-semibold text-blue-700' : 'text-slate-600'
+                      }`}
+                    >
+                      <div className="font-medium">{date.getDate()}</div>
+                      <div className="text-xs opacity-70">
+                        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][date.getDay()]}
+                      </div>
+                      {/* Linha central para indicar meio do dia - OCULTA */}
+                      <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-300 opacity-0"></div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Timeline dinâmico com drag & drop */}
+            <div className="flex-1 overflow-y-auto timeline-container relative">
+              {/* Grid de quartos */}
+              {quartos.map((quartoId, quartoIndex) => {
+                const reservasDoQuarto = reservas.filter(r => r.quarto === quartoId);
+                
+                return (
+                  <div key={quartoId} className="flex min-h-[60px] hover:bg-slate-50 border-b border-slate-100">
+                    <div className="w-48 p-3 border-r border-slate-200">
+                      <div className="font-medium text-slate-900">Quarto {quartoId}</div>
+                      <div className="text-xs text-slate-500">
+                        {quartoId.startsWith('1') ? 'Standard' : 
+                         quartoId.startsWith('2') ? 'Superior' : 
+                         quartoId.startsWith('3') ? 'Deluxe' : 'Suíte'}
+                      </div>
+                    </div>
+                    
+                    {/* Área do timeline com grid */}
+                    <div className="flex-1 relative">
+                      {/* Grid de células (15 dias) - agora clicável */}
+                      <div className="absolute inset-0 flex">
+                        {Array.from({ length: 15 }, (_, i) => (
+                          <div 
+                            key={i}
+                            className="flex-1 border-r border-slate-100 relative hover:bg-blue-50 cursor-pointer transition-colors"
+                            style={{ minWidth: '60px' }}
+                            onClick={() => handleCellClick(quartoId, i)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, quartoId, i)}
+                            title={selectedForMove ? `Mover "${selectedForMove.nome}" para dia ${i + 1}` : `Dia ${i + 1}`}
+                          >
+                            {/* Linha central para snap - OCULTA */}
+                            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-300 opacity-0"></div>
+                            
+                            {/* Indicador de drop */}
+                            {selectedForMove && (
+                              <div className="absolute inset-0 bg-green-100 opacity-50 flex items-center justify-center">
+                                <div className="text-xs text-green-600 font-medium">📍</div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {/* Reservas dinâmicas com drag personalizado */}
+                      {reservasDoQuarto.map(reserva => {
+                        // Usar posição temporária durante o drag ou posição atual
+                        const currentInicio = (isDragging && draggedReserva?.id === reserva.id && tempPosition) 
+                          ? tempPosition.inicio 
+                          : reserva.inicio;
+                        
+                        return (
+                          <div
+                            key={reserva.id}
+                            className={`absolute top-2 h-8 ${reserva.cor} text-white text-xs flex items-center justify-center rounded shadow cursor-move hover:opacity-90 transition-all select-none ${
+                              isDragging && draggedReserva?.id === reserva.id ? 'opacity-70 z-50 ring-2 ring-white' : 
+                              selectedForMove?.id === reserva.id ? 'ring-2 ring-yellow-400 z-50' : 'z-10'
+                            }`}
+                            style={{
+                              left: `${((currentInicio + 0.5) / 15) * 100}%`,
+                              width: `${(reserva.duracao / 15) * 100}%`,
+                              transform: 'translateX(-50%)',
+                              transition: isDragging && draggedReserva?.id === reserva.id ? 'none' : 'all 0.2s ease'
+                            }}
+                            title={`${reserva.nome} - ${reserva.duracao} dias - Arraste para mover com precisão`}
+                            onMouseDown={(e) => handleMouseDown(e, reserva)}
+                            onDragStart={(e) => handleDragStart(e, reserva)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isDragging) {
+                                handleReservaClick(reserva);
+                              }
+                            }}
+                            draggable={true} // Manter HTML5 drag como backup
+                          >
+                            {reserva.nome}
+                            {selectedForMove?.id === reserva.id && (
+                              <span className="ml-1">📍</span>
+                            )}
+                            {isDragging && draggedReserva?.id === reserva.id && (
+                              <span className="ml-1">🎯</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Área vazia indicativa */}
+                      {reservasDoQuarto.length === 0 && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="text-xs text-slate-400">
+                            {selectedForMove ? 'Clique aqui para mover a reserva' : 'Disponível'}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Informações sobre o uso */}
+      <div className="bg-slate-200 border-t border-slate-300 p-3">
+        <div className="text-center">
+          <div className="text-sm font-medium text-slate-800 mb-1">
+            ✨ Sistema de Movimentação de Reservas
+          </div>
+          <div className="text-xs text-slate-600 mb-2">
+            📋 <strong>Três formas de mover:</strong> 1) Clique na reserva + célula destino | 2) Arraste mouse (ajustes finos) | 3) Drag & drop HTML5
+          </div>
+          <div className="flex justify-center space-x-4 text-xs">
+            <div className="text-slate-600">
+              🎯 <strong>Posicionamento:</strong> No meio das células
+            </div>
+            <div className="text-slate-600">
+              📍 <strong>Encaixe:</strong> João Silva → Carlos Lima (perfeito)
+            </div>
+            <div className="text-slate-600">
+              {selectedForMove ? (
+                <span className="text-yellow-600 font-medium">
+                  📌 "{selectedForMove.nome}" selecionado - Clique em uma célula
+                </span>
+              ) : (
+                "🖱️ Clique em uma reserva para começar"
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal Nova Reserva */}
+      {showNewReservaModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-800">Nova Reserva</h3>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Hóspede</label>
+                <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome do hóspede" />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Check-in</label>
+                  <input type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Check-out</label>
+                  <input type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Quarto</label>
+                <select className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Selecionar quarto</option>
+                  <option value="101">101 - Standard</option>
+                  <option value="102">102 - Standard</option>
+                  <option value="103">103 - Standard</option>
+                  <option value="201">201 - Superior</option>
+                  <option value="202">202 - Superior</option>
+                  <option value="301">301 - Deluxe</option>
+                  <option value="302">302 - Deluxe</option>
+                  <option value="401">401 - Suíte</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Pax</label>
+                <input type="number" min="1" max="6" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Número de pessoas" />
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-slate-200 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowNewReservaModal(false)}
+                className="px-4 py-2 text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => setShowNewReservaModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Criar Reserva
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CalendarioGantt;

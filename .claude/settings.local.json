@@ -45,7 +45,8 @@
       "Bash(cp:*)",
       "Bash(ping:*)",
       "Bash(telnet:*)",
-      "Bash(mysql:*)"
+      "Bash(mysql:*)",
+      "WebFetch(domain:fullcalendar.io)"
     ],
     "deny": [],
     "ask": []

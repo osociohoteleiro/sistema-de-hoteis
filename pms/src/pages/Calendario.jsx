@@ -21,6 +21,7 @@ const Calendario = () => {
   const [selectedReserva, setSelectedReserva] = useState(null);
   const [showNewReservaModal, setShowNewReservaModal] = useState(false);
   const [draggedReserva, setDraggedReserva] = useState(null);
+  const [dragOverCell, setDragOverCell] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({
     'Standard': true,
     'Superior': true, 
@@ -150,19 +151,34 @@ const Calendario = () => {
     });
   };
 
+  const getDayOfWeek = (date) => {
+    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    return days[date.getDay()];
+  };
+
   const calculateReservaPosition = (reserva, dayWidth) => {
     const checkInDate = new Date(reserva.checkIn);
     const checkOutDate = new Date(reserva.checkOut);
     const firstDay = days[0];
     
-    const startDiff = Math.floor((checkInDate - firstDay) / (1000 * 60 * 60 * 24));
-    const duration = Math.floor((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+    // Calcular dias de ocupação (estilo Gantt)
+    const startDay = Math.floor((checkInDate - firstDay) / (1000 * 60 * 60 * 24));
+    const endDay = Math.floor((checkOutDate - firstDay) / (1000 * 60 * 60 * 24));
     
-    // As posições são relativas à área da timeline (após a coluna dos quartos)
+    // REGRA GANTT: Check-out não ocupa a noite de saída
+    const occupiedDays = endDay - startDay; // Não inclui o dia de check-out
+    
+    // POSIÇÃO CENTRALIZADA: Cards ficam no meio das células
+    // Margem de 5% de cada lado para centralizar o card
+    const cardMargin = 0.05; // 5% de margem
+    const leftPosition = startDay + cardMargin;           // 5% dentro da primeira célula
+    const widthInDays = occupiedDays - (2 * cardMargin);  // Largura com margens
+    
     return {
-      left: Math.max(startDiff * dayWidth, 0),
-      width: Math.max(duration * dayWidth, dayWidth * 0.3), // Mínimo de 30% de um dia
-      visible: startDiff < 30 && startDiff + duration > 0
+      left: leftPosition * dayWidth,
+      width: Math.max(widthInDays * dayWidth, dayWidth * 0.1), // Mínimo 10% de largura
+      visible: startDay < 30 && endDay > 0,
+      occupiedDays: occupiedDays
     };
   };
 
@@ -179,6 +195,84 @@ const Calendario = () => {
     }));
   };
 
+  // Funções de Drag and Drop
+  const handleDragStart = (e, reserva) => {
+    setDraggedReserva(reserva);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+    e.target.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1';
+    setDraggedReserva(null);
+    setDragOverCell(null);
+  };
+
+  const handleDragOver = (e, quartoId, date) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverCell({ quartoId, date: formatDate(date) });
+  };
+
+  const handleDragLeave = (e) => {
+    // Só limpa se realmente saiu da célula
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverCell(null);
+    }
+  };
+
+  const handleDrop = (e, quartoId, date) => {
+    e.preventDefault();
+    
+    if (!draggedReserva) return;
+
+    const targetDate = formatDate(date);
+    const checkInDate = new Date(draggedReserva.checkIn);
+    const checkOutDate = new Date(draggedReserva.checkOut);
+    const duration = Math.floor((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+
+    // Calcular nova data de check-out
+    const newCheckOut = new Date(date);
+    newCheckOut.setDate(newCheckOut.getDate() + duration);
+
+    // Verificar conflitos estilo Gantt (check-out libera o dia)
+    const conflictingReservations = reservas.filter(r => {
+      if (r.id === draggedReserva.id || r.quartoId !== quartoId) return false;
+      
+      const rCheckIn = new Date(r.checkIn).getTime();
+      const rCheckOut = new Date(r.checkOut).getTime();
+      const newCheckInTime = new Date(targetDate).getTime();
+      const newCheckOutTime = newCheckOut.getTime();
+      
+      // Conflito apenas se houver sobreposição real de períodos de ocupação
+      // Check-out no mesmo dia de check-in é permitido (regra Gantt)
+      return (
+        (rCheckIn < newCheckOutTime && rCheckOut > newCheckInTime)
+      );
+    });
+
+    if (conflictingReservations.length > 0) {
+      alert('Não é possível mover a reserva. O quarto já possui reserva neste período.');
+      setDragOverCell(null);
+      return;
+    }
+
+    // Atualizar a reserva
+    setReservas(prev => prev.map(r => 
+      r.id === draggedReserva.id 
+        ? {
+            ...r,
+            quartoId,
+            checkIn: targetDate,
+            checkOut: formatDate(newCheckOut)
+          }
+        : r
+    ));
+
+    setDragOverCell(null);
+  };
+
   const monthNames = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
@@ -186,17 +280,107 @@ const Calendario = () => {
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
-      {/* Timeline Scheduler */}
-      <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden">
+      <style jsx>{`
+        .gantt-bar {
+          position: relative;
+          border-left: none;
+          border-right: none;
+        }
+        .gantt-bar::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: inherit;
+          z-index: -1;
+        }
+        .gantt-bar:hover {
+          filter: brightness(0.9);
+          transform: scaleY(1.05);
+        }
+        /* Efeito de transição suave entre reservas */
+        .gantt-bar + .gantt-bar {
+          margin-left: 0;
+        }
+      `}</style>
+      {/* Layout Principal: Sidebar + Timeline */}
+      <div className="flex-1 flex bg-slate-50 overflow-hidden">
         
-        {/* Header com Mês e Datas */}
-        <div className="bg-slate-200 border-b border-slate-300">
-          {/* Linha do Mês */}
-          <div className="flex border-b border-slate-300">
-            <div className="w-48 bg-slate-300 border-r border-slate-400 p-2 flex items-center justify-center font-semibold text-slate-800 text-sm">
+        {/* Sidebar de Quartos */}
+        <div className="w-48 bg-slate-300 border-r border-slate-400 flex flex-col">
+          {/* Header da Sidebar */}
+          <div className="p-2 border-b border-slate-400 bg-slate-300">
+            <div className="font-semibold text-slate-800 text-sm text-center">
               Quartos
             </div>
-            <div className="flex-1 p-2 flex items-center justify-between bg-slate-200">
+            <div className="text-xs text-slate-700 text-center mt-1">
+              Categoria / Número
+            </div>
+          </div>
+          
+          {/* Lista de Quartos */}
+          <div className="flex-1 overflow-y-auto">
+            {categorias.map((categoria) => (
+              <div key={categoria.nome}>
+                {/* Header da Categoria */}
+                <div className="bg-slate-400 border-b border-slate-500 sticky top-0 z-20">
+                  <button
+                    onClick={() => toggleCategory(categoria.nome)}
+                    className="w-full p-3 flex items-center space-x-2 hover:bg-slate-500 transition-colors text-left"
+                  >
+                    <div 
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: categoria.cor }}
+                    ></div>
+                    <div className="flex-1 font-semibold text-slate-800 text-sm">
+                      {categoria.nome}
+                    </div>
+                    <div className="text-xs text-slate-600 mr-2">
+                      {categoria.quartos.length}
+                    </div>
+                    {expandedCategories[categoria.nome] ? (
+                      <ChevronUp size={16} className="text-slate-700" />
+                    ) : (
+                      <ChevronDown size={16} className="text-slate-700" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Quartos da Categoria */}
+                {expandedCategories[categoria.nome] && categoria.quartos.map((quarto, index) => (
+                  <div 
+                    key={quarto.id}
+                    className={`min-h-[60px] p-3 border-b border-slate-300 flex items-center space-x-3 ${
+                      index % 2 === 0 ? 'bg-slate-200' : 'bg-slate-250'
+                    } hover:bg-blue-100/30 transition-colors`}
+                  >
+                    <div className="flex-1">
+                      <div className="font-semibold text-slate-900 text-sm">{quarto.numero}</div>
+                      <div className="text-xs text-slate-600">{categoria.nome}</div>
+                    </div>
+                    <div className={`text-xs px-2 py-1 rounded-full ${
+                      quarto.status === 'livre' ? 'bg-green-200 text-green-800' :
+                      quarto.status === 'ocupado' ? 'bg-red-200 text-red-800' :
+                      'bg-yellow-200 text-yellow-800'
+                    }`}>
+                      {quarto.status === 'livre' ? 'Livre' : 
+                       quarto.status === 'ocupado' ? 'Ocupado' : 'Manutenção'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Área do Timeline */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header do Timeline */}
+          <div className="bg-slate-200 border-b border-slate-300 flex flex-col">
+            {/* Linha de Controles e Legenda */}
+            <div className="p-2 flex items-center justify-between bg-slate-200">
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => navigateDays(-1)}
@@ -241,14 +425,9 @@ const Calendario = () => {
                 </button>
               </div>
             </div>
-          </div>
-          
-          {/* Linha das Datas */}
-          <div className="flex">
-            <div className="w-48 bg-slate-300 border-r border-slate-400 p-2 text-xs text-slate-700 text-center">
-              Categoria / Número
-            </div>
-            <div className="flex flex-1">
+            
+            {/* Header das Datas */}
+            <div className="flex border-t border-slate-300">
               {days.map((date, index) => {
                 const isToday = formatDate(date) === formatDate(new Date());
                 const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -256,99 +435,77 @@ const Calendario = () => {
                 return (
                   <div 
                     key={index}
-                    className={`flex-1 min-w-[40px] p-2 text-center text-xs border-r border-slate-300 ${
+                    className={`flex-1 min-w-[80px] p-2 text-center text-xs border-r border-slate-300 ${
                       isToday ? 'bg-blue-100 text-blue-700 font-semibold' : 
                       isWeekend ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-700'
                     }`}
                   >
                     <div className="font-medium">{date.getDate()}</div>
                     <div className="text-xs opacity-70">
-                      {formatDateDisplay(date).split(' ')[1]}
+                      {getDayOfWeek(date)}
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-        </div>
 
-        {/* Grid de Quartos e Reservas por Categoria */}
-        <div className="flex-1 overflow-y-auto">
-          {categorias.map((categoria) => (
-            <div key={categoria.nome}>
-              {/* Header da Categoria */}
-              <div className="bg-slate-300 border-b border-slate-400 sticky top-0 z-20">
-                <div className="flex items-center h-10">
-                  {/* Botão da Categoria */}
-                  <button
-                    onClick={() => toggleCategory(categoria.nome)}
-                    className="w-48 border-r border-slate-400 px-3 py-2 flex items-center space-x-2 hover:bg-slate-400 transition-colors text-left"
-                  >
-                    <div 
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: categoria.cor }}
-                    ></div>
-                    <div className="flex-1 font-semibold text-slate-800 text-sm">
-                      {categoria.nome}
-                    </div>
-                    <div className="text-xs text-slate-600 mr-2">
-                      {categoria.quartos.length}
-                    </div>
-                    {expandedCategories[categoria.nome] ? (
-                      <ChevronUp size={16} className="text-slate-700" />
-                    ) : (
-                      <ChevronDown size={16} className="text-slate-700" />
-                    )}
-                  </button>
-                  
-                  {/* Linha da Timeline da Categoria */}
-                  <div className="flex-1 bg-slate-300"></div>
-                </div>
-              </div>
-
-              {/* Quartos da Categoria */}
-              {expandedCategories[categoria.nome] && categoria.quartos.map((quarto, index) => {
+          {/* Timeline de Reservas */}
+          <div className="flex-1 overflow-y-auto">
+            {categorias.map((categoria) => (
+              expandedCategories[categoria.nome] && categoria.quartos.map((quarto, index) => {
                 const quartoReservas = reservas.filter(r => r.quartoId === quarto.id);
-                const dayWidth = 100 / 30;
+                const dayWidth = 100 / 30; // Cada dia ocupa 3.333% da timeline
                 
                 return (
                   <div 
                     key={quarto.id}
-                    className={`flex border-b border-slate-200 min-h-[60px] relative ${
+                    className={`min-h-[60px] relative border-b border-slate-200 ${
                       index % 2 === 0 ? 'bg-slate-50' : 'bg-slate-100'
                     } hover:bg-blue-100/30 transition-colors`}
                   >
-                    {/* Coluna do Quarto */}
-                    <div className="w-48 border-r border-slate-300 p-3 flex items-center space-x-3">
-                      <div className="w-4 h-4 flex-shrink-0"></div> {/* Espaço para alinhamento */}
-                      <div className="flex-1">
-                        <div className="font-semibold text-slate-900">{quarto.numero}</div>
-                        <div className="text-xs text-slate-600">{categoria.nome}</div>
-                      </div>
-                      <div className={`text-xs px-2 py-1 rounded-full ${
-                        quarto.status === 'livre' ? 'bg-green-200 text-green-800' :
-                        quarto.status === 'ocupado' ? 'bg-red-200 text-red-800' :
-                        'bg-yellow-200 text-yellow-800'
-                      }`}>
-                        {quarto.status === 'livre' ? 'Livre' : 
-                         quarto.status === 'ocupado' ? 'Ocupado' : 'Manutenção'}
-                      </div>
-                    </div>
 
                     {/* Timeline de Reservas */}
-                    <div className="flex-1 relative">
-                      {/* Grid de Dias (invisível, para clique) */}
+                    <div className="absolute inset-0">
+                      {/* Grid de linhas verticais alinhadas com header */}
+                      <div className="absolute inset-0">
+                        {days.map((date, dayIndex) => {
+                          const leftPosition = (dayIndex * 100) / 30; // Mesmo cálculo do dayWidth
+                          return (
+                            <div
+                              key={`grid-${dayIndex}`}
+                              className="absolute top-0 bottom-0 border-r border-slate-200"
+                              style={{ left: `${leftPosition + (100/30)}%` }} // Linha no final de cada dia
+                            />
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Área de clique invisível */}
                       <div className="absolute inset-0 flex">
-                        {days.map((date, dayIndex) => (
-                          <div 
-                            key={dayIndex}
-                            className="flex-1 min-w-[40px] hover:bg-blue-200/40 transition-colors cursor-pointer border-r border-slate-200"
-                            onClick={() => {
-                              console.log(`Criar reserva para quarto ${quarto.numero} em ${formatDate(date)}`);
-                            }}
-                            title={`Criar reserva para ${quarto.numero} - ${formatDateDisplay(date)}`}
-                          />
-                        ))}
+                        {days.map((date, dayIndex) => {
+                          const isDragOver = dragOverCell && 
+                                           dragOverCell.quartoId === quarto.id && 
+                                           dragOverCell.date === formatDate(date);
+                          
+                          return (
+                            <div 
+                              key={dayIndex}
+                              className={`flex-1 min-w-[80px] transition-colors cursor-pointer ${
+                                isDragOver 
+                                  ? 'bg-green-200/60' 
+                                  : 'hover:bg-blue-200/40'
+                              }`}
+                              onClick={() => {
+                                console.log(`Criar reserva para quarto ${quarto.numero} em ${formatDate(date)}`);
+                              }}
+                              onDragOver={(e) => handleDragOver(e, quarto.id, date)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, quarto.id, date)}
+                              title={`Criar reserva para ${quarto.numero} - ${formatDateDisplay(date)}`}
+                            />
+                          );
+                        })}
                       </div>
 
                       {/* Reservas como blocos */}
@@ -361,27 +518,25 @@ const Calendario = () => {
                         return (
                           <div
                             key={reserva.id}
-                            className={`absolute top-2 bottom-2 rounded-lg shadow-sm border-l-4 cursor-pointer hover:shadow-md transition-all z-10 ${
-                              reserva.status === 'confirmada' ? 'bg-blue-100 border-blue-400' :
-                              reserva.status === 'checkedin' ? 'bg-green-100 border-green-400' :
-                              'bg-gray-100 border-gray-400'
-                            }`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, reserva)}
+                            onDragEnd={handleDragEnd}
+                            className={`absolute top-2 bottom-2 shadow-md cursor-move hover:shadow-lg transition-all z-10 reserva-card gantt-bar ${
+                              reserva.status === 'confirmada' ? 'bg-blue-300' :
+                              reserva.status === 'checkedin' ? 'bg-green-300' :
+                              'bg-gray-300'
+                            } ${draggedReserva?.id === reserva.id ? 'opacity-50' : ''}`}
                             style={{
                               left: `${position.left}%`,
-                              width: `${position.width}%`
+                              width: `${position.width}%`,
+                              clipPath: 'polygon(2% 0%, 98% 0%, 100% 50%, 98% 100%, 2% 100%, 0% 50%)'
                             }}
                             onClick={() => setSelectedReserva(reserva)}
-                            title={`${reserva.hospede} - ${reserva.checkIn} à ${reserva.checkOut}`}
+                            title={`${reserva.hospede} - ${reserva.checkIn} à ${reserva.checkOut} (Arraste para mover)`}
                           >
-                            <div className="p-2 h-full flex flex-col justify-center">
-                              <div className="text-xs font-semibold text-slate-800 truncate">
+                            <div className="p-2 h-full flex flex-col justify-center relative">
+                              <div className="text-xs font-semibold text-slate-900 truncate text-center">
                                 {reserva.hospede}
-                              </div>
-                              <div className="text-xs text-slate-600">
-                                {reserva.pax} pax
-                              </div>
-                              <div className={`text-xs px-1 py-0.5 rounded mt-1 ${statusBadge.class} w-fit`}>
-                                {statusBadge.text}
                               </div>
                             </div>
                           </div>
@@ -390,9 +545,9 @@ const Calendario = () => {
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          ))}
+              })
+            ))}
+          </div>
         </div>
       </div>
 

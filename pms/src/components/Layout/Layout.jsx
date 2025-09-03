@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
 const Layout = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const location = useLocation();
+  const isCalendarPage = location.pathname === '/calendario';
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -14,7 +16,7 @@ const Layout = () => {
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-hidden bg-slate-50">
+        <main className={`flex-1 overflow-hidden bg-slate-50 ${!isCalendarPage ? 'p-6' : ''}`}>
           <Outlet />
         </main>
       </div>
