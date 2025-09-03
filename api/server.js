@@ -121,6 +121,7 @@ const reportsRoutes = require('./routes/reports');
 const webhooksRoutes = require('./routes/webhooks');
 const metaRoutes = require('./routes/meta');
 const marketingMessagesRoutes = require('./routes/marketing-messages');
+const logosRoutes = require('./routes/logos');
 // const migrateRoutes = require('./routes/migrate'); // Removido por segurança
 
 // Rotas da API
@@ -143,6 +144,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/meta', metaRoutes);
 app.use('/api/marketing-messages', marketingMessagesRoutes);
+app.use('/api/logos', logosRoutes);
 // app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
 // Middleware de erro global

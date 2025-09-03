@@ -2,6 +2,7 @@ const express = require('express');
 const Joi = require('joi');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { Config, ApiEndpoint } = require('../models/Config');
+const LogoHistory = require('../models/LogoHistory');
 
 const router = express.Router();
 
@@ -485,6 +486,116 @@ router.delete('/endpoints/:id', authenticateToken, async (req, res) => {
     console.error('Erro ao excluir endpoint:', error);
     res.status(500).json({
       error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// =============================================================================
+// ROTA ESPECIAL PARA CONFIGURAÇÕES COM LOGOTIPO
+// =============================================================================
+
+// Validação para configurações completas (incluindo logotipo)
+const fullConfigSchema = Joi.object({
+  hotel_uuid: Joi.string().allow(null, ''),
+  configurations: Joi.object({
+    logo: Joi.string().uri().allow(null, ''),
+    company_name: Joi.string().min(1).max(255),
+    upload_config: Joi.object().allow(null),
+    system_config: Joi.object().allow(null)
+  }).required()
+});
+
+// POST /api/config/save - Salvar configurações completas (incluindo logotipo no histórico)
+router.post('/save', authenticateToken, async (req, res) => {
+  try {
+    const { error, value } = fullConfigSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        error: 'Dados inválidos',
+        details: error.details[0].message
+      });
+    }
+
+    const { hotel_uuid, configurations } = value;
+    let hotelId = null;
+
+    // Resolver hotel_id a partir do uuid se fornecido
+    if (hotel_uuid) {
+      const Hotel = require('../models/Hotel');
+      const hotel = await Hotel.findByUuid(hotel_uuid);
+      if (!hotel) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      hotelId = hotel.id;
+
+      // Verificar se usuário tem acesso ao hotel
+      if (req.user.user_type === 'HOTEL') {
+        const userHotels = await req.user.getHotels();
+        const hasAccess = userHotels.some(h => h.id == hotelId);
+        
+        if (!hasAccess) {
+          return res.status(403).json({
+            error: 'Acesso negado ao hotel especificado'
+          });
+        }
+      }
+    } else if (req.user.user_type === 'HOTEL') {
+      return res.status(400).json({
+        error: 'hotel_uuid é obrigatório para usuários de hotel'
+      });
+    }
+
+    const { logo, company_name, upload_config, system_config } = configurations;
+    
+    // Salvar configurações tradicionais
+    const promises = [];
+    
+    if (company_name) {
+      promises.push(Config.setValue('company_name', company_name, 'STRING', hotelId, 'Nome da empresa'));
+    }
+    
+    if (upload_config) {
+      promises.push(Config.setValue('upload_config', upload_config, 'JSON', hotelId, 'Configurações de upload'));
+    }
+    
+    if (system_config) {
+      promises.push(Config.setValue('system_config', system_config, 'JSON', hotelId, 'Configurações do sistema'));
+    }
+
+    // Se há um logotipo, salvar no histórico E na configuração tradicional
+    if (logo && logo.trim() !== '') {
+      // Adicionar ao histórico de logotipos
+      const logoHistoryItem = await LogoHistory.create(hotelId, logo, true); // Definir como ativo
+      
+      if (logoHistoryItem) {
+        // Também salvar na configuração tradicional para compatibilidade
+        promises.push(Config.setValue('logo_patch', logo, 'STRING', hotelId, 'Logotipo da empresa'));
+      } else {
+        console.warn('Falha ao salvar logotipo no histórico, salvando apenas na configuração tradicional');
+        promises.push(Config.setValue('logo_patch', logo, 'STRING', hotelId, 'Logotipo da empresa'));
+      }
+    }
+
+    // Executar todas as operações de salvamento
+    await Promise.all(promises);
+
+    res.json({
+      success: true,
+      message: 'Configurações salvas com sucesso',
+      data: {
+        hotel_id: hotelId,
+        configurations_saved: Object.keys(configurations).length,
+        logo_saved_to_history: !!(logo && logo.trim() !== '')
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao salvar configurações completas:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor',
+      details: error.message
     });
   }
 });
