@@ -16,6 +16,7 @@
     "@fullcalendar/resource-timeline": "^6.1.19",
     "@fullcalendar/timegrid": "^6.1.19",
     "@fullcalendar/timeline": "^6.1.19",
+    "framer-motion": "^12.23.12",
     "gantt-schedule-timeline-calendar": "^3.41.1",
     "lucide-react": "^0.542.0",
     "react": "^19.1.1",
