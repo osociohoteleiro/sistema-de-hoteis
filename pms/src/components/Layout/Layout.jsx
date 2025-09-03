@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -16,7 +16,7 @@ const Layout = () => {
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
-        <main className={`flex-1 overflow-hidden bg-slate-50 ${!isCalendarPage ? 'p-6' : ''}`}>
+        <main className={`flex-1 ${isCalendarPage ? 'overflow-auto' : 'overflow-hidden'} bg-slate-50 ${!isCalendarPage ? 'p-6' : ''}`}>
           <Outlet />
         </main>
       </div>

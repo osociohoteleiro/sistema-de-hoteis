@@ -16,6 +16,12 @@ const CalendarioFullCalendar = () => {
   const [tempPosition, setTempPosition] = useState(null);
   const [dragMoved, setDragMoved] = useState(false); // Para detectar se houve movimento real
   const [currentDate, setCurrentDate] = useState(new Date()); // Estado para controlar a data atual
+  const [isHeaderCompact, setIsHeaderCompact] = useState(false); // Estado para header compacto
+  const [isDaysHeaderFixed, setIsDaysHeaderFixed] = useState(false); // Estado para header dos dias
+  
+  // Detectar se a sidebar está colapsada (assumindo expandida por padrão)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarWidth = sidebarCollapsed ? '5rem' : '18rem';
 
   // Mapeamento de cores por status
   const getStatusColor = (status) => {
@@ -60,6 +66,36 @@ const CalendarioFullCalendar = () => {
     }));
   };
 
+  // Detectar scroll para ativar headers fixos
+  useEffect(() => {
+    const handleScroll = () => {
+      // Obter o elemento main que tem o scroll
+      const mainElement = document.querySelector('main');
+      if (!mainElement) return;
+      
+      const scrollTop = mainElement.scrollTop;
+      console.log('Scroll detectado:', scrollTop); // Debug
+      
+      const shouldBeCompact = scrollTop > 150;
+      const shouldFixDaysHeader = scrollTop > 200; // Header dos dias fixa um pouco depois
+      
+      console.log('Header compacto:', shouldBeCompact, 'Days header fixo:', shouldFixDaysHeader); // Debug
+      
+      setIsHeaderCompact(shouldBeCompact);
+      setIsDaysHeaderFixed(shouldFixDaysHeader);
+    };
+
+    console.log('Adicionando listener de scroll no main'); // Debug
+    const mainElement = document.querySelector('main');
+    if (mainElement) {
+      mainElement.addEventListener('scroll', handleScroll);
+      return () => {
+        console.log('Removendo listener de scroll'); // Debug
+        mainElement.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, []);
+
   // Estado das reservas com procedência e status
   const [reservas, setReservas] = useState([
     { id: 1, nome: 'João Silva', quarto: '101', inicio: 1.5, duracao: 3, procedencia: 'Booking.com', status: 'reservado' },
@@ -72,14 +108,35 @@ const CalendarioFullCalendar = () => {
   // Estrutura de categorias de quartos
   const [categorias] = useState([
     {
+      id: 'economico',
+      nome: 'Econômico',
+      cor: '#64748B',
+      quartos: [
+        { id: '001', numero: '001', status: 'disponivel' },
+        { id: '002', numero: '002', status: 'ocupado' },
+        { id: '003', numero: '003', status: 'disponivel' },
+        { id: '004', numero: '004', status: 'limpeza' },
+        { id: '005', numero: '005', status: 'disponivel' },
+        { id: '006', numero: '006', status: 'manutencao' },
+        { id: '007', numero: '007', status: 'disponivel' },
+        { id: '008', numero: '008', status: 'disponivel' }
+      ]
+    },
+    {
       id: 'standard',
       nome: 'Standard',
       cor: '#3B82F6',
       quartos: [
         { id: '101', numero: '101', status: 'disponivel' },
-        { id: '102', numero: '102', status: 'disponivel' },
+        { id: '102', numero: '102', status: 'ocupado' },
         { id: '103', numero: '103', status: 'manutencao' },
-        { id: '104', numero: '104', status: 'disponivel' }
+        { id: '104', numero: '104', status: 'disponivel' },
+        { id: '105', numero: '105', status: 'limpeza' },
+        { id: '106', numero: '106', status: 'disponivel' },
+        { id: '107', numero: '107', status: 'ocupado' },
+        { id: '108', numero: '108', status: 'disponivel' },
+        { id: '109', numero: '109', status: 'disponivel' },
+        { id: '110', numero: '110', status: 'ocupado' }
       ]
     },
     {
@@ -88,8 +145,13 @@ const CalendarioFullCalendar = () => {
       cor: '#10B981',
       quartos: [
         { id: '201', numero: '201', status: 'disponivel' },
-        { id: '202', numero: '202', status: 'disponivel' },
-        { id: '203', numero: '203', status: 'ocupado' }
+        { id: '202', numero: '202', status: 'ocupado' },
+        { id: '203', numero: '203', status: 'ocupado' },
+        { id: '204', numero: '204', status: 'disponivel' },
+        { id: '205', numero: '205', status: 'limpeza' },
+        { id: '206', numero: '206', status: 'disponivel' },
+        { id: '207', numero: '207', status: 'manutencao' },
+        { id: '208', numero: '208', status: 'disponivel' }
       ]
     },
     {
@@ -98,7 +160,11 @@ const CalendarioFullCalendar = () => {
       cor: '#8B5CF6',
       quartos: [
         { id: '301', numero: '301', status: 'disponivel' },
-        { id: '302', numero: '302', status: 'disponivel' }
+        { id: '302', numero: '302', status: 'ocupado' },
+        { id: '303', numero: '303', status: 'disponivel' },
+        { id: '304', numero: '304', status: 'limpeza' },
+        { id: '305', numero: '305', status: 'disponivel' },
+        { id: '306', numero: '306', status: 'ocupado' }
       ]
     },
     {
@@ -107,17 +173,56 @@ const CalendarioFullCalendar = () => {
       cor: '#F59E0B',
       quartos: [
         { id: '401', numero: '401', status: 'disponivel' },
-        { id: '402', numero: '402', status: 'limpeza' }
+        { id: '402', numero: '402', status: 'limpeza' },
+        { id: '403', numero: '403', status: 'ocupado' },
+        { id: '404', numero: '404', status: 'disponivel' }
+      ]
+    },
+    {
+      id: 'premium',
+      nome: 'Premium',
+      cor: '#DC2626',
+      quartos: [
+        { id: '501', numero: '501', status: 'disponivel' },
+        { id: '502', numero: '502', status: 'ocupado' },
+        { id: '503', numero: '503', status: 'disponivel' },
+        { id: '504', numero: '504', status: 'manutencao' },
+        { id: '505', numero: '505', status: 'disponivel' }
+      ]
+    },
+    {
+      id: 'executivo',
+      nome: 'Executivo',
+      cor: '#7C2D12',
+      quartos: [
+        { id: '601', numero: '601', status: 'disponivel' },
+        { id: '602', numero: '602', status: 'ocupado' },
+        { id: '603', numero: '603', status: 'limpeza' },
+        { id: '604', numero: '604', status: 'disponivel' }
+      ]
+    },
+    {
+      id: 'presidencial',
+      nome: 'Presidencial',
+      cor: '#581C87',
+      quartos: [
+        { id: '701', numero: '701', status: 'disponivel' },
+        { id: '702', numero: '702', status: 'ocupado' },
+        { id: '703', numero: '703', status: 'disponivel' }
       ]
     }
   ]);
 
   // Estado para controlar categorias expandidas/colapsadas
   const [expandedCategories, setExpandedCategories] = useState({
+    'economico': true,
     'standard': true,
     'superior': true,
     'deluxe': true,
-    'suite': true
+    'suite': true,
+    'premium': true,
+    'executivo': true,
+    'presidencial': true
   });
 
   // Função para verificar se há sobreposição entre reservas
@@ -514,52 +619,100 @@ const CalendarioFullCalendar = () => {
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
-      {/* Header */}
-      <div className="bg-slate-200 border-b border-slate-300 p-4">
+      {/* Header do Calendário */}
+      <div className={`bg-slate-200 border-b border-slate-300 transition-all duration-300 ease-in-out ${
+        isHeaderCompact ? 'fixed z-30 py-2 px-4' : 'relative py-4 px-4'
+      }`}
+      style={{
+        ...(isHeaderCompact ? {
+          top: '4rem', // Logo abaixo do header do site (64px)
+          left: sidebarWidth,
+          right: 0,
+          width: `calc(100vw - ${sidebarWidth})`
+        } : {})
+      }}>
         <div className="flex justify-between items-center">
-          {/* Título à esquerda */}
-          <h1 className="text-lg font-semibold text-slate-800">
+          {/* Título à esquerda - reduz no modo compacto */}
+          <h1 className={`font-semibold text-slate-800 transition-all duration-300 ${
+            isHeaderCompact ? 'text-sm' : 'text-lg'
+          }`}>
             Calendário
           </h1>
           
-          {/* Navegação de mês no centro */}
-          <div className="flex items-center space-x-4">
+          {/* Navegação de mês no centro - reduz no modo compacto */}
+          <div className={`flex items-center transition-all duration-300 ${
+            isHeaderCompact ? 'space-x-2' : 'space-x-4'
+          }`}>
             <button
               onClick={() => navigateMonth(-1)}
-              className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full transition-colors"
+              className={`text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full transition-all duration-300 ${
+                isHeaderCompact ? 'p-1' : 'p-2'
+              }`}
             >
-              <ChevronLeft size={20} />
+              <ChevronLeft size={isHeaderCompact ? 16 : 20} />
             </button>
             
-            <div className="text-lg font-medium text-slate-800 min-w-[150px] text-center">
+            <div className={`font-medium text-slate-800 text-center transition-all duration-300 ${
+              isHeaderCompact ? 'text-sm min-w-[120px]' : 'text-lg min-w-[150px]'
+            }`}>
               {getCurrentMonthYear()}
             </div>
             
             <button
               onClick={() => navigateMonth(1)}
-              className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full transition-colors"
+              className={`text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full transition-all duration-300 ${
+                isHeaderCompact ? 'p-1' : 'p-2'
+              }`}
             >
-              <ChevronRight size={20} />
+              <ChevronRight size={isHeaderCompact ? 16 : 20} />
             </button>
           </div>
           
-          {/* Botão à direita */}
+          {/* Botão à direita - reduz no modo compacto */}
           <button
             onClick={() => setShowNewReservaModal(true)}
-            className="px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center space-x-1"
+            className={`bg-blue-600 text-white rounded hover:bg-blue-700 transition-all duration-300 flex items-center space-x-1 ${
+              isHeaderCompact ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm'
+            }`}
           >
-            <Plus size={16} />
+            <Plus size={isHeaderCompact ? 12 : 16} />
             <span>Nova Reserva</span>
           </button>
         </div>
       </div>
+      
+      {/* Spacer para quando os headers estiverem fixos */}
+      {(isHeaderCompact || isDaysHeaderFixed) && (
+        <div className={`bg-transparent transition-all duration-300 ${
+          isDaysHeaderFixed ? 'h-40' : isHeaderCompact ? 'h-24' : 'h-20'
+        }`}></div>
+      )}
+      
+      {/* Debug indicator - remover após teste */}
+      <div className="fixed top-28 right-4 bg-red-500 text-white px-3 py-1 rounded z-50 text-xs">
+        <div>Calendário: {isHeaderCompact ? 'FIXO' : 'NORMAL'}</div>
+        <div>Dias: {isDaysHeaderFixed ? 'FIXO' : 'NORMAL'}</div>
+        <div className="text-yellow-200">Top: {isHeaderCompact ? '6rem' : '8rem'}</div>
+      </div>
+
 
       {/* Gantt Timeline Container - Demonstração */}
-      <div className="flex-1 p-4">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 h-full overflow-hidden">
-          <div className="h-full w-full flex flex-col">
+      <div className="flex-1">
+        <div className="bg-white shadow-sm border border-slate-200">
+          <div className="w-full flex flex-col">
             {/* Header de datas */}
-            <div className="flex border-b border-slate-200 bg-slate-50">
+            <div className={`flex border-b border-slate-200 transition-all duration-300 ease-in-out ${
+              isDaysHeaderFixed ? 'fixed bg-white' : 'relative bg-slate-50'
+            }`}
+            style={{
+              ...(isDaysHeaderFixed ? {
+                top: isHeaderCompact ? '6.5rem' : '8.5rem', // Ajustado para descer um pouco mais
+                left: sidebarWidth,
+                right: 0,
+                width: `calc(100vw - ${sidebarWidth})`,
+                zIndex: 25
+              } : {})
+            }}>
               <div className="w-48 p-3 font-semibold text-slate-700 border-r border-slate-200">
                 Quartos
               </div>
@@ -598,12 +751,17 @@ const CalendarioFullCalendar = () => {
             </div>
 
             {/* Timeline dinâmico com drag & drop */}
-            <div className="flex-1 overflow-y-auto timeline-container relative">
+            <div className="timeline-container relative">
               {/* Grid de categorias e quartos */}
               {categorias.map((categoria) => (
                 <div key={categoria.id}>
                   {/* Header da Categoria */}
-                  <div className="bg-slate-200 border-b border-slate-300 sticky top-0 z-10">
+                  <div 
+                    className="bg-slate-200 border-b border-slate-300 sticky z-20"
+                    style={{
+                      top: isDaysHeaderFixed ? (isHeaderCompact ? '4.9rem' : '6.9rem') : '0'
+                    }}
+                  >
                     <button
                       onClick={() => toggleCategory(categoria.id)}
                       className="w-full p-3 flex items-center space-x-3 hover:bg-slate-300 transition-colors text-left"

@@ -1,11 +1,40 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, Bell, User, ChevronDown, Calendar, MessageCircle } from 'lucide-react';
 
 const Header = () => {
+  const location = useLocation();
+  const isCalendarPage = location.pathname === '/calendario';
+  const headerRef = useRef(null);
+  
+  console.log('Header - current path:', location.pathname, 'isCalendarPage:', isCalendarPage); // Debug
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
+
+  // Força o header a ser static na página do calendário
+  useEffect(() => {
+    if (headerRef.current) {
+      if (isCalendarPage) {
+        headerRef.current.style.setProperty('position', 'absolute', 'important');
+        headerRef.current.style.setProperty('top', 'auto', 'important');
+        headerRef.current.style.setProperty('z-index', 'auto', 'important');
+        headerRef.current.style.setProperty('transform', 'none', 'important');
+        headerRef.current.style.setProperty('left', 'auto', 'important');
+        headerRef.current.style.setProperty('right', 'auto', 'important');
+        console.log('Header forçado para static');
+      } else {
+        headerRef.current.style.removeProperty('position');
+        headerRef.current.style.removeProperty('top');
+        headerRef.current.style.removeProperty('z-index');
+        headerRef.current.style.removeProperty('transform');
+        headerRef.current.style.removeProperty('left');
+        headerRef.current.style.removeProperty('right');
+        console.log('Header resetado para comportamento normal');
+      }
+    }
+  }, [isCalendarPage]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -14,7 +43,18 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white/80 backdrop-blur-lg shadow-elegant border-b border-slate-200/60 sticky top-0 z-40">
+    <>
+      <header 
+        ref={headerRef}
+        className={`bg-white/80 backdrop-blur-lg shadow-elegant border-b border-slate-200/60 ${isCalendarPage ? 'calendar-page-header' : ''}`}
+        style={{
+          ...(isCalendarPage ? {} : {
+            position: 'sticky',
+            top: '0',
+            zIndex: '40'
+          })
+        }}
+      >
       <div className="flex items-center justify-between px-8 py-3">
         {/* Search */}
         <div className="flex-1 max-w-2xl">
@@ -125,6 +165,7 @@ const Header = () => {
         </div>
       </div>
     </header>
+    </>
   );
 };
 
