@@ -16,13 +16,32 @@ const CalendarioGantt = () => {
   const [tempPosition, setTempPosition] = useState(null);
   const [dragMoved, setDragMoved] = useState(false); // Para detectar se houve movimento real
 
-  // Estado das reservas (ajustadas para centralizar corretamente com CSS +0.5)
+  // Mapeamento de cores por status
+  const getStatusColor = (status) => {
+    const statusColors = {
+      'pre-reserva': 'bg-gray-300', // Cinza claro - aguardando confirmação
+      'reservado': 'bg-blue-500', // Azul - confirmado
+      'hospedado': 'bg-green-500', // Verde - ativo
+      'checkin-nao-efetuado': 'bg-red-600', // Vermelho forte - alerta crítico
+      'checkin-efetuado': 'bg-green-600', // Verde escuro - ok
+      'checkout-nao-efetuado': 'bg-orange-600', // Laranja forte - alerta
+      'checkout-efetuado': 'bg-gray-500' // Cinza - finalizado
+    };
+    return statusColors[status] || 'bg-gray-400';
+  };
+
+  // Função para obter cor do texto baseada no status
+  const getTextColor = (status) => {
+    return status === 'pre-reserva' ? 'text-gray-700' : 'text-white';
+  };
+
+  // Estado das reservas com procedência e status
   const [reservas, setReservas] = useState([
-    { id: 1, nome: 'João Silva', quarto: '101', inicio: 1.5, duracao: 3, cor: 'bg-blue-500' }, // CSS: (1.5+0.5)/15 = centro célula 2
-    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 4.5, duracao: 3, cor: 'bg-orange-500' }, // CSS: (4.5+0.5)/15 = centro célula 5
-    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 0.5, duracao: 3, cor: 'bg-green-500' }, // CSS: (0.5+0.5)/15 = centro célula 1
-    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 3.5, duracao: 3, cor: 'bg-red-500' }, // CSS: (3.5+0.5)/15 = centro célula 4
-    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 2.5, duracao: 3, cor: 'bg-purple-500' } // CSS: (2.5+0.5)/15 = centro célula 3
+    { id: 1, nome: 'João Silva', quarto: '101', inicio: 1.5, duracao: 3, procedencia: 'Booking.com', status: 'reservado' },
+    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 4.5, duracao: 3, procedencia: 'WhatsApp', status: 'checkin-nao-efetuado' },
+    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 0.5, duracao: 3, procedencia: 'Airbnb', status: 'hospedado' },
+    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 3.5, duracao: 3, procedencia: 'Telefone', status: 'checkout-nao-efetuado' },
+    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 2.5, duracao: 3, procedencia: 'Site Direto', status: 'pre-reserva' }
   ]);
 
   const quartos = ['101', '102', '201', '301'];
@@ -434,23 +453,27 @@ const CalendarioGantt = () => {
           </div>
           
           <div className="flex items-center space-x-3">
-            {/* Legenda */}
-            <div className="flex items-center space-x-3 text-xs">
+            {/* Legenda de Status */}
+            <div className="flex items-center space-x-2 text-xs">
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-gray-300 rounded-sm"></div>
+                <span className="text-slate-700">Pré-reserva</span>
+              </div>
               <div className="flex items-center space-x-1">
                 <div className="w-3 h-3 bg-blue-500 rounded-sm"></div>
-                <span className="text-slate-700">Standard</span>
+                <span className="text-slate-700">Reservado</span>
               </div>
               <div className="flex items-center space-x-1">
                 <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
-                <span className="text-slate-700">Superior</span>
+                <span className="text-slate-700">Hospedado</span>
               </div>
               <div className="flex items-center space-x-1">
-                <div className="w-3 h-3 bg-purple-500 rounded-sm"></div>
-                <span className="text-slate-700">Deluxe</span>
+                <div className="w-3 h-3 bg-red-600 rounded-sm"></div>
+                <span className="text-slate-700">⚠️ Atraso Check-in</span>
               </div>
               <div className="flex items-center space-x-1">
-                <div className="w-3 h-3 bg-yellow-500 rounded-sm"></div>
-                <span className="text-slate-700">Suíte</span>
+                <div className="w-3 h-3 bg-orange-600 rounded-sm"></div>
+                <span className="text-slate-700">⚠️ Atraso Check-out</span>
               </div>
             </div>
             
@@ -578,15 +601,19 @@ const CalendarioGantt = () => {
                         return (
                           <div
                             key={reserva.id}
-                            className={`absolute top-2 h-8 ${reserva.cor} text-white text-xs flex items-center justify-center rounded shadow cursor-move hover:opacity-90 transition-all select-none ${
+                            className={`absolute h-10 ${getStatusColor(reserva.status)} ${getTextColor(reserva.status)} text-xs flex flex-col justify-center pl-2 pr-1 rounded cursor-move hover:opacity-90 transition-all select-none ${
                               isDragging && draggedReserva?.id === reserva.id ? 'opacity-70 z-50 ring-2 ring-white' : 
                               selectedForMove?.id === reserva.id ? 'ring-2 ring-yellow-400 z-50' : 'z-10'
                             }`}
                             style={{
+                              top: '2px',
                               left: `${((currentInicio + 0.5) / 15) * 100}%`,
                               width: `${(reserva.duracao / 15) * 100}%`,
                               transform: 'translateX(-50%)',
-                              transition: isDragging && draggedReserva?.id === reserva.id ? 'none' : 'all 0.2s ease'
+                              transition: isDragging && draggedReserva?.id === reserva.id ? 'none' : 'all 0.2s ease',
+                              boxShadow: '3px 4px 8px rgba(0, 0, 0, 0.3)', // Sombra forte deslocada para direita e baixo
+                              marginLeft: '1px', // 1px de margem à esquerda
+                              marginRight: '1px' // 1px de margem à direita (total 2px entre cards)
                             }}
                             title={`${reserva.nome} - ${reserva.duracao} dias - Arraste para mover | Duplo clique para modo pin`}
                             onMouseDown={(e) => handleMouseDown(e, reserva)}
@@ -605,13 +632,18 @@ const CalendarioGantt = () => {
                             }}
                             draggable={true} // Manter HTML5 drag como backup
                           >
-                            {reserva.nome}
-                            {selectedForMove?.id === reserva.id && (
-                              <span className="ml-1">📍</span>
-                            )}
-                            {isDragging && draggedReserva?.id === reserva.id && (
-                              <span className="ml-1">🎯</span>
-                            )}
+                            <div className="font-medium leading-tight">
+                              {reserva.nome}
+                              {selectedForMove?.id === reserva.id && (
+                                <span className="ml-1">📍</span>
+                              )}
+                              {isDragging && draggedReserva?.id === reserva.id && (
+                                <span className="ml-1">🎯</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] opacity-75 leading-tight">
+                              {reserva.procedencia}
+                            </div>
                           </div>
                         );
                       })}
