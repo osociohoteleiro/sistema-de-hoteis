@@ -14,14 +14,15 @@ const CalendarioGantt = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartPos, setDragStartPos] = useState({ x: 0, y: 0 });
   const [tempPosition, setTempPosition] = useState(null);
+  const [dragMoved, setDragMoved] = useState(false); // Para detectar se houve movimento real
 
-  // Estado das reservas (posicionadas no meio das células)
+  // Estado das reservas (sistema: índice 0=dia1, índice 1=dia2, etc. + 0.5 no CSS)
   const [reservas, setReservas] = useState([
-    { id: 1, nome: 'João Silva', quarto: '101', inicio: 2.5, duracao: 3, cor: 'bg-blue-500' },
-    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 5.5, duracao: 3, cor: 'bg-orange-500' },
-    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 1.5, duracao: 3, cor: 'bg-green-500' },
-    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 4.5, duracao: 3, cor: 'bg-red-500' },
-    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 3.5, duracao: 3, cor: 'bg-purple-500' }
+    { id: 1, nome: 'João Silva', quarto: '101', inicio: 2, duracao: 3, cor: 'bg-blue-500' },
+    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 5, duracao: 3, cor: 'bg-orange-500' },
+    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 1, duracao: 3, cor: 'bg-green-500' },
+    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 4, duracao: 3, cor: 'bg-red-500' },
+    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 3, duracao: 3, cor: 'bg-purple-500' }
   ]);
 
   const quartos = ['101', '102', '201', '301'];
@@ -34,7 +35,8 @@ const CalendarioGantt = () => {
     setIsDragging(true);
     setDraggedReserva(reserva);
     setDragStartPos({ x: e.clientX, y: e.clientY });
-    setTempPosition({ inicio: reserva.inicio }); // Inicializar com posição atual
+    setTempPosition({ inicio: reserva.inicio });
+    setDragMoved(false); // Reset do flag de movimento
   };
 
   // Listeners globais usando useEffect
@@ -55,12 +57,17 @@ const CalendarioGantt = () => {
       
       const novaInicio = Math.max(0, Math.min(14 - draggedReserva.duracao, draggedReserva.inicio + dayOffset));
       setTempPosition({ inicio: novaInicio });
+      
+      // Detectar se houve movimento significativo (mais que 5px)
+      if (Math.abs(deltaX) > 5) {
+        setDragMoved(true);
+      }
     };
 
     const handleMouseUp = () => {
-      if (isDragging && draggedReserva && tempPosition) {
-        // Snap para o meio das células (0.5, 1.5, 2.5...)
-        const snapInicio = Math.round(tempPosition.inicio) + 0.5;
+      if (isDragging && draggedReserva && tempPosition && dragMoved) {
+        // Só atualizar se houve movimento real - usar mesma lógica do clique+pin
+        const snapInicio = Math.round(tempPosition.inicio - 0.5) + 0.5;
         
         setReservas(prev => prev.map(r => 
           r.id === draggedReserva.id 
@@ -73,6 +80,7 @@ const CalendarioGantt = () => {
       setIsDragging(false);
       setDraggedReserva(null);
       setTempPosition(null);
+      setDragMoved(false);
     };
 
     if (isDragging) {
@@ -119,12 +127,23 @@ const CalendarioGantt = () => {
     }
   };
 
-  const handleCellClick = (quarto, dia) => {
+  const handleCellClick = (e, quarto, dia) => {
     if (selectedForMove) {
-      // Mover a reserva selecionada para a célula clicada
+      // Capturar posição exata do clique dentro da célula
+      const cellElement = e.currentTarget;
+      const cellRect = cellElement.getBoundingClientRect();
+      const clickX = e.clientX - cellRect.left; // Posição X dentro da célula
+      const cellWidth = cellRect.width;
+      
+      // Calcular posição dentro do dia (0 a 1)
+      const posicaoNoDia = clickX / cellWidth;
+      
+      // Check-in exatamente onde clicou (dia é índice do array, sistema espera valor direto)
+      const inicioExatoNoClique = dia + posicaoNoDia;
+      
       setReservas(prev => prev.map(r => 
         r.id === selectedForMove.id 
-          ? { ...r, inicio: dia, quarto: quarto }
+          ? { ...r, inicio: inicioExatoNoClique, quarto: quarto }
           : r
       ));
       setSelectedForMove(null);
@@ -451,7 +470,7 @@ const CalendarioGantt = () => {
                             key={i}
                             className="flex-1 border-r border-slate-100 relative hover:bg-blue-50 cursor-pointer transition-colors"
                             style={{ minWidth: '60px' }}
-                            onClick={() => handleCellClick(quartoId, i)}
+                            onClick={(e) => handleCellClick(e, quartoId, i)}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, quartoId, i)}
                             title={selectedForMove ? `Mover "${selectedForMove.nome}" para dia ${i + 1}` : `Dia ${i + 1}`}
@@ -494,7 +513,8 @@ const CalendarioGantt = () => {
                             onDragStart={(e) => handleDragStart(e, reserva)}
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (!isDragging) {
+                              // Só processar clique se não houve drag
+                              if (!dragMoved) {
                                 handleReservaClick(reserva);
                               }
                             }}
