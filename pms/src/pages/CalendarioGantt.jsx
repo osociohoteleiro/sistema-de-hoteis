@@ -16,13 +16,13 @@ const CalendarioGantt = () => {
   const [tempPosition, setTempPosition] = useState(null);
   const [dragMoved, setDragMoved] = useState(false); // Para detectar se houve movimento real
 
-  // Estado das reservas (valores inteiros + CSS adiciona 0.5 para centralizar)
+  // Estado das reservas (ajustadas para centralizar corretamente com CSS +0.5)
   const [reservas, setReservas] = useState([
-    { id: 1, nome: 'João Silva', quarto: '101', inicio: 2, duracao: 3, cor: 'bg-blue-500' },
-    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 5, duracao: 3, cor: 'bg-orange-500' },
-    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 1, duracao: 3, cor: 'bg-green-500' },
-    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 4, duracao: 3, cor: 'bg-red-500' },
-    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 3, duracao: 3, cor: 'bg-purple-500' }
+    { id: 1, nome: 'João Silva', quarto: '101', inicio: 1.5, duracao: 3, cor: 'bg-blue-500' }, // CSS: (1.5+0.5)/15 = centro célula 2
+    { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 4.5, duracao: 3, cor: 'bg-orange-500' }, // CSS: (4.5+0.5)/15 = centro célula 5
+    { id: 3, nome: 'Maria Santos', quarto: '201', inicio: 0.5, duracao: 3, cor: 'bg-green-500' }, // CSS: (0.5+0.5)/15 = centro célula 1
+    { id: 4, nome: 'Ana Paula', quarto: '201', inicio: 3.5, duracao: 3, cor: 'bg-red-500' }, // CSS: (3.5+0.5)/15 = centro célula 4
+    { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 2.5, duracao: 3, cor: 'bg-purple-500' } // CSS: (2.5+0.5)/15 = centro célula 3
   ]);
 
   const quartos = ['101', '102', '201', '301'];
@@ -137,8 +137,8 @@ const CalendarioGantt = () => {
   const handleDrop = (e, targetQuarto, targetDia) => {
     e.preventDefault();
     if (draggedReserva) {
-      // Verificar se a nova posição causaria sobreposição (targetDia é índice, converter para dia real)
-      const inicioReal = targetDia + 1;
+      // Verificar se a nova posição causaria sobreposição (targetDia é índice, converter para posição)
+      const inicioReal = targetDia + 1; // CSS adiciona +0.5 para centralizar
       const novaReserva = {
         ...draggedReserva,
         inicio: inicioReal,
@@ -179,9 +179,9 @@ const CalendarioGantt = () => {
 
   const handleCellClick = (e, quarto, dia) => {
     if (selectedForMove) {
-      // Modo pin: dia correto + centralizar 
-      // HTML5 drag: dia + 1 = início da célula | PIN: dia + 1.5 = meio da célula
-      const inicioNoCentroDaCelula = dia + 1.5; // Para centralizar na célula clicada
+      // Modo pin: ajustar para centralizar corretamente
+      // Usar o valor que funcionava: dia + 1.5 
+      const inicioNoCentroDaCelula = dia + 1.5; // Para centralizar (CSS adiciona +0.5)
       
       // Verificar se a nova posição causaria sobreposição
       const novaReserva = {
