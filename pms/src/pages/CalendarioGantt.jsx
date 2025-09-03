@@ -16,7 +16,7 @@ const CalendarioGantt = () => {
   const [tempPosition, setTempPosition] = useState(null);
   const [dragMoved, setDragMoved] = useState(false); // Para detectar se houve movimento real
 
-  // Estado das reservas (sistema: índice 0=dia1, índice 1=dia2, etc. + 0.5 no CSS)
+  // Estado das reservas (valores inteiros + CSS adiciona 0.5 para centralizar)
   const [reservas, setReservas] = useState([
     { id: 1, nome: 'João Silva', quarto: '101', inicio: 2, duracao: 3, cor: 'bg-blue-500' },
     { id: 2, nome: 'Carlos Lima', quarto: '101', inicio: 5, duracao: 3, cor: 'bg-orange-500' },
@@ -26,6 +26,25 @@ const CalendarioGantt = () => {
   ]);
 
   const quartos = ['101', '102', '201', '301'];
+
+  // Função para verificar se há sobreposição entre reservas
+  const verificarSobreposicao = (novaReserva, reservaAtual = null) => {
+    const reservasDoQuarto = reservas.filter(r => 
+      r.quarto === novaReserva.quarto && 
+      (!reservaAtual || r.id !== reservaAtual.id) // Excluir a reserva atual (para drag)
+    );
+
+    const novoInicio = novaReserva.inicio;
+    const novoFim = novaReserva.inicio + novaReserva.duracao;
+
+    return reservasDoQuarto.some(r => {
+      const inicioExistente = r.inicio;
+      const fimExistente = r.inicio + r.duracao;
+      
+      // Verificar se há sobreposição
+      return (novoInicio < fimExistente && novoFim > inicioExistente);
+    });
+  };
 
   // Sistema de drag personalizado com mouse events - CORRIGIDO
   const handleMouseDown = (e, reserva) => {
@@ -69,11 +88,22 @@ const CalendarioGantt = () => {
         // Só atualizar se houve movimento real - usar mesma lógica do clique+pin
         const snapInicio = Math.round(tempPosition.inicio - 0.5) + 0.5;
         
-        setReservas(prev => prev.map(r => 
-          r.id === draggedReserva.id 
-            ? { ...r, inicio: snapInicio }
-            : r
-        ));
+        // Verificar se a nova posição causaria sobreposição
+        const novaReserva = {
+          ...draggedReserva,
+          inicio: snapInicio
+        };
+        
+        if (verificarSobreposicao(novaReserva, draggedReserva)) {
+          // Não mover se há conflito - mostrar feedback
+          alert(`❌ Conflito! Não é possível mover "${draggedReserva.nome}" para esta posição pois há sobreposição com outra reserva.`);
+        } else {
+          setReservas(prev => prev.map(r => 
+            r.id === draggedReserva.id 
+              ? { ...r, inicio: snapInicio }
+              : r
+          ));
+        }
       }
       
       // Limpar estados
@@ -107,9 +137,24 @@ const CalendarioGantt = () => {
   const handleDrop = (e, targetQuarto, targetDia) => {
     e.preventDefault();
     if (draggedReserva) {
+      // Verificar se a nova posição causaria sobreposição (targetDia é índice, converter para dia real)
+      const inicioReal = targetDia + 1;
+      const novaReserva = {
+        ...draggedReserva,
+        inicio: inicioReal,
+        quarto: targetQuarto
+      };
+      
+      if (verificarSobreposicao(novaReserva, draggedReserva)) {
+        // Não mover se há conflito
+        alert(`❌ Conflito! Não é possível mover "${draggedReserva.nome}" para esta posição pois há sobreposição com outra reserva.`);
+        setDraggedReserva(null);
+        return;
+      }
+      
       setReservas(prev => prev.map(r => 
         r.id === draggedReserva.id 
-          ? { ...r, inicio: targetDia, quarto: targetQuarto }
+          ? { ...r, inicio: inicioReal, quarto: targetQuarto }
           : r
       ));
       setDraggedReserva(null);
@@ -119,31 +164,41 @@ const CalendarioGantt = () => {
   // Função alternativa de clique para mover reservas
   const [selectedForMove, setSelectedForMove] = useState(null);
   
-  const handleReservaClick = (reserva) => {
+  const handleReservaDoubleClick = (reserva) => {
     if (selectedForMove && selectedForMove.id === reserva.id) {
-      setSelectedForMove(null); // Deselecionar
+      setSelectedForMove(null); // Deselecionar se já estava selecionado
     } else {
       setSelectedForMove(reserva); // Selecionar para mover
     }
   };
 
+  const handleReservaClick = (reserva) => {
+    // Clique simples não faz nada agora - só duplo clique ativa o modo pin
+    // Reservado para futuras funcionalidades (ex: mostrar detalhes da reserva)
+  };
+
   const handleCellClick = (e, quarto, dia) => {
     if (selectedForMove) {
-      // Capturar posição exata do clique dentro da célula
-      const cellElement = e.currentTarget;
-      const cellRect = cellElement.getBoundingClientRect();
-      const clickX = e.clientX - cellRect.left; // Posição X dentro da célula
-      const cellWidth = cellRect.width;
+      // Modo pin: dia correto + centralizar 
+      // HTML5 drag: dia + 1 = início da célula | PIN: dia + 1.5 = meio da célula
+      const inicioNoCentroDaCelula = dia + 1.5; // Para centralizar na célula clicada
       
-      // Calcular posição dentro do dia (0 a 1)
-      const posicaoNoDia = clickX / cellWidth;
+      // Verificar se a nova posição causaria sobreposição
+      const novaReserva = {
+        ...selectedForMove,
+        inicio: inicioNoCentroDaCelula,
+        quarto: quarto
+      };
       
-      // Check-in exatamente onde clicou (dia é índice do array, sistema espera valor direto)
-      const inicioExatoNoClique = dia + posicaoNoDia;
+      if (verificarSobreposicao(novaReserva, selectedForMove)) {
+        // Mostrar feedback visual de erro
+        alert(`❌ Conflito! Não é possível mover "${selectedForMove.nome}" para esta posição pois há sobreposição com outra reserva.`);
+        return;
+      }
       
       setReservas(prev => prev.map(r => 
         r.id === selectedForMove.id 
-          ? { ...r, inicio: inicioExatoNoClique, quarto: quarto }
+          ? { ...r, inicio: inicioNoCentroDaCelula, quarto: quarto }
           : r
       ));
       setSelectedForMove(null);
@@ -421,15 +476,24 @@ const CalendarioGantt = () => {
               </div>
               <div className="flex-1 flex">
                 {Array.from({ length: 15 }, (_, i) => {
-                  const date = new Date('2025-09-01');
-                  date.setDate(date.getDate() + i);
-                  const isToday = i === 2; // 03/09
+                  // Usar data real de hoje como referência
+                  const today = new Date();
+                  const startDate = new Date(today);
+                  startDate.setDate(today.getDate() - 2); // Começar 2 dias antes de hoje
+                  
+                  const date = new Date(startDate);
+                  date.setDate(startDate.getDate() + i);
+                  const isToday = i === 2; // Hoje no centro do calendário
+                  const dayOfWeek = date.getDay(); // 0 = Domingo, 6 = Sábado
+                  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
                   
                   return (
                     <div 
                       key={i}
                       className={`flex-1 p-2 text-center text-xs border-r border-slate-200 relative ${
-                        isToday ? 'bg-blue-100 font-semibold text-blue-700' : 'text-slate-600'
+                        isToday ? 'bg-blue-100 font-semibold text-blue-700' : 
+                        isWeekend ? 'bg-red-50 text-red-700 font-medium' : 
+                        'text-slate-600'
                       }`}
                     >
                       <div className="font-medium">{date.getDate()}</div>
@@ -463,18 +527,33 @@ const CalendarioGantt = () => {
                     
                     {/* Área do timeline com grid */}
                     <div className="flex-1 relative">
-                      {/* Grid de células (15 dias) - agora clicável */}
+                      {/* Grid de células (15 dias) - agora clicável com destaque de fins de semana */}
                       <div className="absolute inset-0 flex">
-                        {Array.from({ length: 15 }, (_, i) => (
-                          <div 
-                            key={i}
-                            className="flex-1 border-r border-slate-100 relative hover:bg-blue-50 cursor-pointer transition-colors"
-                            style={{ minWidth: '60px' }}
-                            onClick={(e) => handleCellClick(e, quartoId, i)}
-                            onDragOver={handleDragOver}
-                            onDrop={(e) => handleDrop(e, quartoId, i)}
-                            title={selectedForMove ? `Mover "${selectedForMove.nome}" para dia ${i + 1}` : `Dia ${i + 1}`}
-                          >
+                        {Array.from({ length: 15 }, (_, i) => {
+                          // Usar mesma lógica de data do header
+                          const today = new Date();
+                          const startDate = new Date(today);
+                          startDate.setDate(today.getDate() - 2); // Começar 2 dias antes de hoje
+                          
+                          const date = new Date(startDate);
+                          date.setDate(startDate.getDate() + i);
+                          const dayOfWeek = date.getDay(); // 0 = Domingo, 6 = Sábado
+                          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                          
+                          return (
+                            <div 
+                              key={i}
+                              className={`flex-1 border-r border-slate-100 relative cursor-pointer transition-colors ${
+                                isWeekend 
+                                  ? 'bg-red-50 hover:bg-red-100' 
+                                  : 'hover:bg-blue-50'
+                              }`}
+                              style={{ minWidth: '60px' }}
+                              onClick={(e) => handleCellClick(e, quartoId, i)}
+                              onDragOver={handleDragOver}
+                              onDrop={(e) => handleDrop(e, quartoId, i)}
+                              title={selectedForMove ? `Mover "${selectedForMove.nome}" para dia ${i + 1}` : `Dia ${i + 1}`}
+                            >
                             {/* Linha central para snap - OCULTA */}
                             <div className="absolute left-1/2 top-0 bottom-0 w-px bg-slate-300 opacity-0"></div>
                             
@@ -485,7 +564,8 @@ const CalendarioGantt = () => {
                               </div>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       
                       {/* Reservas dinâmicas com drag personalizado */}
@@ -508,15 +588,20 @@ const CalendarioGantt = () => {
                               transform: 'translateX(-50%)',
                               transition: isDragging && draggedReserva?.id === reserva.id ? 'none' : 'all 0.2s ease'
                             }}
-                            title={`${reserva.nome} - ${reserva.duracao} dias - Arraste para mover com precisão`}
+                            title={`${reserva.nome} - ${reserva.duracao} dias - Arraste para mover | Duplo clique para modo pin`}
                             onMouseDown={(e) => handleMouseDown(e, reserva)}
                             onDragStart={(e) => handleDragStart(e, reserva)}
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Só processar clique se não houve drag
+                              // Clique simples não faz nada - só duplo clique ativa modo pin
                               if (!dragMoved) {
                                 handleReservaClick(reserva);
                               }
+                            }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              // Duplo clique ativa/desativa modo de movimentação
+                              handleReservaDoubleClick(reserva);
                             }}
                             draggable={true} // Manter HTML5 drag como backup
                           >
@@ -555,7 +640,7 @@ const CalendarioGantt = () => {
             ✨ Sistema de Movimentação de Reservas
           </div>
           <div className="text-xs text-slate-600 mb-2">
-            📋 <strong>Três formas de mover:</strong> 1) Clique na reserva + célula destino | 2) Arraste mouse (ajustes finos) | 3) Drag & drop HTML5
+            📋 <strong>Três formas de mover:</strong> 1) Duplo clique na reserva + célula destino | 2) Arraste mouse (ajustes finos) | 3) Drag & drop HTML5
           </div>
           <div className="flex justify-center space-x-4 text-xs">
             <div className="text-slate-600">
@@ -570,7 +655,7 @@ const CalendarioGantt = () => {
                   📌 "{selectedForMove.nome}" selecionado - Clique em uma célula
                 </span>
               ) : (
-                "🖱️ Clique em uma reserva para começar"
+                "🖱️ Duplo clique em uma reserva para ativar modo pin"
               )}
             </div>
           </div>
