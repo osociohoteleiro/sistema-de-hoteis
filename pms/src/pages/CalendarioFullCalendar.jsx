@@ -1,62 +1,125 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, ChevronLeft, ChevronRight, User, Moon, DollarSign, ArrowLeft, ArrowRight, Clock, ClockAlert, RefreshCw } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Moon, DollarSign, ArrowLeft, ArrowRight, Clock, ClockAlert, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Componente de efeito de sucesso
-const SuccessEffect = ({ reserva, quartos }) => {
-  if (!reserva) return null;
+// Componente para desenhar linhas conectoras entre reservas do mesmo hóspede
+const GuestConnectionLines = ({ reservas, quartos }) => {
+  // Agrupar reservas por hóspede
+  const reservasPorHospede = reservas.reduce((acc, reserva) => {
+    if (!acc[reserva.hospede]) {
+      acc[reserva.hospede] = [];
+    }
+    acc[reserva.hospede].push(reserva);
+    return acc;
+  }, {});
+
+  // Filtrar apenas hóspedes com múltiplas reservas visíveis
+  const hospedes = Object.entries(reservasPorHospede).filter(([_, reservasDoHospede]) => reservasDoHospede.length > 1);
+
+  console.log('🔗 GuestConnectionLines - Hospedes com múltiplas reservas:', hospedes.length);
   
-  const quarto = quartos.find(q => q.numero === reserva.quarto);
-  
+  if (hospedes.length === 0) return null;
+
+  // Função para calcular posição da reserva na tela
+  const getReservaPosition = (reserva) => {
+    const quarto = quartos.find(q => q.numero === reserva.quarto);
+    if (!quarto) return null;
+
+    const quartoIndex = quartos.indexOf(quarto);
+    const leftPercent = (reserva.inicio / 15) * 100;
+    const widthPercent = (reserva.duracao / 15) * 100;
+    
+    const position = {
+      x: leftPercent + (widthPercent / 2), // Centro horizontal da reserva
+      y: 200 + (quartoIndex * 80) + 40, // Posição vertical ajustada
+      reserva
+    };
+    
+    console.log(`📍 Posição para ${reserva.hospede} no quarto ${reserva.quarto}:`, position);
+    return position;
+  };
+
+  // Gerar cores para cada hóspede
+  const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
+
   return (
-    <motion.div
-      className="fixed inset-0 pointer-events-none z-[100]"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      {/* Partículas de sucesso */}
-      {[...Array(8)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute w-2 h-2 bg-green-400 rounded-full"
-          initial={{
-            x: "50vw",
-            y: "50vh",
-            scale: 0,
-          }}
-          animate={{
-            x: `${50 + (Math.random() - 0.5) * 60}vw`,
-            y: `${50 + (Math.random() - 0.5) * 60}vh`,
-            scale: [0, 1, 0],
-          }}
-          transition={{
-            duration: 1.5,
-            delay: i * 0.1,
-            ease: "easeOut"
-          }}
-        />
-      ))}
-      
-      {/* Texto de sucesso */}
-      <motion.div
-        className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0, opacity: 0 }}
-        transition={{ duration: 0.3, delay: 0.2 }}
-      >
-        <div className="bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">
-          <div className="text-sm font-medium">✅ Reserva Atualizada!</div>
-          <div className="text-xs opacity-90">{reserva.hospede} - Quarto {reserva.quarto}</div>
-        </div>
-      </motion.div>
-    </motion.div>
+    <div className="absolute inset-0 pointer-events-none z-[15]" style={{ width: '100%', height: '100%' }}>
+      <svg 
+        width="100%" 
+        height="100%"
+        style={{ position: 'absolute', top: 0, left: 0 }}
+      >        
+        {hospedes.map(([hospedeNome, reservasDoHospede], hospedeIndex) => {
+          const positions = reservasDoHospede
+            .map(getReservaPosition)
+            .filter(pos => pos !== null)
+            .sort((a, b) => a.reserva.inicio - b.reserva.inicio);
+
+          console.log(`🎯 ${hospedeNome} - ${positions.length} posições válidas`);
+
+          if (positions.length < 2) return null;
+
+          const color = colors[hospedeIndex % colors.length];
+
+          return (
+            <g key={hospedeNome}>
+              {positions.map((pos, index) => {
+                if (index === positions.length - 1) return null;
+                
+                const nextPos = positions[index + 1];
+                
+                console.log(`➡️ Linha de ${pos.reserva.hospede}: (${pos.x}%, ${pos.y}) → (${nextPos.x}%, ${nextPos.y})`);
+                
+                return (
+                  <line
+                    key={`${pos.reserva.id}-${nextPos.reserva.id}`}
+                    x1={`${pos.x}%`}
+                    y1={pos.y}
+                    x2={`${nextPos.x}%`}
+                    y2={nextPos.y}
+                    stroke={color}
+                    strokeWidth="3"
+                    strokeDasharray="8,4"
+                    strokeOpacity="0.8"
+                  />
+                );
+              })}
+              
+              {/* Círculos nas posições das reservas */}
+              {positions.map((pos, index) => (
+                <circle
+                  key={`circle-${pos.reserva.id}`}
+                  cx={`${pos.x}%`}
+                  cy={pos.y}
+                  r="4"
+                  fill={color}
+                  opacity="0.8"
+                />
+              ))}
+              
+              {/* Rótulo do hóspede */}
+              <text
+                x={`${positions[0].x}%`}
+                y={positions[0].y - 15}
+                textAnchor="middle"
+                fontSize="12"
+                fill={color}
+                style={{fontWeight: 'bold'}}
+              >
+                🔗 {hospedeNome}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 };
 
+// Componente de efeito de sucesso - removido, agora usamos animação direta na reserva
+
 const CalendarioFullCalendar = () => {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 3)); // Setembro 2025 (mês 8 = setembro)
   const [showNewReservaModal, setShowNewReservaModal] = useState(false);
   
   // Estados para Drag and Drop
@@ -80,18 +143,62 @@ const CalendarioFullCalendar = () => {
   // Estado para destacar reserva modificada
   const [highlightedReserva, setHighlightedReserva] = useState(null);
   
-  // Estado para efeito de sucesso
-  const [showSuccessEffect, setShowSuccessEffect] = useState(null);
+  // Estado para efeito de sucesso - animação shake na reserva
+  const [shakeReservaId, setShakeReservaId] = useState(null);
+  
+  // Estado para controlar expansão/colapso das categorias
+  const [expandedCategories, setExpandedCategories] = useState({
+    'Standard': true,
+    'Superior': true,
+    'Deluxe': true,
+    'Suíte': true
+  });
   
   const sidebarWidth = '18rem'; // Fixed JSX structure
 
-  // Dados dos quartos
-  const quartos = [
-    { id: 1, numero: '101', tipo: 'Standard' },
-    { id: 2, numero: '201', tipo: 'Superior' },
-    { id: 3, numero: '301', tipo: 'Deluxe' },
-    { id: 4, numero: '401', tipo: 'Suíte' }
+  // Dados dos quartos organizados por categorias
+  const categorias = [
+    {
+      nome: 'Standard',
+      cor: '#3B82F6',
+      quartos: [
+        { id: 1, numero: '101', tipo: 'Standard' },
+        { id: 5, numero: '102', tipo: 'Standard' },
+        { id: 6, numero: '103', tipo: 'Standard' },
+        { id: 7, numero: '104', tipo: 'Standard' }
+      ]
+    },
+    {
+      nome: 'Superior',
+      cor: '#10B981',
+      quartos: [
+        { id: 2, numero: '201', tipo: 'Superior' },
+        { id: 8, numero: '202', tipo: 'Superior' },
+        { id: 9, numero: '203', tipo: 'Superior' },
+        { id: 10, numero: '204', tipo: 'Superior' }
+      ]
+    },
+    {
+      nome: 'Deluxe',
+      cor: '#8B5CF6',
+      quartos: [
+        { id: 3, numero: '301', tipo: 'Deluxe' },
+        { id: 11, numero: '302', tipo: 'Deluxe' },
+        { id: 12, numero: '303', tipo: 'Deluxe' }
+      ]
+    },
+    {
+      nome: 'Suíte',
+      cor: '#F59E0B',
+      quartos: [
+        { id: 4, numero: '401', tipo: 'Suíte' },
+        { id: 13, numero: '402', tipo: 'Suíte' }
+      ]
+    }
   ];
+
+  // Lista plana de quartos para compatibilidade com código existente
+  const quartos = categorias.flatMap(categoria => categoria.quartos);
 
   // Dados das reservas
   const [reservas, setReservas] = useState([
@@ -99,8 +206,8 @@ const CalendarioFullCalendar = () => {
       id: 1,
       hospede: 'João Silva',
       quarto: '101',
-      checkin: '03/09',
-      checkout: '06/09',
+      checkin: '03/09/2025',
+      checkout: '06/09/2025',
       status: 'reservado',
       inicio: 2.5,
       duracao: 3,
@@ -112,8 +219,8 @@ const CalendarioFullCalendar = () => {
       id: 2,
       hospede: 'Maria Santos',
       quarto: '201',
-      checkin: '04/09',
-      checkout: '08/09',
+      checkin: '04/09/2025',
+      checkout: '08/09/2025',
       status: 'hospedado',
       inicio: 3.5,
       duracao: 4,
@@ -125,12 +232,90 @@ const CalendarioFullCalendar = () => {
       id: 3,
       hospede: 'Pedro Costa',
       quarto: '301',
-      checkin: '05/09',
-      checkout: '07/09',
+      checkin: '05/09/2025',
+      checkout: '07/09/2025',
       status: 'checkout',
       inicio: 4.5,
       duracao: 2,
       hospedes: 3,
+      earlyCheckin: false,
+      lateCheckout: false
+    },
+    {
+      id: 4,
+      hospede: 'João Silva',
+      quarto: '102',
+      checkin: '04/09/2025',
+      checkout: '06/09/2025',
+      status: 'reservado',
+      inicio: 3.5,
+      duracao: 2,
+      hospedes: 2,
+      earlyCheckin: false,
+      lateCheckout: false
+    },
+    {
+      id: 5,
+      hospede: 'Maria Santos',
+      quarto: '302',
+      checkin: '06/09/2025',
+      checkout: '08/09/2025',
+      status: 'reservado',
+      inicio: 5.5,
+      duracao: 2,
+      hospedes: 1,
+      earlyCheckin: false,
+      lateCheckout: false
+    },
+    {
+      id: 6,
+      hospede: 'Ana Costa',
+      quarto: '103',
+      checkin: '03/09/2025',
+      checkout: '05/09/2025',
+      status: 'hospedado',
+      inicio: 2.5,
+      duracao: 2,
+      hospedes: 1,
+      earlyCheckin: false,
+      lateCheckout: false
+    },
+    {
+      id: 7,
+      hospede: 'Ana Costa',
+      quarto: '203',
+      checkin: '06/09/2025',
+      checkout: '08/09/2025',
+      status: 'reservado',
+      inicio: 5.5,
+      duracao: 2,
+      hospedes: 1,
+      earlyCheckin: true,
+      lateCheckout: false
+    },
+    {
+      id: 8,
+      hospede: 'Carlos Silva',
+      quarto: '104',
+      checkin: '03/09/2025',
+      checkout: '05/09/2025',
+      status: 'hospedado',
+      inicio: 2.5,
+      duracao: 2,
+      hospedes: 2,
+      earlyCheckin: false,
+      lateCheckout: false
+    },
+    {
+      id: 9,
+      hospede: 'Carlos Silva',
+      quarto: '202',
+      checkin: '07/09/2025',
+      checkout: '09/09/2025',
+      status: 'reservado',
+      inicio: 6.5,
+      duracao: 2,
+      hospedes: 2,
       earlyCheckin: false,
       lateCheckout: false
     }
@@ -546,20 +731,20 @@ const CalendarioFullCalendar = () => {
     
     console.log(`✅ Redimensionamento confirmado: ${resizeConfirmData.type}`);
     
-    // Mostrar efeito de sucesso
-    setShowSuccessEffect(reserva);
+    // Aplicar animação shake na reserva
+    setShakeReservaId(reserva.id);
     
     // Destacar a reserva modificada
     setHighlightedReserva(reserva.id);
     
     // Remover efeitos após timing adequado
     setTimeout(() => {
-      setShowSuccessEffect(null);
-    }, 1500);
+      setShakeReservaId(null);
+    }, 1000);
     
     setTimeout(() => {
       setHighlightedReserva(null);
-    }, 2000);
+    }, 3000);
     
     // Fechar modal e limpar estados
     setShowResizeConfirmModal(false);
@@ -572,6 +757,14 @@ const CalendarioFullCalendar = () => {
     setShowResizeConfirmModal(false);
     setResizeConfirmData(null);
     setResizeMode(null);
+  };
+
+  // Função para alternar expansão/colapso de categorias
+  const toggleCategory = (categoriaNome) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoriaNome]: !prev[categoriaNome]
+    }));
   };
 
   return (
@@ -654,18 +847,57 @@ const CalendarioFullCalendar = () => {
       {/* Conteúdo Principal */}
       <div className="flex-1 overflow-auto" style={{ paddingTop: '8rem' }}>
         <div className="bg-white">
-          {quartos.map(quarto => {
-            const reservasDoQuarto = reservas.filter(r => r.quarto === quarto.numero);
-            
-            return (
-              <div key={quarto.id} className="flex border-b border-slate-200 h-20">
-                {/* Coluna do Quarto */}
-                <div className="w-48 flex-shrink-0 p-4 border-r border-slate-200 bg-slate-50 flex items-center">
-                  <div>
-                    <h3 className="font-semibold text-slate-800">{quarto.numero}</h3>
-                    <p className="text-sm text-slate-600">{quarto.tipo}</p>
-                  </div>
+          {categorias.map(categoria => (
+            <div key={categoria.nome}>
+              {/* Header da Categoria */}
+              <div className="flex border-b-2 border-slate-300 bg-slate-100">
+                {/* Coluna da Categoria */}
+                <div className="w-48 flex-shrink-0 border-r border-slate-200">
+                  <button
+                    onClick={() => toggleCategory(categoria.nome)}
+                    className="w-full p-4 flex items-center space-x-3 hover:bg-slate-200 transition-colors text-left"
+                  >
+                    <div 
+                      className="w-4 h-4 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: categoria.cor }}
+                    ></div>
+                    <div className="flex-1">
+                      <h2 className="font-bold text-slate-900 text-lg">{categoria.nome}</h2>
+                      <p className="text-xs text-slate-600">{categoria.quartos.length} quartos</p>
+                    </div>
+                    {expandedCategories[categoria.nome] ? (
+                      <ChevronUp size={20} className="text-slate-700" />
+                    ) : (
+                      <ChevronDown size={20} className="text-slate-700" />
+                    )}
+                  </button>
                 </div>
+                
+                {/* Timeline da Categoria (vazio) */}
+                <div className="flex-1 bg-slate-100 border-b border-slate-200"></div>
+              </div>
+
+              {/* Quartos da Categoria */}
+              {expandedCategories[categoria.nome] && categoria.quartos.map((quarto, index) => {
+                const reservasDoQuarto = reservas.filter(r => r.quarto === quarto.numero);
+                
+                return (
+                  <div key={quarto.id} className="flex border-b border-slate-200 h-20">
+                    {/* Coluna do Quarto */}
+                    <div className={`w-48 flex-shrink-0 p-4 border-r border-slate-200 flex items-center ${
+                      index % 2 === 0 ? 'bg-slate-50' : 'bg-white'
+                    }`}>
+                      <div className="flex items-center space-x-3">
+                        <div 
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: categoria.cor }}
+                        ></div>
+                        <div>
+                          <h3 className="font-semibold text-slate-800">{quarto.numero}</h3>
+                          <p className="text-sm text-slate-600">{quarto.tipo}</p>
+                        </div>
+                      </div>
+                    </div>
 
                 {/* Timeline */}
                 <div className="flex-1 relative">
@@ -736,15 +968,33 @@ const CalendarioFullCalendar = () => {
                       <motion.div
                         key={reserva.id}
                         draggable={!resizeMode}
-                        animate={highlightedReserva === reserva.id ? {
+                        initial={{ 
+                          y: "-50%"
+                        }}
+                        animate={shakeReservaId === reserva.id ? {
+                          x: [0, -10, 10, -8, 8, -4, 4, 0],
+                          y: "-50%",
+                          scale: [1, 1.05, 1.05, 1.05, 1.05, 1],
+                          boxShadow: [
+                            "0 0 0 0 rgba(34, 197, 94, 0)",
+                            "0 0 0 12px rgba(34, 197, 94, 0.4), 0 0 30px rgba(34, 197, 94, 0.3)",
+                            "0 0 0 0 rgba(34, 197, 94, 0)"
+                          ]
+                        } : highlightedReserva === reserva.id ? {
                           scale: [1, 1.02, 1],
+                          y: ["-50%", "-50%", "-50%"],
                           boxShadow: [
                             "0 0 0 0 rgba(34, 197, 94, 0)",
                             "0 0 0 8px rgba(34, 197, 94, 0.3), 0 0 20px rgba(34, 197, 94, 0.2)",
                             "0 0 0 0 rgba(34, 197, 94, 0)"
                           ]
-                        } : {}}
-                        transition={{
+                        } : {
+                          y: "-50%"
+                        }}
+                        transition={shakeReservaId === reserva.id ? {
+                          duration: 0.8,
+                          ease: "easeInOut"
+                        } : {
                           duration: 2,
                           ease: "easeInOut",
                           times: [0, 0.5, 1]
@@ -768,7 +1018,6 @@ const CalendarioFullCalendar = () => {
                           left: `${leftPercent}%`,
                           width: `${widthPercent}%`,
                           top: '50%',
-                          transform: 'translateY(-50%)',
                           minWidth: '80px',
                           height: '36px',
                           clipPath: 'polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%)'
@@ -890,8 +1139,10 @@ const CalendarioFullCalendar = () => {
                   })}
                 </div>
               </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1277,12 +1528,9 @@ const CalendarioFullCalendar = () => {
         </div>
       )}
 
-      {/* Efeito de sucesso */}
-      <AnimatePresence>
-        {showSuccessEffect && (
-          <SuccessEffect reserva={showSuccessEffect} quartos={quartos} />
-        )}
-      </AnimatePresence>
+      {/* Linhas conectoras entre reservas do mesmo hóspede */}
+      <GuestConnectionLines reservas={reservas} quartos={quartos} />
+
     </div>
   );
 };
