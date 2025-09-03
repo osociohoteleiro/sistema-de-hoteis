@@ -620,51 +620,37 @@ const CalendarioFullCalendar = () => {
   return (
     <div className="flex flex-col h-full bg-slate-100">
       {/* Header do Calendário */}
-      <div className={`bg-slate-200 border-b border-slate-300 transition-all duration-300 ease-in-out ${
-        isHeaderCompact ? 'fixed z-30 py-2 px-4' : 'relative py-4 px-4'
-      }`}
+      <div className="bg-slate-200 border-b border-slate-300 fixed z-30 py-2 px-4"
       style={{
-        ...(isHeaderCompact ? {
-          top: '4rem', // Logo abaixo do header do site (64px)
-          left: sidebarWidth,
-          right: 0,
-          width: `calc(100vw - ${sidebarWidth})`
-        } : {})
+        top: '4rem', // Logo abaixo do header do site (64px)
+        left: sidebarWidth,
+        right: 0,
+        width: `calc(100vw - ${sidebarWidth})`
       }}>
         <div className="flex justify-between items-center">
           {/* Título à esquerda - reduz no modo compacto */}
-          <h1 className={`font-semibold text-slate-800 transition-all duration-300 ${
-            isHeaderCompact ? 'text-sm' : 'text-lg'
-          }`}>
+          <h1 className="font-semibold text-slate-800 text-sm">
             Calendário
           </h1>
           
           {/* Navegação de mês no centro - reduz no modo compacto */}
-          <div className={`flex items-center transition-all duration-300 ${
-            isHeaderCompact ? 'space-x-2' : 'space-x-4'
-          }`}>
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => navigateMonth(-1)}
-              className={`text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full transition-all duration-300 ${
-                isHeaderCompact ? 'p-1' : 'p-2'
-              }`}
+              className="text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full p-1"
             >
-              <ChevronLeft size={isHeaderCompact ? 16 : 20} />
+              <ChevronLeft size={16} />
             </button>
             
-            <div className={`font-medium text-slate-800 text-center transition-all duration-300 ${
-              isHeaderCompact ? 'text-sm min-w-[120px]' : 'text-lg min-w-[150px]'
-            }`}>
+            <div className="font-medium text-slate-800 text-center text-sm min-w-[120px]">
               {getCurrentMonthYear()}
             </div>
             
             <button
               onClick={() => navigateMonth(1)}
-              className={`text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full transition-all duration-300 ${
-                isHeaderCompact ? 'p-1' : 'p-2'
-              }`}
+              className="text-slate-600 hover:text-slate-800 hover:bg-slate-300 rounded-full p-1"
             >
-              <ChevronRight size={isHeaderCompact ? 16 : 20} />
+              <ChevronRight size={16} />
             </button>
           </div>
           
@@ -688,30 +674,20 @@ const CalendarioFullCalendar = () => {
         }`}></div>
       )}
       
-      {/* Debug indicator - remover após teste */}
-      <div className="fixed top-28 right-4 bg-red-500 text-white px-3 py-1 rounded z-50 text-xs">
-        <div>Calendário: {isHeaderCompact ? 'FIXO' : 'NORMAL'}</div>
-        <div>Dias: {isDaysHeaderFixed ? 'FIXO' : 'NORMAL'}</div>
-        <div className="text-yellow-200">Top: {isHeaderCompact ? '6rem' : '8rem'}</div>
-      </div>
 
 
       {/* Gantt Timeline Container - Demonstração */}
-      <div className="flex-1">
+      <div className="flex-1 pt-20">
         <div className="bg-white shadow-sm border border-slate-200">
           <div className="w-full flex flex-col">
             {/* Header de datas */}
-            <div className={`flex border-b border-slate-200 transition-all duration-300 ease-in-out ${
-              isDaysHeaderFixed ? 'fixed bg-white' : 'relative bg-slate-50'
-            }`}
+            <div className="flex border-b border-slate-200 fixed bg-white transition-all duration-300 ease-in-out"
             style={{
-              ...(isDaysHeaderFixed ? {
-                top: isHeaderCompact ? '6.5rem' : '8.5rem', // Ajustado para descer um pouco mais
-                left: sidebarWidth,
-                right: 0,
-                width: `calc(100vw - ${sidebarWidth})`,
-                zIndex: 25
-              } : {})
+              top: isHeaderCompact ? '6.5rem' : '7.3rem', // Ajusta quando o header "Calendário" fica compacto
+              left: sidebarWidth,
+              right: 0,
+              width: `calc(100vw - ${sidebarWidth})`,
+              zIndex: 25
             }}>
               <div className="w-48 p-3 font-semibold text-slate-700 border-r border-slate-200">
                 Quartos
@@ -757,9 +733,9 @@ const CalendarioFullCalendar = () => {
                 <div key={categoria.id}>
                   {/* Header da Categoria */}
                   <div 
-                    className="bg-slate-200 border-b border-slate-300 sticky z-20"
+                    className="bg-slate-200 border-b border-slate-300 sticky z-20 transition-all duration-300 ease-in-out"
                     style={{
-                      top: isDaysHeaderFixed ? (isHeaderCompact ? '4.9rem' : '6.9rem') : '0'
+                      top: isHeaderCompact ? '5.1rem' : '5.9rem' // Ajusta junto com os outros headers
                     }}
                   >
                     <button
