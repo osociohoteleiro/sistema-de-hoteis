@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Calendar, Users, Edit, Trash2, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Calendar, Users, Edit, Trash2, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Versão simplificada sem biblioteca externa por enquanto
 // import GSTC from 'gantt-schedule-timeline-calendar';
@@ -52,6 +52,14 @@ const CalendarioFullCalendar = () => {
     return `${months[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
   };
 
+  // Função para alternar categoria (expandir/colapsar)
+  const toggleCategory = (categoryId) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryId]: !prev[categoryId]
+    }));
+  };
+
   // Estado das reservas com procedência e status
   const [reservas, setReservas] = useState([
     { id: 1, nome: 'João Silva', quarto: '101', inicio: 1.5, duracao: 3, procedencia: 'Booking.com', status: 'reservado' },
@@ -61,7 +69,56 @@ const CalendarioFullCalendar = () => {
     { id: 5, nome: 'Pedro Costa', quarto: '301', inicio: 2.5, duracao: 3, procedencia: 'Site Direto', status: 'pre-reserva' }
   ]);
 
-  const quartos = ['101', '102', '201', '301'];
+  // Estrutura de categorias de quartos
+  const [categorias] = useState([
+    {
+      id: 'standard',
+      nome: 'Standard',
+      cor: '#3B82F6',
+      quartos: [
+        { id: '101', numero: '101', status: 'disponivel' },
+        { id: '102', numero: '102', status: 'disponivel' },
+        { id: '103', numero: '103', status: 'manutencao' },
+        { id: '104', numero: '104', status: 'disponivel' }
+      ]
+    },
+    {
+      id: 'superior',
+      nome: 'Superior',
+      cor: '#10B981',
+      quartos: [
+        { id: '201', numero: '201', status: 'disponivel' },
+        { id: '202', numero: '202', status: 'disponivel' },
+        { id: '203', numero: '203', status: 'ocupado' }
+      ]
+    },
+    {
+      id: 'deluxe',
+      nome: 'Deluxe',
+      cor: '#8B5CF6',
+      quartos: [
+        { id: '301', numero: '301', status: 'disponivel' },
+        { id: '302', numero: '302', status: 'disponivel' }
+      ]
+    },
+    {
+      id: 'suite',
+      nome: 'Suíte',
+      cor: '#F59E0B',
+      quartos: [
+        { id: '401', numero: '401', status: 'disponivel' },
+        { id: '402', numero: '402', status: 'limpeza' }
+      ]
+    }
+  ]);
+
+  // Estado para controlar categorias expandidas/colapsadas
+  const [expandedCategories, setExpandedCategories] = useState({
+    'standard': true,
+    'superior': true,
+    'deluxe': true,
+    'suite': true
+  });
 
   // Função para verificar se há sobreposição entre reservas
   const verificarSobreposicao = (novaReserva, reservaAtual = null) => {
@@ -542,20 +599,55 @@ const CalendarioFullCalendar = () => {
 
             {/* Timeline dinâmico com drag & drop */}
             <div className="flex-1 overflow-y-auto timeline-container relative">
-              {/* Grid de quartos */}
-              {quartos.map((quartoId, quartoIndex) => {
-                const reservasDoQuarto = reservas.filter(r => r.quarto === quartoId);
-                
-                return (
-                  <div key={quartoId} className="flex min-h-[60px] hover:bg-slate-50 border-b border-slate-100">
-                    <div className="w-48 p-3 border-r border-slate-200">
-                      <div className="font-medium text-slate-900">Quarto {quartoId}</div>
-                      <div className="text-xs text-slate-500">
-                        {quartoId.startsWith('1') ? 'Standard' : 
-                         quartoId.startsWith('2') ? 'Superior' : 
-                         quartoId.startsWith('3') ? 'Deluxe' : 'Suíte'}
+              {/* Grid de categorias e quartos */}
+              {categorias.map((categoria) => (
+                <div key={categoria.id}>
+                  {/* Header da Categoria */}
+                  <div className="bg-slate-200 border-b border-slate-300 sticky top-0 z-10">
+                    <button
+                      onClick={() => toggleCategory(categoria.id)}
+                      className="w-full p-3 flex items-center space-x-3 hover:bg-slate-300 transition-colors text-left"
+                    >
+                      <div 
+                        className="w-4 h-4 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: categoria.cor }}
+                      ></div>
+                      <div className="flex-1 font-semibold text-slate-800 text-sm">
+                        {categoria.nome}
                       </div>
-                    </div>
+                      <div className="text-xs text-slate-600 bg-slate-300 px-2 py-1 rounded-full">
+                        {categoria.quartos.length}
+                      </div>
+                      {expandedCategories[categoria.id] ? (
+                        <ChevronUp size={16} className="text-slate-700" />
+                      ) : (
+                        <ChevronDown size={16} className="text-slate-700" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Quartos da Categoria */}
+                  {expandedCategories[categoria.id] && categoria.quartos.map((quarto, quartoIndex) => {
+                    const reservasDoQuarto = reservas.filter(r => r.quarto === quarto.numero);
+                    
+                    return (
+                      <div key={quarto.id} className="flex min-h-[60px] hover:bg-slate-50 border-b border-slate-100">
+                        <div className="w-48 p-3 border-r border-slate-200">
+                          <div className="font-medium text-slate-900">Quarto {quarto.numero}</div>
+                          <div className="text-xs text-slate-500 flex items-center space-x-2">
+                            <span>{categoria.nome}</span>
+                            <div className={`px-2 py-1 rounded-full text-xs ${
+                              quarto.status === 'disponivel' ? 'bg-green-100 text-green-700' :
+                              quarto.status === 'ocupado' ? 'bg-red-100 text-red-700' :
+                              quarto.status === 'manutencao' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-blue-100 text-blue-700'
+                            }`}>
+                              {quarto.status === 'disponivel' ? 'Livre' :
+                               quarto.status === 'ocupado' ? 'Ocupado' :
+                               quarto.status === 'manutencao' ? 'Manutenção' : 'Limpeza'}
+                            </div>
+                          </div>
+                        </div>
                     
                     {/* Área do timeline com grid */}
                     <div className="flex-1 relative">
@@ -581,9 +673,9 @@ const CalendarioFullCalendar = () => {
                                   : 'hover:bg-blue-50'
                               }`}
                               style={{ minWidth: '60px' }}
-                              onClick={(e) => handleCellClick(e, quartoId, i)}
+                              onClick={(e) => handleCellClick(e, quarto.numero, i)}
                               onDragOver={handleDragOver}
-                              onDrop={(e) => handleDrop(e, quartoId, i)}
+                              onDrop={(e) => handleDrop(e, quarto.numero, i)}
                               title={selectedForMove ? `Mover "${selectedForMove.nome}" para dia ${i + 1}` : `Dia ${i + 1}`}
                             >
                             {/* Linha central para snap - OCULTA */}
@@ -667,8 +759,10 @@ const CalendarioFullCalendar = () => {
                       )}
                     </div>
                   </div>
-                );
-              })}
+                        );
+                      })}
+                  </div>
+                ))}
             </div>
           </div>
         </div>
