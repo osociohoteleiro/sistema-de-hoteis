@@ -2,121 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plus, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, User, Moon, DollarSign, ArrowLeft, ArrowRight, Clock, ClockAlert, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Componente para desenhar linhas conectoras entre reservas do mesmo hóspede
-const GuestConnectionLines = ({ reservas, quartos }) => {
-  // Agrupar reservas por hóspede
-  const reservasPorHospede = reservas.reduce((acc, reserva) => {
-    if (!acc[reserva.hospede]) {
-      acc[reserva.hospede] = [];
-    }
-    acc[reserva.hospede].push(reserva);
-    return acc;
-  }, {});
-
-  // Filtrar apenas hóspedes com múltiplas reservas visíveis
-  const hospedes = Object.entries(reservasPorHospede).filter(([_, reservasDoHospede]) => reservasDoHospede.length > 1);
-
-  console.log('🔗 GuestConnectionLines - Hospedes com múltiplas reservas:', hospedes.length);
-  
-  if (hospedes.length === 0) return null;
-
-  // Função para calcular posição da reserva na tela
-  const getReservaPosition = (reserva) => {
-    const quarto = quartos.find(q => q.numero === reserva.quarto);
-    if (!quarto) return null;
-
-    const quartoIndex = quartos.indexOf(quarto);
-    const leftPercent = (reserva.inicio / 15) * 100;
-    const widthPercent = (reserva.duracao / 15) * 100;
-    
-    const position = {
-      x: leftPercent + (widthPercent / 2), // Centro horizontal da reserva
-      y: 200 + (quartoIndex * 80) + 40, // Posição vertical ajustada
-      reserva
-    };
-    
-    console.log(`📍 Posição para ${reserva.hospede} no quarto ${reserva.quarto}:`, position);
-    return position;
-  };
-
-  // Gerar cores para cada hóspede
-  const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
-
-  return (
-    <div className="absolute inset-0 pointer-events-none z-[15]" style={{ width: '100%', height: '100%' }}>
-      <svg 
-        width="100%" 
-        height="100%"
-        style={{ position: 'absolute', top: 0, left: 0 }}
-      >        
-        {hospedes.map(([hospedeNome, reservasDoHospede], hospedeIndex) => {
-          const positions = reservasDoHospede
-            .map(getReservaPosition)
-            .filter(pos => pos !== null)
-            .sort((a, b) => a.reserva.inicio - b.reserva.inicio);
-
-          console.log(`🎯 ${hospedeNome} - ${positions.length} posições válidas`);
-
-          if (positions.length < 2) return null;
-
-          const color = colors[hospedeIndex % colors.length];
-
-          return (
-            <g key={hospedeNome}>
-              {positions.map((pos, index) => {
-                if (index === positions.length - 1) return null;
-                
-                const nextPos = positions[index + 1];
-                
-                console.log(`➡️ Linha de ${pos.reserva.hospede}: (${pos.x}%, ${pos.y}) → (${nextPos.x}%, ${nextPos.y})`);
-                
-                return (
-                  <line
-                    key={`${pos.reserva.id}-${nextPos.reserva.id}`}
-                    x1={`${pos.x}%`}
-                    y1={pos.y}
-                    x2={`${nextPos.x}%`}
-                    y2={nextPos.y}
-                    stroke={color}
-                    strokeWidth="3"
-                    strokeDasharray="8,4"
-                    strokeOpacity="0.8"
-                  />
-                );
-              })}
-              
-              {/* Círculos nas posições das reservas */}
-              {positions.map((pos, index) => (
-                <circle
-                  key={`circle-${pos.reserva.id}`}
-                  cx={`${pos.x}%`}
-                  cy={pos.y}
-                  r="4"
-                  fill={color}
-                  opacity="0.8"
-                />
-              ))}
-              
-              {/* Rótulo do hóspede */}
-              <text
-                x={`${positions[0].x}%`}
-                y={positions[0].y - 15}
-                textAnchor="middle"
-                fontSize="12"
-                fill={color}
-                style={{fontWeight: 'bold'}}
-              >
-                🔗 {hospedeNome}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-};
-
-// Componente de efeito de sucesso - removido, agora usamos animação direta na reserva
 
 const CalendarioFullCalendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 3)); // Setembro 2025 (mês 8 = setembro)
@@ -145,6 +30,9 @@ const CalendarioFullCalendar = () => {
   
   // Estado para efeito de sucesso - animação shake na reserva
   const [shakeReservaId, setShakeReservaId] = useState(null);
+  
+  // Estado para tooltip customizado
+  const [tooltip, setTooltip] = useState({ visible: false, x: 0, y: 0, data: null, flipped: false });
   
   // Estado para controlar expansão/colapso das categorias
   const [expandedCategories, setExpandedCategories] = useState({
@@ -212,8 +100,13 @@ const CalendarioFullCalendar = () => {
       inicio: 2.5,
       duracao: 3,
       hospedes: 2,
+      procedencia: 'Booking.com',
       earlyCheckin: false,
-      lateCheckout: true // Exemplo: saída postergada
+      checkinTime: '14:00',
+      lateCheckout: true, // Exemplo: saída postergada
+      lateCheckoutTime: '15:30',
+      valorTotal: 450.00,
+      valorPago: 180.00
     },
     {
       id: 2,
@@ -225,8 +118,12 @@ const CalendarioFullCalendar = () => {
       inicio: 3.5,
       duracao: 4,
       hospedes: 1,
+      procedencia: 'Expedia',
       earlyCheckin: true, // Exemplo: chegada antecipada
-      lateCheckout: false
+      earlyCheckinTime: '10:30',
+      lateCheckout: false,
+      valorTotal: 600.00,
+      valorPago: 600.00
     },
     {
       id: 3,
@@ -238,8 +135,12 @@ const CalendarioFullCalendar = () => {
       inicio: 4.5,
       duracao: 2,
       hospedes: 3,
+      procedencia: 'Direto',
       earlyCheckin: false,
-      lateCheckout: false
+      checkinTime: '16:45',
+      lateCheckout: false,
+      valorTotal: 320.00,
+      valorPago: 100.00
     },
     {
       id: 4,
@@ -251,8 +152,12 @@ const CalendarioFullCalendar = () => {
       inicio: 3.5,
       duracao: 2,
       hospedes: 2,
+      procedencia: 'Site',
       earlyCheckin: false,
-      lateCheckout: false
+      checkinTime: '11:30',
+      lateCheckout: false,
+      valorTotal: 280.00,
+      valorPago: 140.00
     },
     {
       id: 5,
@@ -264,8 +169,11 @@ const CalendarioFullCalendar = () => {
       inicio: 5.5,
       duracao: 2,
       hospedes: 1,
+      procedencia: 'Airbnb',
       earlyCheckin: false,
-      lateCheckout: false
+      lateCheckout: false,
+      valorTotal: 380.00,
+      valorPago: 0.00
     },
     {
       id: 6,
@@ -277,8 +185,11 @@ const CalendarioFullCalendar = () => {
       inicio: 2.5,
       duracao: 2,
       hospedes: 1,
+      procedencia: 'WhatsApp',
       earlyCheckin: false,
-      lateCheckout: false
+      lateCheckout: false,
+      valorTotal: 240.00,
+      valorPago: 240.00
     },
     {
       id: 7,
@@ -290,8 +201,12 @@ const CalendarioFullCalendar = () => {
       inicio: 5.5,
       duracao: 2,
       hospedes: 1,
+      procedencia: 'Telefone',
       earlyCheckin: true,
-      lateCheckout: false
+      earlyCheckinTime: '09:15',
+      lateCheckout: false,
+      valorTotal: 290.00,
+      valorPago: 50.00
     },
     {
       id: 8,
@@ -303,8 +218,12 @@ const CalendarioFullCalendar = () => {
       inicio: 2.5,
       duracao: 2,
       hospedes: 2,
+      procedencia: 'Booking.com',
       earlyCheckin: false,
-      lateCheckout: false
+      lateCheckout: true,
+      lateCheckoutTime: '14:45',
+      valorTotal: 350.00,
+      valorPago: 350.00
     },
     {
       id: 9,
@@ -316,8 +235,12 @@ const CalendarioFullCalendar = () => {
       inicio: 6.5,
       duracao: 2,
       hospedes: 2,
+      procedencia: 'Decolar',
       earlyCheckin: false,
-      lateCheckout: false
+      checkinTime: '15:20',
+      lateCheckout: false,
+      valorTotal: 420.00,
+      valorPago: 210.00
     }
   ]);
 
@@ -759,6 +682,40 @@ const CalendarioFullCalendar = () => {
     setResizeMode(null);
   };
 
+  // Funções do tooltip customizado
+  const handleMouseEnter = (e, reserva) => {
+    const windowHeight = window.innerHeight;
+    const tooltipHeight = 250; // altura aproximada do tooltip
+    const shouldFlip = e.clientY + tooltipHeight > windowHeight - 50;
+    
+    setTooltip({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      data: reserva,
+      flipped: shouldFlip
+    });
+  };
+
+  const handleMouseMove = (e) => {
+    if (tooltip.visible) {
+      const windowHeight = window.innerHeight;
+      const tooltipHeight = 250; // altura aproximada do tooltip
+      const shouldFlip = e.clientY + tooltipHeight > windowHeight - 50;
+      
+      setTooltip(prev => ({
+        ...prev,
+        x: e.clientX,
+        y: e.clientY,
+        flipped: shouldFlip
+      }));
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setTooltip({ visible: false, x: 0, y: 0, data: null, flipped: false });
+  };
+
   // Função para alternar expansão/colapso de categorias
   const toggleCategory = (categoriaNome) => {
     setExpandedCategories(prev => ({
@@ -771,7 +728,7 @@ const CalendarioFullCalendar = () => {
     <div className="flex flex-col h-full bg-slate-100">
       {/* Header do Calendário */}
       <div 
-        className="bg-slate-200 border-b border-slate-300 fixed z-30 py-4 px-6"
+        className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-700 border-b border-blue-800 fixed z-30 py-3 px-6 shadow-lg"
         style={{
           top: '4rem',
           left: sidebarWidth,
@@ -780,23 +737,23 @@ const CalendarioFullCalendar = () => {
         }}
       >
         <div className="flex justify-between items-center">
-          <h1 className="text-xl font-bold text-slate-800">Calendário</h1>
+          <h1 className="text-xl font-bold text-white drop-shadow-sm">📅 Calendário PMS</h1>
           
           <div className="flex items-center space-x-4">
-            <button onClick={goToPreviousMonth} className="p-2 rounded-lg bg-white hover:bg-slate-50 border">
+            <button onClick={goToPreviousMonth} className="p-2 rounded-lg bg-white/20 hover:bg-white/30 border border-white/30 text-white transition-all">
               <ChevronLeft size={16} />
             </button>
-            <h2 className="text-lg font-semibold text-slate-700 min-w-[180px] text-center">
+            <h2 className="text-lg font-semibold text-white min-w-[180px] text-center drop-shadow-sm">
               {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </h2>
-            <button onClick={goToNextMonth} className="p-2 rounded-lg bg-white hover:bg-slate-50 border">
+            <button onClick={goToNextMonth} className="p-2 rounded-lg bg-white/20 hover:bg-white/30 border border-white/30 text-white transition-all">
               <ChevronRight size={16} />
             </button>
           </div>
 
           <button
             onClick={() => setShowNewReservaModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="flex items-center space-x-2 px-4 py-2 bg-white text-blue-700 rounded-lg hover:bg-blue-50 font-medium transition-all shadow-md hover:shadow-lg"
           >
             <Plus size={16} />
             <span>Nova Reserva</span>
@@ -806,12 +763,12 @@ const CalendarioFullCalendar = () => {
 
       {/* Header dos Dias */}
       <div 
-        className="bg-slate-300 border-b border-slate-400 sticky z-20"
+        className="bg-gray-50 border-b border-gray-200 sticky z-20 shadow-sm"
         style={{ top: '8rem' }}
       >
         <div className="flex">
-          <div className="w-48 flex-shrink-0 p-3 border-r border-slate-400 bg-slate-400 font-semibold text-slate-800">
-            Quartos
+          <div className="w-48 flex-shrink-0 p-3 border-r border-gray-200 bg-white font-semibold text-gray-700 shadow-sm">
+            📋 Quartos
           </div>
           <div className="flex-1 flex">
             {Array.from({ length: 15 }, (_, i) => {
@@ -827,8 +784,8 @@ const CalendarioFullCalendar = () => {
               return (
                 <div
                   key={i}
-                  className={`flex-1 p-2 text-center text-sm font-medium border-r border-slate-400 ${
-                    isToday ? 'bg-blue-500 text-white' : 'bg-slate-300 text-slate-700'
+                  className={`flex-1 min-w-[80px] p-2 text-center text-sm font-medium border-r border-gray-200 ${
+                    isToday ? 'bg-blue-500 text-white shadow-sm' : 'bg-gray-50 text-gray-600'
                   }`}
                 >
                   <div className="text-xs">
@@ -855,7 +812,7 @@ const CalendarioFullCalendar = () => {
                 <div className="w-48 flex-shrink-0 border-r border-slate-200">
                   <button
                     onClick={() => toggleCategory(categoria.nome)}
-                    className="w-full p-4 flex items-center space-x-3 hover:bg-slate-200 transition-colors text-left"
+                    className="w-full p-3 flex items-center space-x-3 hover:bg-slate-200 transition-colors text-left"
                   >
                     <div 
                       className="w-4 h-4 rounded-full flex-shrink-0"
@@ -913,7 +870,7 @@ const CalendarioFullCalendar = () => {
                       return (
                         <div
                           key={i}
-                          className={`flex-1 h-full border-r border-slate-200 cursor-pointer transition-colors relative ${
+                          className={`flex-1 min-w-[80px] h-full border-r border-slate-200 cursor-pointer transition-colors relative ${
                             isDragOver 
                               ? 'bg-green-200 hover:bg-green-300' 
                               : selectedForMove
@@ -1009,6 +966,9 @@ const CalendarioFullCalendar = () => {
                         onDragEnd={handleDragEnd}
                         onDoubleClick={(e) => handleReservaDoubleClick(e, reserva)}
                         onContextMenu={(e) => handleReservaRightClick(e, reserva)}
+                        onMouseEnter={(e) => handleMouseEnter(e, reserva)}
+                        onMouseMove={handleMouseMove}
+                        onMouseLeave={handleMouseLeave}
                         className={`absolute text-white text-xs p-2 cursor-move shadow-lg rounded ${getStatusColor(reserva.status)} hover:shadow-xl ${
                           resizeMode?.reservaId === reserva.id ? 'z-50 ring-4 ring-purple-400 shadow-2xl' : ''
                         } ${isDragging && draggedReserva?.id === reserva.id ? 'opacity-50' : ''} ${
@@ -1019,10 +979,9 @@ const CalendarioFullCalendar = () => {
                           width: `${widthPercent}%`,
                           top: '50%',
                           minWidth: '80px',
-                          height: '36px',
+                          height: '64px',
                           clipPath: 'polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%)'
                         }}
-                        title={`${reserva.hospede} - ${reserva.quarto}\n${reserva.checkin} - ${reserva.checkout}\n(Arraste para mover ou duplo clique para modo PIN)`}
                       >
                         <div
                           className={`absolute left-0 top-0 bottom-0 w-4 cursor-pointer transition-colors z-20 ${
@@ -1042,13 +1001,13 @@ const CalendarioFullCalendar = () => {
                           </div>
                         </div>
 
-                        <div className="px-2 flex items-center justify-between h-full">
+                        <div className="px-4 flex items-center justify-between h-full">
                           <div className="flex-1 min-w-0">
                             <div className="font-medium leading-tight truncate">
                               {reserva.hospede}
                             </div>
                             <div className="text-[10px] opacity-90">
-                              {reserva.checkin} - {reserva.checkout}
+                              {reserva.procedencia}
                             </div>
                           </div>
                           
@@ -1528,8 +1487,128 @@ const CalendarioFullCalendar = () => {
         </div>
       )}
 
-      {/* Linhas conectoras entre reservas do mesmo hóspede */}
-      <GuestConnectionLines reservas={reservas} quartos={quartos} />
+      {/* Tooltip Customizado */}
+      <AnimatePresence>
+        {tooltip.visible && tooltip.data && (
+          <motion.div
+            initial={{ 
+              opacity: 0, 
+              scale: 0.8,
+              x: tooltip.data ? -20 : 0,
+              y: tooltip.data ? 10 : 0
+            }}
+            animate={{ 
+              opacity: 1, 
+              scale: 1,
+              x: 0,
+              y: 0
+            }}
+            exit={{ 
+              opacity: 0, 
+              scale: 0.8,
+              x: 20,
+              y: -10
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 400,
+              damping: 25,
+              duration: 0.2
+            }}
+            className="fixed z-[10000] pointer-events-none"
+            style={{
+              left: `${tooltip.x}px`,
+              top: tooltip.flipped ? `${tooltip.y - 260}px` : `${tooltip.y + 20}px`,
+              transform: 'translateX(-50%)'
+            }}
+          >
+            <div className="bg-white rounded-xl shadow-2xl border border-gray-200 p-4 w-80">
+              <div className="space-y-3">
+                {/* Header com nome do hóspede */}
+                <div className="flex items-center space-x-3">
+                  <div 
+                    className={`w-3 h-3 rounded-full ${getStatusColor(tooltip.data.status)}`}
+                  ></div>
+                  <div>
+                    <h4 className="font-bold text-gray-800 text-sm">{tooltip.data.hospede}</h4>
+                    <p className="text-xs text-gray-600">Quarto {tooltip.data.quarto}</p>
+                  </div>
+                </div>
+                
+                {/* Informações da reserva em grid */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Check-in:</span>
+                      <span className="text-gray-800 font-medium">{tooltip.data.checkin}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Check-out:</span>
+                      <span className="text-gray-800 font-medium">{tooltip.data.checkout}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Hóspedes:</span>
+                      <span className="text-gray-800 font-medium">{tooltip.data.hospedes}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Noites:</span>
+                      <span className="text-gray-800 font-medium">{Math.floor(tooltip.data.duracao)}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Indicadores especiais */}
+                {(tooltip.data.earlyCheckin || tooltip.data.lateCheckout) && (
+                  <div className="pt-2 border-t border-gray-100 space-y-1">
+                    {tooltip.data.earlyCheckin && (
+                      <div className="flex items-center justify-between text-xs text-orange-600">
+                        <div className="flex items-center space-x-2">
+                          <Clock size={12} />
+                          <span>Early Check-in</span>
+                        </div>
+                        {tooltip.data.earlyCheckinTime && (
+                          <span className="font-medium">{tooltip.data.earlyCheckinTime}</span>
+                        )}
+                      </div>
+                    )}
+                    {tooltip.data.lateCheckout && (
+                      <div className="flex items-center justify-between text-xs text-red-600">
+                        <div className="flex items-center space-x-2">
+                          <ClockAlert size={12} />
+                          <span>Late Check-out</span>
+                        </div>
+                        {tooltip.data.lateCheckoutTime && (
+                          <span className="font-medium">{tooltip.data.lateCheckoutTime}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Informações Financeiras */}
+                <div className="pt-3 border-t border-gray-100">
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="text-center p-2 bg-green-50 rounded-lg">
+                      <div className="text-green-600 font-medium">Pago</div>
+                      <div className="text-green-800 font-bold">R$ {tooltip.data.valorPago?.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center p-2 bg-orange-50 rounded-lg">
+                      <div className="text-orange-600 font-medium">A Pagar</div>
+                      <div className="text-orange-800 font-bold">R$ {(tooltip.data.valorTotal - tooltip.data.valorPago)?.toFixed(2)}</div>
+                    </div>
+                    <div className="text-center p-2 bg-blue-50 rounded-lg">
+                      <div className="text-blue-600 font-medium">Total</div>
+                      <div className="text-blue-800 font-bold">R$ {tooltip.data.valorTotal?.toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
