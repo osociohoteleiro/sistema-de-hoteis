@@ -46,7 +46,9 @@
       "Bash(ping:*)",
       "Bash(telnet:*)",
       "Bash(mysql:*)",
-      "WebFetch(domain:fullcalendar.io)"
+      "WebFetch(domain:fullcalendar.io)",
+      "WebFetch(domain:gantt-schedule-timeline-calendar.neuronet.io)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []
