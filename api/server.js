@@ -123,6 +123,7 @@ const metaRoutes = require('./routes/meta');
 const marketingMessagesRoutes = require('./routes/marketing-messages');
 const logosRoutes = require('./routes/logos');
 const whatsappCloudRoutes = require('./routes/whatsapp-cloud');
+const rateShopperRoutes = require('./routes/rateShopper');
 // const migrateRoutes = require('./routes/migrate'); // Removido por segurança
 
 // Rotas da API
@@ -147,6 +148,7 @@ app.use('/api/meta', metaRoutes);
 app.use('/api/marketing-messages', marketingMessagesRoutes);
 app.use('/api/logos', logosRoutes);
 app.use('/api/whatsapp-cloud', whatsappCloudRoutes);
+app.use('/api/rate-shopper', rateShopperRoutes);
 // app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
 // Middleware de erro global
