@@ -14,6 +14,8 @@ import Tarifario from './pages/Tarifario';
 import Financeiro from './pages/Financeiro';
 import Relatorios from './pages/Relatorios';
 import Configuracoes from './pages/Configuracoes';
+import RateShopperDashboard from './pages/RateShopper/RateShopperDashboard';
+import PropertyManager from './pages/RateShopper/PropertyManager';
 
 const router = createBrowserRouter([
   {
@@ -31,6 +33,8 @@ const router = createBrowserRouter([
       { path: 'hospedes', element: <Hospedes /> },
       { path: 'quartos', element: <Quartos /> },
       { path: 'tarifario', element: <Tarifario /> },
+      { path: 'rate-shopper', element: <RateShopperDashboard /> },
+      { path: 'rate-shopper/properties', element: <PropertyManager /> },
       { path: 'financeiro', element: <Financeiro /> },
       { path: 'relatorios', element: <Relatorios /> },
       { path: 'configuracoes', element: <Configuracoes /> },

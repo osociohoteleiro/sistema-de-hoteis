@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   TrendingUp,
   TrendingDown,
@@ -15,15 +16,25 @@ import {
   RefreshCw,
   Filter,
   Calendar,
-  Building
+  Building,
+  Settings,
+  X
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import NewSearchModal from './NewSearchModal';
+import axios from 'axios';
 
 const RateShopperDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedProperty, setSelectedProperty] = useState('all');
   const [dateRange, setDateRange] = useState('30d');
+  const [showNewSearchModal, setShowNewSearchModal] = useState(false);
+  const [submittingSearch, setSubmittingSearch] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [searchesPolling, setSearchesPolling] = useState(false);
+  const [extractionStatuses, setExtractionStatuses] = useState({});
+  const [startingExtractions, setStartingExtractions] = useState(new Set());
 
   // Mock data - será substituído pela chamada real da API
   const mockData = {
@@ -83,12 +94,263 @@ const RateShopperDashboard = () => {
   };
 
   useEffect(() => {
-    // Simular carregamento dos dados
+    loadDashboardData();
+  }, [selectedProperty, dateRange]);
+
+  // Polling seletivo apenas para buscas (quando necessário)
+  const startSearchesPolling = () => {
+    if (searchesPolling) return; // Já está rodando
+
+    setSearchesPolling(true);
+    let pollCount = 0;
+    const maxPolls = 24; // 24 * 5s = 2 minutos
+
+    const pollInterval = setInterval(() => {
+      pollCount++;
+      
+      // Atualizar apenas as buscas recentes
+      updateRecentSearches();
+      
+      if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+        setSearchesPolling(false);
+      }
+    }, 5000);
+
+    // Auto-stop após 2 minutos
     setTimeout(() => {
+      clearInterval(pollInterval);
+      setSearchesPolling(false);
+    }, 120000);
+  };
+
+  // Atualizar apenas a seção de buscas recentes
+  const updateRecentSearches = async () => {
+    try {
+      const hotelId = 2;
+      const response = await axios.get(`/api/rate-shopper/${hotelId}/dashboard`);
+      
+      if (response.data.success && dashboardData) {
+        setDashboardData(prev => ({
+          ...prev,
+          recent_searches: response.data.data.recent_searches,
+          summary: {
+            ...prev.summary,
+            running_searches: response.data.data.summary.running_searches || prev.summary.running_searches
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error updating searches:', error);
+    }
+  };
+
+  // Limpar notificação após 5 segundos
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Obter hotel_id do usuário logado (assumindo que está em localStorage ou context)
+      const hotelId = 2; // Temporário - usando hotel existente (Pousada Bugaendrus)
+      
+      const response = await axios.get(`/api/rate-shopper/${hotelId}/dashboard`, {
+        params: {
+          property_id: selectedProperty === 'all' ? undefined : selectedProperty,
+          days: dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 90
+        }
+      });
+      
+      if (response.data.success) {
+        setDashboardData(response.data.data);
+      } else {
+        console.error('Failed to load dashboard data');
+        // Fallback para dados mock
+        setDashboardData(mockData);
+      }
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+      // Fallback para dados mock em caso de erro
       setDashboardData(mockData);
+    } finally {
       setLoading(false);
-    }, 1000);
-  }, []);
+    }
+  };
+
+  // Funções de controle de extração
+  const handleStartExtraction = async (search) => {
+    try {
+      const searchId = search.id;
+      setStartingExtractions(prev => new Set([...prev, searchId]));
+      
+      const hotelId = 2;
+      const response = await axios.post(`/api/rate-shopper-extraction/${hotelId}/start-extraction`, {
+        search_ids: [searchId],
+        properties: [{ id: search.property_id, name: search.property_name }]
+      });
+
+      if (response.data.success) {
+        setNotification({
+          type: 'success',
+          title: 'Extração Iniciada!',
+          message: `Extração de ${search.property_name} iniciada com sucesso`
+        });
+        
+        // Iniciar polling para acompanhar progresso
+        startExtractionPolling(searchId);
+        
+        // Atualizar dados do dashboard
+        setTimeout(loadDashboardData, 1000);
+      }
+    } catch (error) {
+      console.error('Error starting extraction:', error);
+      setNotification({
+        type: 'error',
+        title: 'Erro ao Iniciar Extração',
+        message: error.response?.data?.error || 'Ocorreu um erro inesperado'
+      });
+    } finally {
+      setStartingExtractions(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(search.id);
+        return newSet;
+      });
+    }
+  };
+
+  const handleStopExtraction = async (search) => {
+    try {
+      const hotelId = 2;
+      const response = await axios.post(`/api/rate-shopper-extraction/${hotelId}/stop-extraction`);
+
+      if (response.data.success) {
+        setNotification({
+          type: 'success',
+          title: 'Extração Pausada!',
+          message: `Extração de ${search.property_name} pausada com sucesso`
+        });
+        
+        // FORÇAR ATUALIZAÇÃO IMEDIATA do status local
+        setDashboardData(prevData => ({
+          ...prevData,
+          recent_searches: prevData.recent_searches.map(s => 
+            s.id === search.id 
+              ? { ...s, status: 'CANCELLED' }
+              : s
+          )
+        }));
+        
+        // Recarregar dados do servidor para confirmar
+        setTimeout(() => {
+          loadDashboardData();
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error stopping extraction:', error);
+      setNotification({
+        type: 'error',
+        title: 'Erro ao Pausar Extração',
+        message: error.response?.data?.error || 'Ocorreu um erro inesperado'
+      });
+    }
+  };
+
+  // Polling específico para status de extração
+  const startExtractionPolling = (searchId) => {
+    const hotelId = 2;
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await axios.get(`/api/rate-shopper-extraction/${hotelId}/extraction-status`);
+        
+        if (response.data.success) {
+          const status = response.data.data;
+          
+          setExtractionStatuses(prev => ({
+            ...prev,
+            [searchId]: status
+          }));
+          
+          // Parar polling se extração terminou
+          if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+            clearInterval(pollInterval);
+            setTimeout(loadDashboardData, 2000);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling extraction status:', error);
+      }
+    }, 3000);
+
+    // Auto-stop após 10 minutos
+    setTimeout(() => {
+      clearInterval(pollInterval);
+    }, 600000);
+  };
+
+  const handleNewSearch = async (searchData) => {
+    try {
+      setSubmittingSearch(true);
+      
+      const propertyId = searchData.property_id;
+      
+      // Atualizar configurações de automação da propriedade se necessário
+      if (searchData.auto_repeat) {
+        const hotelId = 2; // Temporário - usando hotel existente (Pousada Bugaendrus)
+        await axios.put(`/api/rate-shopper/properties/${propertyId}`, {
+          auto_search_enabled: true,
+          search_frequency_hours: searchData.repeat_frequency_hours
+        });
+      }
+      
+      // Iniciar busca para a propriedade selecionada (usando estrutura correta da API)
+      const hotelId = 2; // Temporário - usando hotel existente (Pousada Bugaendrus)
+      const searchResponse = await axios.post(`/api/rate-shopper/${hotelId}/searches`, {
+        property_id: propertyId,
+        start_date: searchData.start_date,
+        end_date: searchData.end_date,
+        max_bundle_size: searchData.max_bundle_size
+      });
+
+      if (searchResponse.data.success) {
+        // Mostrar notificação de sucesso
+        setNotification({
+          type: 'success',
+          title: 'Busca Iniciada!',
+          message: `Busca criada para ${properties.find(p => p.id.toString() === propertyId.toString())?.property_name}. O processamento iniciará em breve.`
+        });
+
+        // Iniciar polling apenas das buscas por 2 minutos
+        startSearchesPolling();
+        
+        // Recarregar dashboard após um delay para mostrar a nova busca
+        setTimeout(() => {
+          loadDashboardData();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Error creating search:', error);
+      
+      // Mostrar notificação de erro
+      setNotification({
+        type: 'error',
+        title: 'Erro ao Criar Busca',
+        message: error.response?.data?.error || 'Ocorreu um erro inesperado. Tente novamente.'
+      });
+      
+      throw error;
+    } finally {
+      setSubmittingSearch(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -104,13 +366,50 @@ const RateShopperDashboard = () => {
   const { summary, recent_searches, properties, price_trends } = dashboardData;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <>
+      {/* Notificação */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 ${
+          notification.type === 'success' 
+            ? 'bg-green-50 border-green-500 text-green-800' 
+            : 'bg-red-50 border-red-500 text-red-800'
+        }`}>
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              {notification.type === 'success' ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-red-600" />
+              )}
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium">{notification.title}</h3>
+              <p className="text-sm mt-1">{notification.message}</p>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Rate Shopper</h1>
-            <p className="text-gray-600">Análise de preços da concorrência</p>
+            <p className="text-gray-600">
+              Análise de preços da concorrência
+              {searchesPolling && (
+                <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
+                  <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                  Atualizando buscas...
+                </span>
+              )}
+            </p>
           </div>
           
           <div className="flex gap-4">
@@ -120,8 +419,8 @@ const RateShopperDashboard = () => {
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">Todas as propriedades</option>
-              {properties?.map(prop => (
-                <option key={prop.id} value={prop.id}>{prop.property_name}</option>
+              {properties?.map((prop, index) => (
+                <option key={`${prop.id}-${index}`} value={prop.id}>{prop.property_name}</option>
               ))}
             </select>
             
@@ -134,6 +433,14 @@ const RateShopperDashboard = () => {
               <option value="30d">Últimos 30 dias</option>
               <option value="90d">Últimos 90 dias</option>
             </select>
+
+            <Link
+              to="/rate-shopper/properties"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Gerenciar Propriedades
+            </Link>
           </div>
         </div>
       </div>
@@ -241,63 +548,207 @@ const RateShopperDashboard = () => {
           </div>
         </div>
 
+
         {/* Recent Searches */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Buscas Recentes</h3>
-            <p className="text-sm text-gray-600">Status das execuções mais recentes</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Buscas Recentes</h3>
+                <p className="text-sm text-gray-600">
+                  Acompanhe o status das suas extrações de preços em tempo real
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">
+                  📌 Processar: <code className="bg-gray-100 px-2 py-1 rounded text-xs">npm run process-database:saas</code>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  🤖 Modo headless (sem interface gráfica)
+                </div>
+                {searchesPolling && (
+                  <div className="text-xs text-blue-600 mt-1">
+                    🔄 Atualizando automaticamente...
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <div className="p-6">
-            <div className="space-y-4">
-              {recent_searches?.map((search) => (
-                <div key={search.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                      search.status === 'RUNNING' ? 'bg-blue-100' : 'bg-green-100'
-                    }`}>
-                      {search.status === 'RUNNING' ? (
-                        <Play className="h-4 w-4 text-blue-600" />
-                      ) : (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      )}
+            {recent_searches && recent_searches.length > 0 ? (
+              <div className="space-y-4">
+                {recent_searches.map((search, index) => (
+                <div key={`${search.id}-${index}`} className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
+                        search.status === 'RUNNING' ? 'bg-blue-100' : 
+                        search.status === 'COMPLETED' ? 'bg-green-100' : 
+                        search.status === 'FAILED' ? 'bg-red-100' :
+                        search.status === 'CANCELLED' ? 'bg-orange-100' : 'bg-gray-100'
+                      }`}>
+                        {search.status === 'RUNNING' ? (
+                          <RefreshCw className="h-5 w-5 text-blue-600 animate-spin" />
+                        ) : search.status === 'COMPLETED' ? (
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        ) : search.status === 'FAILED' ? (
+                          <AlertCircle className="h-5 w-5 text-red-600" />
+                        ) : search.status === 'CANCELLED' ? (
+                          <Pause className="h-5 w-5 text-orange-600" />
+                        ) : (
+                          <Clock className="h-5 w-5 text-gray-600" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-gray-900">{search.property_name}</p>
+                          <span className="text-xs text-gray-500">
+                            #{search.id}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <div>📅 {new Date(search.start_date).toLocaleDateString('pt-BR')} → {new Date(search.end_date).toLocaleDateString('pt-BR')}</div>
+                          <div>
+                            {search.status === 'RUNNING' 
+                              ? `🔄 Processando: ${search.processed_dates || 0}/${search.total_dates} datas`
+                              : search.status === 'COMPLETED' 
+                              ? `✅ Finalizada: ${search.total_prices_found || 0} preços encontrados`
+                              : search.status === 'FAILED'
+                              ? `❌ Erro na execução`
+                              : `⏳ Aguardando processamento (${search.total_dates} datas)`
+                            }
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Criada: {new Date(search.started_at || search.created_at).toLocaleString('pt-BR')}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{search.property_name}</p>
-                      <p className="text-sm text-gray-600">
-                        {search.status === 'RUNNING' 
-                          ? `${search.processed_dates}/${search.total_dates} processados`
-                          : `${search.total_prices_found} preços encontrados`
-                        }
-                      </p>
+                    
+                    <div className="flex flex-col items-end space-y-2">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                        search.status === 'RUNNING' 
+                          ? 'bg-blue-100 text-blue-800'
+                          : search.status === 'COMPLETED' 
+                          ? 'bg-green-100 text-green-800'
+                          : search.status === 'FAILED'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {search.status === 'RUNNING' ? '🔄 Executando' : 
+                         search.status === 'COMPLETED' ? '✅ Concluída' :
+                         search.status === 'FAILED' ? '❌ Erro' :
+                         '⏳ Pendente'}
+                      </span>
+                      
+                      {/* Botões de controle */}
+                      <div className="flex items-center space-x-2">
+                        {search.status === 'PENDING' && (
+                          <button
+                            onClick={() => handleStartExtraction(search)}
+                            disabled={startingExtractions.has(search.id)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {startingExtractions.has(search.id) ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                                Iniciando...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3 mr-1" />
+                                Iniciar
+                              </>
+                            )}
+                          </button>
+                        )}
+                        
+                        {search.status === 'RUNNING' && (
+                          <button
+                            onClick={() => handleStopExtraction(search)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                          >
+                            <Pause className="h-3 w-3 mr-1" />
+                            Pausar
+                          </button>
+                        )}
+                        
+                        {(search.status === 'FAILED' || search.status === 'CANCELLED') && (
+                          <button
+                            onClick={() => handleStartExtraction(search)}
+                            disabled={startingExtractions.has(search.id)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {startingExtractions.has(search.id) ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                                {search.status === 'CANCELLED' ? 'Reiniciando...' : 'Reiniciando...'}
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3 mr-1" />
+                                {search.status === 'CANCELLED' ? 'Retomar' : 'Tentar Novamente'}
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-center space-x-2">
-                    {search.status === 'RUNNING' && (
-                      <div className="flex items-center space-x-2">
-                        <div className="w-20 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: `${search.progress_percentage}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">
-                          {search.progress_percentage}%
+                  {/* Barra de progresso para extrações em andamento */}
+                  {search.status === 'RUNNING' && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-700">
+                          Progresso da Extração
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {search.progress_percentage || 0}% concluído
                         </span>
                       </div>
-                    )}
-                    
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      search.status === 'RUNNING' 
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {search.status === 'RUNNING' ? 'Executando' : 'Concluída'}
-                    </span>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${search.progress_percentage || 0}%` }}
+                        ></div>
+                      </div>
+                      {extractionStatuses[search.id] && (
+                        <div className="mt-2 text-xs text-gray-600">
+                          <div>⏱️ Tempo decorrido: {Math.floor((extractionStatuses[search.id].duration || 0) / 60)}:{String((extractionStatuses[search.id].duration || 0) % 60).padStart(2, '0')}</div>
+                          {extractionStatuses[search.id].estimatedTimeRemaining && (
+                            <div>⏳ Tempo estimado restante: {Math.floor(extractionStatuses[search.id].estimatedTimeRemaining / 60)}:{String(extractionStatuses[search.id].estimatedTimeRemaining % 60).padStart(2, '0')}</div>
+                          )}
+                          {extractionStatuses[search.id].progress?.currentProperty && (
+                            <div>🏨 Processando: {extractionStatuses[search.id].progress.currentProperty}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                    <Search className="h-8 w-8 text-gray-400" />
                   </div>
                 </div>
-              ))}
-            </div>
+                <h4 className="text-lg font-medium text-gray-900 mb-2">Nenhuma busca encontrada</h4>
+                <p className="text-gray-600 mb-4">
+                  Crie uma nova busca para começar a monitorar os preços da concorrência.
+                </p>
+                <button
+                  onClick={() => setShowNewSearchModal(true)}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  Criar Primeira Busca
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -310,10 +761,25 @@ const RateShopperDashboard = () => {
               <h3 className="text-lg font-semibold text-gray-900">Propriedades Monitoradas</h3>
               <p className="text-sm text-gray-600">Visão geral dos preços mais recentes</p>
             </div>
-            <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-              <Search className="h-4 w-4 mr-2" />
-              Nova Busca
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => loadDashboardData()}
+                disabled={loading}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
+              
+              <button 
+                onClick={() => setShowNewSearchModal(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                disabled={submittingSearch}
+              >
+                <Search className="h-4 w-4 mr-2" />
+                Nova Busca
+              </button>
+            </div>
           </div>
         </div>
         
@@ -342,8 +808,8 @@ const RateShopperDashboard = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {properties?.map((property) => (
-                <tr key={property.id} className="hover:bg-gray-50">
+              {properties?.map((property, index) => (
+                <tr key={`${property.id}-${index}`} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -399,7 +865,18 @@ const RateShopperDashboard = () => {
           </table>
         </div>
       </div>
-    </div>
+
+      {/* Modal de Nova Busca */}
+      <NewSearchModal 
+        isOpen={showNewSearchModal}
+        onClose={() => setShowNewSearchModal(false)}
+        onSubmit={() => {
+          // Recarregar dashboard após nova busca ser criada
+          loadDashboardData();
+          setShowNewSearchModal(false);
+        }}
+      />
+    </>
   );
 };
 

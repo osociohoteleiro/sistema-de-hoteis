@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Plus,
   Edit,
@@ -13,7 +14,8 @@ import {
   AlertCircle,
   CheckCircle,
   Eye,
-  BarChart3
+  BarChart3,
+  ArrowLeft
 } from 'lucide-react';
 
 const PropertyManager = () => {
@@ -186,11 +188,20 @@ const PropertyManager = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <>
       {/* Header */}
       <div className="mb-8">
         <div className="flex justify-between items-center">
           <div>
+            <div className="flex items-center gap-3 mb-2">
+              <Link
+                to="/rate-shopper"
+                className="inline-flex items-center text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Voltar ao Dashboard
+              </Link>
+            </div>
             <h1 className="text-3xl font-bold text-gray-900">Gerenciar Propriedades</h1>
             <p className="text-gray-600">Configure os concorrentes que deseja monitorar</p>
           </div>
@@ -512,7 +523,7 @@ const PropertyManager = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 

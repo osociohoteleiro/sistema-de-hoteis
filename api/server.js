@@ -149,6 +149,10 @@ app.use('/api/marketing-messages', marketingMessagesRoutes);
 app.use('/api/logos', logosRoutes);
 app.use('/api/whatsapp-cloud', whatsappCloudRoutes);
 app.use('/api/rate-shopper', rateShopperRoutes);
+
+// Rate Shopper Extraction Control
+const rateShopperExtractionRoutes = require('./routes/rateShopperExtraction');
+app.use('/api/rate-shopper-extraction', rateShopperExtractionRoutes);
 // app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
 // Middleware de erro global

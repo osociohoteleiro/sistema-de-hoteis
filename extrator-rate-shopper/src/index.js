@@ -4,10 +4,8 @@ const fs = require('fs').promises
 const config_json = require('./config.json')
 const { logger } = require('./logger')
 
-// Usar a versão otimizada por padrão, com fallback para a antiga
-const { extract_prices_from_booking } = process.env.USE_OLD_EXTRACTOR === 'true' 
-  ? require('./booking-via-js-vars-extractor-with-bundle-handler.js')
-  : require('./booking-extractor-optimized.js')
+// Usar SEMPRE a versão otimizada (sem navegador visível)
+const { extract_prices_from_booking } = require('./booking-extractor-optimized.js')
 
 const { convert_csv_to_xlsx } = require('./conversor')
 

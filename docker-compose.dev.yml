@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: osh_postgres
+    environment:
+      POSTGRES_DB: osh_db
+      POSTGRES_USER: osh_user
+      POSTGRES_PASSWORD: osh_password_2024
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./api/database/init:/docker-entrypoint-initdb.d
+    command: postgres -c 'max_connections=200' -c 'shared_buffers=256MB' -c 'effective_cache_size=1GB'
+    restart: unless-stopped
+    networks:
+      - osh_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: osh_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./api/config/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    networks:
+      - osh_network
+
+  # Redis Commander (GUI para Redis)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: osh_redis_commander
+    environment:
+      REDIS_HOSTS: local:osh_redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - osh_network
+
+  # pgAdmin (GUI para PostgreSQL)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: osh_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@osh.com
+      PGADMIN_DEFAULT_PASSWORD: osh_admin_2024
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+    networks:
+      - osh_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  osh_network:
+    driver: bridge

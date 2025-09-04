@@ -13,7 +13,8 @@ import {
   Settings,
   Menu,
   X,
-  Hotel
+  Hotel,
+  TrendingUp
 } from 'lucide-react';
 
 const menuItems = [
@@ -25,6 +26,7 @@ const menuItems = [
   { icon: Users, label: 'Hóspedes', path: '/hospedes' },
   { icon: Bed, label: 'Quartos', path: '/quartos' },
   { icon: DollarSign, label: 'Tarifário', path: '/tarifario' },
+  { icon: TrendingUp, label: 'Rate Shopper', path: '/rate-shopper' },
   { icon: BarChart3, label: 'Financeiro', path: '/financeiro' },
   { icon: BarChart3, label: 'Relatórios', path: '/relatorios' },
   { icon: Settings, label: 'Configurações', path: '/configuracoes' },
