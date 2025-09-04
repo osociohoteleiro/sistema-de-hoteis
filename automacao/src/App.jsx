@@ -5,6 +5,9 @@ import Dashboard from './pages/Dashboard';
 import Workspaces from './pages/Workspaces';
 import WorkspaceBots from './pages/WorkspaceBots';
 import BotFlows from './pages/BotFlows';
+import WhatsAppCloud from './pages/WhatsAppCloudOAuth';
+import WhatsAppOAuthCallback from './pages/WhatsAppOAuthCallback';
+import WhatsAppApp from './pages/WhatsAppApp';
 
 const Settings = () => (
   <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-8 shadow-blue-elegant">
@@ -34,9 +37,18 @@ function App() {
           {/* Bot Flows */}
           <Route path="bot/:botUuid/flows" element={<BotFlows />} />
 
+          {/* WhatsApp Cloud API */}
+          <Route path="workspace/:workspaceUuid/whatsapp-cloud" element={<WhatsAppCloud />} />
+          
+          {/* WhatsApp App (Evolution API) */}
+          <Route path="workspace/:workspaceUuid/whatsapp-app" element={<WhatsAppApp />} />
+
           {/* Configurações */}
           <Route path="settings" element={<Settings />} />
         </Route>
+
+        {/* Rota de callback OAuth do WhatsApp (fora do Layout) */}
+        <Route path="whatsapp-oauth-callback" element={<WhatsAppOAuthCallback />} />
 
         {/* Rota 404 para páginas não encontradas */}
         <Route path="*" element={

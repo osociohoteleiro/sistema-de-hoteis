@@ -103,6 +103,9 @@ export default {
         'gradient-sapphire': 'linear-gradient(135deg, #547af1 0%, #3d5ce6 100%)',
         'gradient-steel': 'linear-gradient(135deg, #6485aa 0%, #506d93 100%)',
         'gradient-card-blue': 'linear-gradient(145deg, rgba(240, 244, 255, 0.95) 0%, rgba(225, 234, 254, 0.85) 100%)',
+      },
+      spacing: {
+        '128': '32rem', // 512px - for two sidebars (256px each)
       }
     },
   },
