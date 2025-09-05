@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
+import apiService from '../../services/api';
+import toast from 'react-hot-toast';
 import {
   Plus,
   Edit,
@@ -19,6 +22,7 @@ import {
 } from 'lucide-react';
 
 const PropertyManager = () => {
+  const { selectedHotelUuid } = useApp();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -32,41 +36,29 @@ const PropertyManager = () => {
   });
   const [errors, setErrors] = useState({});
 
-  // Mock data - será substituído pela chamada real da API
-  const mockProperties = [
-    {
-      id: 1,
-      property_name: 'HOTEL MARANDUBA',
-      booking_url: 'https://www.booking.com/hotel/br/maranduba-ubatuba12.pt-br.html',
-      location: 'Ubatuba, SP',
-      category: 'Hotel',
-      ota_name: 'Booking.com',
-      competitor_type: 'OTA',
-      max_bundle_size: 7,
-      active: true,
-      created_at: '2025-01-01T10:00:00Z'
-    },
-    {
-      id: 2,
-      property_name: 'POUSADA KALIMAN',
-      booking_url: 'https://www.booking.com/hotel/br/kaliman-pousada.pt-br.html',
-      location: 'Ubatuba, SP',
-      category: 'Pousada',
-      ota_name: 'Booking.com',
-      competitor_type: 'OTA',
-      max_bundle_size: 7,
-      active: true,
-      created_at: '2025-01-01T10:30:00Z'
+  const loadProperties = async () => {
+    if (!selectedHotelUuid) {
+      toast.error('Nenhum hotel selecionado');
+      setLoading(false);
+      return;
     }
-  ];
+
+    try {
+      setLoading(true);
+      const response = await apiService.getRateShopperProperties(selectedHotelUuid);
+      setProperties(response.data || []);
+    } catch (error) {
+      console.error('Erro ao carregar propriedades:', error);
+      toast.error('Erro ao carregar propriedades do Rate Shopper');
+      setProperties([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Simular carregamento dos dados
-    setTimeout(() => {
-      setProperties(mockProperties);
-      setLoading(false);
-    }, 1000);
-  }, []);
+    loadProperties();
+  }, [selectedHotelUuid]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -89,43 +81,46 @@ const PropertyManager = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
       return;
     }
 
-    if (editingProperty) {
-      // Update existing property
-      setProperties(properties.map(prop => 
-        prop.id === editingProperty.id 
-          ? { ...prop, ...formData }
-          : prop
-      ));
-    } else {
-      // Add new property
-      const newProperty = {
-        id: Date.now(),
-        ...formData,
-        ota_name: 'Booking.com',
-        competitor_type: 'OTA',
-        active: true,
-        created_at: new Date().toISOString()
-      };
-      setProperties([...properties, newProperty]);
+    if (!selectedHotelUuid) {
+      toast.error('Nenhum hotel selecionado');
+      return;
     }
 
-    setShowModal(false);
-    setEditingProperty(null);
-    setFormData({
-      property_name: '',
-      booking_url: '',
-      location: '',
-      category: '',
-      max_bundle_size: 7
-    });
-    setErrors({});
+    try {
+      if (editingProperty) {
+        // Update existing property
+        await apiService.updateRateShopperProperty(editingProperty.id, formData);
+        toast.success('Propriedade atualizada com sucesso!');
+      } else {
+        // Add new property
+        await apiService.createRateShopperProperty(selectedHotelUuid, formData);
+        toast.success('Propriedade criada com sucesso!');
+      }
+
+      // Reload properties
+      await loadProperties();
+      
+      setShowModal(false);
+      setEditingProperty(null);
+      setFormData({
+        property_name: '',
+        booking_url: '',
+        location: '',
+        category: '',
+        max_bundle_size: 7
+      });
+      setErrors({});
+    } catch (error) {
+      console.error('Erro ao salvar propriedade:', error);
+      toast.error('Erro ao salvar propriedade');
+    }
   };
 
   const handleEdit = (property) => {
@@ -140,9 +135,16 @@ const PropertyManager = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (propertyId) => {
+  const handleDelete = async (propertyId) => {
     if (window.confirm('Tem certeza que deseja excluir esta propriedade? Esta ação não pode ser desfeita.')) {
-      setProperties(properties.filter(prop => prop.id !== propertyId));
+      try {
+        await apiService.deleteRateShopperProperty(propertyId);
+        toast.success('Propriedade excluída com sucesso!');
+        await loadProperties();
+      } catch (error) {
+        console.error('Erro ao excluir propriedade:', error);
+        toast.error('Erro ao excluir propriedade');
+      }
     }
   };
 
@@ -175,6 +177,29 @@ const PropertyManager = () => {
       }
     }
   };
+
+  if (!selectedHotelUuid) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="h-16 w-16 mx-auto mb-6 bg-yellow-100 rounded-xl flex items-center justify-center">
+            <AlertCircle className="h-8 w-8 text-yellow-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Nenhum Hotel Selecionado</h2>
+          <p className="text-gray-600 mb-6">
+            Para gerenciar propriedades do Rate Shopper, você precisa selecionar um hotel no cabeçalho da aplicação.
+          </p>
+          <Link
+            to="/rate-shopper"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar ao Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
