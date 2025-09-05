@@ -141,7 +141,7 @@ class Hotel {
   // Get hotel users
   async getUsers() {
     const result = await db.query(`
-      SELECT u.id, u.uuid, u.name, u.email, u.user_type, u.active, u.email_verified,
+      SELECT u.id, u.user_uuid as uuid, u.name, u.email, u.user_type, u.active, u.email_verified,
              uh.role, uh.permissions, uh.active as hotel_active, uh.created_at as joined_at
       FROM users u
       JOIN user_hotels uh ON u.id = uh.user_id

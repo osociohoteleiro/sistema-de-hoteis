@@ -5,11 +5,11 @@
 /**
  * Emit extraction progress update to connected clients
  * @param {Object} io - Socket.io server instance
- * @param {number} hotelId - Hotel ID
+ * @param {string|number} hotelIdentifier - Hotel UUID or ID
  * @param {Object} progressData - Progress data to emit
  */
-const emitExtractionProgress = (io, hotelId, progressData) => {
-  const roomName = `hotel-${hotelId}`;
+const emitExtractionProgress = (io, hotelIdentifier, progressData) => {
+  const roomName = `hotel-${hotelIdentifier}`;
   
   io.to(roomName).emit('extraction-progress', {
     searchId: progressData.searchId,
@@ -31,6 +31,7 @@ const emitExtractionProgress = (io, hotelId, progressData) => {
 
   console.log(`📡 Emitido progresso para sala ${roomName}:`, {
     searchId: progressData.searchId,
+    status: progressData.status,
     progress: progressData.progress_percentage + '%',
     dates: `${progressData.processed_dates}/${progressData.total_dates}`
   });
@@ -39,11 +40,11 @@ const emitExtractionProgress = (io, hotelId, progressData) => {
 /**
  * Emit extraction status change to connected clients
  * @param {Object} io - Socket.io server instance
- * @param {number} hotelId - Hotel ID
+ * @param {string|number} hotelIdentifier - Hotel UUID or ID
  * @param {Object} statusData - Status data to emit
  */
-const emitExtractionStatus = (io, hotelId, statusData) => {
-  const roomName = `hotel-${hotelId}`;
+const emitExtractionStatus = (io, hotelIdentifier, statusData) => {
+  const roomName = `hotel-${hotelIdentifier}`;
   
   io.to(roomName).emit('extraction-status', {
     searchId: statusData.searchId,
@@ -58,11 +59,11 @@ const emitExtractionStatus = (io, hotelId, statusData) => {
 /**
  * Emit new search created event
  * @param {Object} io - Socket.io server instance
- * @param {number} hotelId - Hotel ID
+ * @param {string|number} hotelIdentifier - Hotel UUID or ID
  * @param {Object} searchData - New search data
  */
-const emitNewSearch = (io, hotelId, searchData) => {
-  const roomName = `hotel-${hotelId}`;
+const emitNewSearch = (io, hotelIdentifier, searchData) => {
+  const roomName = `hotel-${hotelIdentifier}`;
   
   io.to(roomName).emit('new-search-created', {
     search: searchData,
@@ -75,11 +76,11 @@ const emitNewSearch = (io, hotelId, searchData) => {
 /**
  * Emit search deleted event
  * @param {Object} io - Socket.io server instance  
- * @param {number} hotelId - Hotel ID
+ * @param {string|number} hotelIdentifier - Hotel UUID or ID
  * @param {Object} deletedData - Deleted search data
  */
-const emitSearchDeleted = (io, hotelId, deletedData) => {
-  const roomName = `hotel-${hotelId}`;
+const emitSearchDeleted = (io, hotelIdentifier, deletedData) => {
+  const roomName = `hotel-${hotelIdentifier}`;
   
   io.to(roomName).emit('search-deleted', {
     searchId: deletedData.id,

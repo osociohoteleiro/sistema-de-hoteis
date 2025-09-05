@@ -344,7 +344,7 @@ router.delete('/properties/:property_id', authenticateToken, async (req, res) =>
 // GET /api/rate-shopper/:hotel_id/searches
 router.get('/:hotel_id/searches', authenticateToken, checkHotelAccess, async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotelId = req.hotel.id; // Use ID do hotel já convertido pelo middleware
     const { status, search_type, property_id, limit } = req.query;
     
     const filters = {};
@@ -525,7 +525,7 @@ router.get('/properties/:property_id/analytics', authenticateToken, async (req, 
 // GET /api/rate-shopper/:hotel_id/config
 router.get('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotelId = req.hotel.id; // Use ID do hotel já convertido pelo middleware
     
     const result = await db.query(
       'SELECT * FROM rate_shopper_configs WHERE hotel_id = $1',
@@ -566,7 +566,7 @@ router.get('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req,
 // PUT /api/rate-shopper/:hotel_id/config
 router.put('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotelId = req.hotel.id; // Use ID do hotel já convertido pelo middleware
     const {
       auto_search_enabled,
       search_frequency_hours,
@@ -849,7 +849,22 @@ router.get('/:hotel_id/scheduler/logs', authenticateToken, checkHotelAccess, asy
 // GET /api/rate-shopper/:hotel_id/searches/progress
 router.get('/:hotel_id/searches/progress', async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar hotel e pegar ID
+      const Hotel = require('../models/Hotel');
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      // É ID integer
+      hotelId = parseInt(hotel_id);
+    }
     
     // Buscar searches em progresso e seus detalhes
     const runningSearches = await db.query(`
@@ -940,7 +955,22 @@ router.get('/:hotel_id/searches/progress', async (req, res) => {
 // DELETE /api/rate-shopper/:hotel_id/searches/failed
 router.delete('/:hotel_id/searches/failed', async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar hotel e pegar ID
+      const Hotel = require('../models/Hotel');
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      // É ID integer
+      hotelId = parseInt(hotel_id);
+    }
     
     // Identificar buscas mal sucedidas (FAILED ou sem preços)
     const failedSearches = await db.query(`
@@ -1152,9 +1182,22 @@ router.put('/:hotel_id/searches/:search_id/progress', async (req, res) => {
     const { hotel_id, search_id } = req.params;
     const { processed_dates, total_prices_found } = req.body;
     
+    // Converter UUID para ID se necessário
+    let hotelId = hotel_id;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Hotel não encontrado' 
+        });
+      }
+      hotelId = hotel.id;
+    }
+    
     // Verificar se a busca existe e pertence ao hotel
     const search = await RateShopperSearch.findById(search_id);
-    if (!search || search.hotel_id != hotel_id) {
+    if (!search || search.hotel_id != hotelId) {
       return res.status(404).json({ 
         success: false, 
         error: 'Busca não encontrada ou não pertence a este hotel' 
@@ -1182,10 +1225,20 @@ router.put('/:hotel_id/searches/:search_id/progress', async (req, res) => {
     const updatedSearch = new RateShopperSearch(updatedSearchData[0]);
     updatedSearch.property_name = updatedSearchData[0].property_name;
 
+    // Usar UUID original ou buscar se foi convertido
+    let hotelUuid = hotel_id;
+    if (!hotel_id.includes('-')) {
+      // Se for ID numérico, buscar UUID
+      const hotelData = await db.query('SELECT hotel_uuid FROM hotels WHERE id = $1', [hotel_id]);
+      if (hotelData.length > 0) {
+        hotelUuid = hotelData[0].hotel_uuid;
+      }
+    }
+
     // Emitir evento Socket.io para clientes conectados
     const io = req.app.get('socketio');
     if (io) {
-      emitExtractionProgress(io, hotel_id, {
+      emitExtractionProgress(io, hotelUuid, {
         searchId: search_id,
         id: updatedSearch.id,
         status: updatedSearch.status,
@@ -1218,6 +1271,95 @@ router.put('/:hotel_id/searches/:search_id/progress', async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: 'Falha ao atualizar progresso' 
+    });
+  }
+});
+
+// PUT /api/rate-shopper/:hotel_id/searches/:search_id/complete
+router.put('/:hotel_id/searches/:search_id/complete', async (req, res) => {
+  try {
+    const { hotel_id, search_id } = req.params;
+    const { 
+      status, 
+      processed_dates, 
+      total_dates,
+      total_prices_found, 
+      property_name, 
+      started_at, 
+      completed_at, 
+      error_log 
+    } = req.body;
+    
+    // Converter UUID para ID se necessário
+    let hotelId = hotel_id;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Hotel não encontrado' 
+        });
+      }
+      hotelId = hotel.id;
+    }
+    
+    // Verificar se a busca existe e pertence ao hotel
+    const search = await RateShopperSearch.findById(search_id);
+    if (!search || search.hotel_id != hotelId) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Busca não encontrada ou não pertence a este hotel' 
+      });
+    }
+
+    console.log(`📡 Recebida notificação de conclusão para busca ${search_id}: ${status}`);
+
+    // Usar UUID original ou buscar se foi convertido
+    let hotelUuid = hotel_id;
+    if (!hotel_id.includes('-')) {
+      // Se for ID numérico, buscar UUID
+      const hotelData = await db.query('SELECT hotel_uuid FROM hotels WHERE id = $1', [hotel_id]);
+      if (hotelData.length > 0) {
+        hotelUuid = hotelData[0].hotel_uuid;
+      }
+    }
+
+    // Emitir evento Socket.io para clientes conectados
+    const io = req.app.get('socketio');
+    if (io) {
+      emitExtractionProgress(io, hotelUuid, {
+        searchId: search_id,
+        id: search.id,
+        status,
+        processed_dates,
+        total_dates,
+        progress_percentage: status === 'COMPLETED' ? 100 : (processed_dates && total_dates ? Math.round((processed_dates / total_dates) * 100) : 0),
+        total_prices_found,
+        duration_seconds: search.duration_seconds,
+        started_at,
+        completed_at,
+        property_name,
+        error_log
+      });
+
+      console.log(`📡 Evento Socket.io emitido para hotel ${hotelUuid}: ${status}`);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Notificação de conclusão processada com sucesso',
+      data: {
+        search_id,
+        status,
+        hotel_uuid: hotelUuid
+      }
+    });
+
+  } catch (error) {
+    console.error('Complete notification error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Falha ao processar notificação de conclusão' 
     });
   }
 });

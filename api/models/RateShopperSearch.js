@@ -3,7 +3,7 @@ const db = require('../config/database');
 class RateShopperSearch {
   constructor(data = {}) {
     this.id = data.id;
-    this.uuid = data.uuid;
+    this.uuid = data.uuid; // Removido search_uuid que não existe
     this.hotel_id = data.hotel_id;
     this.property_id = data.property_id;
     this.search_type = data.search_type || 'MANUAL';
@@ -27,7 +27,7 @@ class RateShopperSearch {
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM rate_shopper_searches WHERE uuid = $1', [uuid]);
+    const result = await db.query('SELECT * FROM rate_shopper_searches WHERE id = $1', [uuid]); // Usando ID em vez de UUID
     return result.length > 0 ? new RateShopperSearch(result[0]) : null;
   }
 
@@ -113,7 +113,7 @@ class RateShopperSearch {
           hotel_id, property_id, search_type, start_date, end_date,
           status, total_dates
         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, uuid
+        RETURNING id
       `, [
         this.hotel_id, this.property_id, this.search_type, this.start_date,
         this.end_date, this.status, this.total_dates
@@ -121,7 +121,7 @@ class RateShopperSearch {
       
       if (result && result.length > 0 && result[0]) {
         this.id = result[0].id;
-        this.uuid = result[0].uuid;
+        this.uuid = null; // UUID não é necessário para searches
       } else {
         throw new Error('Failed to create search: No result returned from database');
       }

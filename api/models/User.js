@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 class User {
   constructor(data = {}) {
     this.id = data.id;
-    this.uuid = data.uuid;
+    this.uuid = data.user_uuid || data.uuid;
     this.name = data.name;
     this.email = data.email;
     this.password_hash = data.password_hash;
@@ -16,17 +16,17 @@ class User {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM users WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [id]);
     return result.length > 0 ? new User(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM users WHERE uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM users WHERE user_uuid = $1', [uuid]);
     return result.length > 0 ? new User(result[0]) : null;
   }
 
   static async findByEmail(email) {
-    const result = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
     return result.length > 0 ? new User(result[0]) : null;
   }
 

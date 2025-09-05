@@ -150,6 +150,11 @@ class DatabaseIntegration {
 
       await this.pool.query(query, params);
       logger.info(`Updated search ${searchId} to status ${status}`, { additionalData });
+
+      // Notificar a API quando a extração terminar
+      if (status === 'COMPLETED' || status === 'FAILED') {
+        await this.notifyExtractionComplete(searchId, status, additionalData);
+      }
     } catch (error) {
       logger.error('Failed to update search status', { 
         searchId, 
@@ -157,6 +162,75 @@ class DatabaseIntegration {
         error: error.message 
       });
       throw error;
+    }
+  }
+
+  /**
+   * Notifica a API sobre a conclusão da extração
+   */
+  async notifyExtractionComplete(searchId, status, additionalData = {}) {
+    try {
+      // Buscar dados da busca para obter hotel_id
+      const searchResult = await this.pool.query(`
+        SELECT rs.*, rsp.property_name 
+        FROM rate_shopper_searches rs 
+        LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id 
+        WHERE rs.id = $1
+      `, [searchId]);
+
+      if (searchResult.rows.length === 0) {
+        logger.warn(`Search ${searchId} not found for notification`);
+        return;
+      }
+
+      const searchData = searchResult.rows[0];
+      
+      // Buscar UUID do hotel
+      const hotelResult = await this.pool.query('SELECT hotel_uuid FROM hotels WHERE id = $1', [searchData.hotel_id]);
+      
+      if (hotelResult.rows.length === 0) {
+        logger.warn(`Hotel ${searchData.hotel_id} not found for notification`);
+        return;
+      }
+
+      const hotelUuid = hotelResult.rows[0].hotel_uuid;
+
+      // Preparar dados da notificação
+      const notificationData = {
+        status,
+        processed_dates: additionalData.processed_dates || searchData.processed_dates,
+        total_dates: searchData.total_dates,
+        total_prices_found: additionalData.total_prices_found || searchData.total_prices_found,
+        property_name: searchData.property_name,
+        started_at: searchData.started_at,
+        completed_at: new Date().toISOString(),
+        error_log: additionalData.error_log || searchData.error_log
+      };
+
+      // Fazer chamada HTTP para a API
+      const axios = require('axios');
+      const apiUrl = `http://localhost:3001/api/rate-shopper/${hotelUuid}/searches/${searchId}/complete`;
+      
+      await axios.put(apiUrl, notificationData, {
+        timeout: 5000,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      logger.info(`Notified API about search ${searchId} completion`, { 
+        searchId, 
+        status, 
+        hotelUuid 
+      });
+
+    } catch (error) {
+      // Log do erro mas não falhar o processo principal
+      logger.error('Failed to notify API about extraction completion', {
+        searchId,
+        status,
+        error: error.message
+      });
     }
   }
 

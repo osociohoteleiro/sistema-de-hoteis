@@ -3,7 +3,7 @@ const db = require('../config/database');
 class RateShopperProperty {
   constructor(data = {}) {
     this.id = data.id;
-    this.uuid = data.uuid;
+    this.uuid = data.property_uuid || data.uuid;
     this.hotel_id = data.hotel_id;
     this.property_name = data.property_name;
     this.booking_url = data.booking_url;
@@ -23,7 +23,7 @@ class RateShopperProperty {
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE uuid = $1', [uuid]);
+    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE property_uuid = $1', [uuid]);
     return result.length > 0 ? new RateShopperProperty(result[0]) : null;
   }
 
@@ -101,7 +101,7 @@ class RateShopperProperty {
           hotel_id, property_name, booking_url, competitor_type, ota_name,
           location, category, max_bundle_size, active
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING id, uuid
+        RETURNING id, property_uuid as uuid
       `, [
         this.hotel_id, this.property_name, this.booking_url, this.competitor_type,
         this.ota_name, this.location, this.category, this.max_bundle_size, this.active

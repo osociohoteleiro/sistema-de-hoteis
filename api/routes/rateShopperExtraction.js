@@ -11,10 +11,23 @@ const activeExtractions = new Map();
  * POST /api/rate-shopper/:hotel_id/start-extraction
  */
 router.post('/:hotel_id/start-extraction', async (req, res) => {
-  const hotelId = req.params.hotel_id;
+  const hotel_id = req.params.hotel_id;
   const { search_ids, properties } = req.body;
 
   try {
+    const Hotel = require('../models/Hotel');
+    
+    // Converter UUID para ID se necessário
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
     // Verificar se já há extração rodando para este hotel
     if (activeExtractions.has(hotelId)) {
       return res.status(400).json({
@@ -100,10 +113,19 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
       extractionData.status = code === 0 ? 'COMPLETED' : 'FAILED';
       extractionData.endTime = new Date();
       
-      // Remove do store após 5 minutos
-      setTimeout(() => {
-        activeExtractions.delete(hotelId);
-      }, 5 * 60 * 1000);
+      // Limpar imediatamente para permitir próximas extrações
+      activeExtractions.delete(hotelId);
+      console.log(`🧹 Extração finalizada para hotel ${hotelId}, liberando para próximas extrações`);
+    });
+
+    extractionProcess.on('error', (error) => {
+      console.error('❌ Erro no processo de extração:', error);
+      extractionData.status = 'FAILED';
+      extractionData.endTime = new Date();
+      
+      // Limpar em caso de erro também
+      activeExtractions.delete(hotelId);
+      console.log(`🧹 Extração com erro para hotel ${hotelId}, liberando para próximas extrações`);
     });
 
     res.json({

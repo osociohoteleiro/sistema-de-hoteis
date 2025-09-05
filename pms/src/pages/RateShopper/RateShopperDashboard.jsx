@@ -35,9 +35,49 @@ const formatDate = (dateValue, locale = 'pt-BR', options = {}) => {
   if (!dateValue) return 'Data inválida';
   
   try {
-    const date = new Date(dateValue);
+    // Para strings ISO com timezone UTC (vem do PostgreSQL)
+    if (typeof dateValue === 'string' && dateValue.includes('T') && dateValue.includes('Z')) {
+      // Extrair apenas a parte da data (YYYY-MM-DD) e ignorar horário/timezone
+      const datePart = dateValue.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
+      
+      // Se o horário é 03:00:00.000Z (timezone brasileiro UTC-3), adicionar 1 dia
+      if (dateValue.includes('T03:00:00.000Z')) {
+        const adjustedDay = day + 1;
+        const date = new Date(year, month - 1, adjustedDay);
+        return date.toLocaleDateString(locale, {
+          day: '2-digit',
+          month: '2-digit', 
+          year: 'numeric',
+          ...options
+        });
+      }
+      
+      // Criar data local sem conversão de timezone
+      const date = new Date(year, month - 1, day);
+      
+      return date.toLocaleDateString(locale, {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric',
+        ...options
+      });
+    }
     
-    // Verificar se a data é válida
+    // Para strings no formato YYYY-MM-DD (data pura)
+    if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      const [year, month, day] = dateValue.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      return date.toLocaleDateString(locale, {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric',
+        ...options
+      });
+    }
+    
+    // Para outros formatos, tentar conversão padrão
+    const date = new Date(dateValue);
     if (isNaN(date.getTime())) return 'Data inválida';
     
     return date.toLocaleDateString(locale, {
@@ -46,6 +86,7 @@ const formatDate = (dateValue, locale = 'pt-BR', options = {}) => {
       year: 'numeric',
       ...options
     });
+    
   } catch (error) {
     console.error('Error formatting date:', error, dateValue);
     return 'Data inválida';
@@ -138,8 +179,11 @@ const RateShopperDashboard = () => {
       console.log('🔌 Conectado ao Socket.io:', newSocket.id);
       
       // Entrar na sala do hotel
-      const hotelId = 2; // Temporário - usar o hotel atual
-      newSocket.emit('join-hotel-room', hotelId);
+      if (selectedHotelUuid) {
+        // Converter UUID para ID para o Socket.io
+        // Por enquanto, usar um valor padrão até obtermos o ID do hotel
+        newSocket.emit('join-hotel-room', selectedHotelUuid);
+      }
     });
     
     newSocket.on('connect_error', (error) => {
@@ -156,29 +200,93 @@ const RateShopperDashboard = () => {
       console.log('🏃 Estado do Modo Preguiça:', lazyModeActive);
       
       const { searchId, progress } = data;
+      console.log('🔍 Buscando searchId:', searchId, 'tipo:', typeof searchId);
       
       // Atualizar o estado do dashboard em tempo real
-      setDashboardData(prevData => ({
-        ...prevData,
-        recent_searches: prevData.recent_searches?.map(search => {
-          if (search.id == searchId) {
-            return {
-              ...search,
-              status: progress.status,
-              processed_dates: progress.processed_dates,
-              total_dates: progress.total_dates,
-              progress_percentage: progress.progress_percentage,
-              total_prices_found: progress.total_prices_found,
-              duration_seconds: progress.duration_seconds,
-              started_at: progress.started_at,
-              completed_at: progress.completed_at,
-              property_name: progress.property_name || search.property_name,
-              error_log: progress.error_log
-            };
-          }
-          return search;
-        }) || []
-      }));
+      setDashboardData(prevData => {
+        console.log('📊 Searches disponíveis:', prevData.recent_searches?.map(s => ({ id: s.id, tipo: typeof s.id })));
+        
+        return {
+          ...prevData,
+          recent_searches: prevData.recent_searches?.map(search => {
+            console.log('🔍 Comparando:', search.id, '==', searchId, ':', search.id == searchId);
+            if (search.id == searchId) {
+              console.log('✅ Atualizando search:', search.id, 'com progress:', progress);
+              console.log('📊 Status recebido:', progress.status, 'Status anterior:', search.status);
+              
+              const calculatedProgress = progress.progress_percentage || 
+                (progress.processed_dates && progress.total_dates ? 
+                  Math.round((progress.processed_dates / progress.total_dates) * 100) : 0);
+              console.log('📊 Progress calculado:', calculatedProgress, 'de', progress.processed_dates, '/', progress.total_dates);
+              
+              // Se progresso chegou a 100% mas status ainda não é COMPLETED/FAILED, configurar fallback
+              if (calculatedProgress >= 100 && 
+                  progress.status === 'RUNNING' && 
+                  search.status === 'RUNNING') {
+                console.log('⏰ Progresso 100% mas ainda RUNNING - configurando fallback de verificação');
+                
+                setTimeout(async () => {
+                  try {
+                    console.log('🔍 Verificando status final da busca', searchId);
+                    const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/dashboard`);
+                    
+                    if (response.success) {
+                      const updatedSearch = response.data.recent_searches?.find(s => s.id == searchId);
+                      
+                      if (updatedSearch && (updatedSearch.status === 'COMPLETED' || updatedSearch.status === 'FAILED')) {
+                        console.log('✅ Status final obtido via fallback:', updatedSearch.status);
+                        
+                        // Atualizar dados com status final
+                        setDashboardData(prevData => ({
+                          ...prevData,
+                          recent_searches: prevData.recent_searches?.map(s => 
+                            s.id == searchId ? updatedSearch : s
+                          ) || []
+                        }));
+                        
+                        // Mostrar notificação
+                        setNotification({
+                          type: updatedSearch.status === 'COMPLETED' ? 'success' : 'error',
+                          title: updatedSearch.status === 'COMPLETED' ? 'Extração Concluída!' : 'Extração Falhou!',
+                          message: `${updatedSearch.property_name || `#${searchId}`} ${
+                            updatedSearch.status === 'COMPLETED' 
+                              ? `terminou com ${updatedSearch.total_prices_found || 0} preços`
+                              : 'falhou durante o processamento'
+                          }`
+                        });
+                        
+                        // Limpar estado de progresso
+                        setExtractionStatuses(prev => {
+                          const newStatuses = { ...prev };
+                          delete newStatuses[searchId];
+                          return newStatuses;
+                        });
+                      }
+                    }
+                  } catch (error) {
+                    console.error('❌ Erro no fallback de verificação:', error);
+                  }
+                }, 5000); // Aguardar 5 segundos após 100%
+              }
+              
+              return {
+                ...search,
+                status: progress.status,
+                processed_dates: progress.processed_dates,
+                total_dates: progress.total_dates,
+                progress_percentage: calculatedProgress,
+                total_prices_found: progress.total_prices_found,
+                duration_seconds: progress.duration_seconds,
+                started_at: progress.started_at,
+                completed_at: progress.completed_at,
+                property_name: progress.property_name || search.property_name,
+                error_log: progress.error_log
+              };
+            }
+            return search;
+          }) || []
+        };
+      });
       
       // Mostrar notificação de progresso se necessário
       if (progress.status === 'COMPLETED') {
@@ -188,13 +296,20 @@ const RateShopperDashboard = () => {
           message: `${progress.property_name || `#${searchId}`} terminou com ${progress.total_prices_found || 0} preços`
         });
         
+        // Limpar estado de progresso da extração concluída
+        setExtractionStatuses(prev => {
+          const newStatuses = { ...prev };
+          delete newStatuses[searchId];
+          return newStatuses;
+        });
+        
         // Se Modo Preguiça estiver ativo, iniciar próxima extração
         setTimeout(() => {
           if (lazyModeRef.current) {
             console.log('✅ Extração concluída - chamando próxima no Modo Preguiça');
             lazyModeRef.current();
           }
-        }, 1000); // Aguardar 1 segundo para garantir que o estado foi atualizado
+        }, 2000); // Aguardar 2 segundos para garantir que backend liberou o hotel
         
       } else if (progress.status === 'FAILED') {
         setNotification({
@@ -203,13 +318,27 @@ const RateShopperDashboard = () => {
           message: `${progress.property_name || `#${searchId}`}: ${progress.error_log || 'Erro desconhecido'}`
         });
         
+        // Limpar estado de progresso da extração que falhou
+        setExtractionStatuses(prev => {
+          const newStatuses = { ...prev };
+          delete newStatuses[searchId];
+          return newStatuses;
+        });
+        
         // Se Modo Preguiça estiver ativo, continuar com próxima mesmo se falhou
         setTimeout(() => {
           if (lazyModeRef.current) {
             console.log('❌ Extração falhou - tentando próxima no Modo Preguiça');
             lazyModeRef.current();
           }
-        }, 1000);
+        }, 2000); // Aguardar 2 segundos para garantir que backend liberou o hotel
+      } else if (progress.status === 'CANCELLED') {
+        // Limpar estado de progresso da extração cancelada
+        setExtractionStatuses(prev => {
+          const newStatuses = { ...prev };
+          delete newStatuses[searchId];
+          return newStatuses;
+        });
       }
     });
     
@@ -366,6 +495,8 @@ const RateShopperDashboard = () => {
         console.log('✅ Dashboard data loaded successfully:', response.data);
         console.log('🏨 Properties count:', response.data.properties?.length || 0);
         console.log('🔍 Recent searches count:', response.data.recent_searches?.length || 0);
+        
+        
         setDashboardData(response.data);
       } else {
         console.error('❌ Failed to load dashboard data - response not successful');
@@ -387,24 +518,31 @@ const RateShopperDashboard = () => {
       const searchId = search.id;
       setStartingExtractions(prev => new Set([...prev, searchId]));
       
-      const hotelId = 2;
-      const response = await axios.post(`/api/rate-shopper-extraction/${hotelId}/start-extraction`, {
-        search_ids: [searchId],
-        properties: [{ id: search.property_id, name: search.property_name }]
+      const response = await apiService.request(`/rate-shopper-extraction/${selectedHotelUuid}/start-extraction`, {
+        method: 'POST',
+        body: JSON.stringify({
+          search_ids: [searchId],
+          properties: [{ id: search.property_id, name: search.property_name }]
+        })
       });
 
-      if (response.data.success) {
+      if (response.success) {
         setNotification({
           type: 'success',
           title: 'Extração Iniciada!',
           message: `Extração de ${search.property_name} iniciada com sucesso`
         });
         
-        // Iniciar polling para acompanhar progresso
-        startExtractionPolling(searchId);
+        // Se Socket.io estiver conectado, usar apenas Socket.io
+        // Caso contrário, usar polling como fallback
+        if (!socket || socket.disconnected) {
+          console.log('⚠️ Socket.io não conectado, usando polling como fallback');
+          startExtractionPolling(searchId);
+        } else {
+          console.log('✅ Socket.io conectado, aguardando updates em tempo real');
+        }
         
-        // Atualizar dados do dashboard
-        setTimeout(loadDashboardData, 1000);
+        // Não precisamos recarregar dados - Socket.io ou polling vai atualizar
       }
     } catch (error) {
       console.error('Error starting extraction:', error);
@@ -674,7 +812,9 @@ const RateShopperDashboard = () => {
                   status: searchData.status,
                   processed_dates: searchData.processed_dates,
                   total_dates: searchData.total_dates,
-                  progress_percentage: searchData.progress_percent,
+                  progress_percentage: searchData.progress_percent || searchData.progress_percentage || 
+                    (searchData.processed_dates && searchData.total_dates ? 
+                      Math.round((searchData.processed_dates / searchData.total_dates) * 100) : 0),
                   total_prices_found: searchData.actual_prices_count || search.total_prices_found,
                   duration_seconds: searchData.elapsed_seconds,
                   started_at: searchData.started_at,
@@ -699,14 +839,19 @@ const RateShopperDashboard = () => {
           // Parar polling se extração terminou
           if (searchData.status === 'COMPLETED' || searchData.status === 'FAILED' || searchData.status === 'CANCELLED') {
             clearInterval(pollInterval);
-            // Recarregar dados completos após terminar
-            setTimeout(loadDashboardData, 1000);
+            
+            // Limpar estado de progresso quando termina via polling
+            setExtractionStatuses(prev => {
+              const newStatuses = { ...prev };
+              delete newStatuses[searchId];
+              return newStatuses;
+            });
           }
         }
       } catch (error) {
         console.error('Error polling extraction progress:', error);
-        // Em caso de erro, tentar recarregar dados completos
-        setTimeout(loadDashboardData, 5000);
+        // Em caso de erro persistente, parar polling
+        clearInterval(pollInterval);
       }
     }, 2000); // Polling mais frequente para progresso em tempo real
 
@@ -913,7 +1058,7 @@ const RateShopperDashboard = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Propriedades Monitoradas</p>
+              <p className="text-sm font-medium text-gray-600">Concorrentes Cadastrados</p>
               <p className="text-3xl font-bold text-gray-900">{summary.total_properties}</p>
             </div>
             <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
