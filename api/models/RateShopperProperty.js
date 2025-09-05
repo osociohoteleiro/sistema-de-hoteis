@@ -78,34 +78,34 @@ class RateShopperProperty {
 
   async save() {
     if (this.id) {
-      // Update existing property
+      // Update existing property - PostgreSQL style
       const result = await db.query(`
         UPDATE rate_shopper_properties SET 
-        property_name = ?, booking_url = ?, competitor_type = ?, ota_name = ?,
-        location = ?, category = ?, max_bundle_size = ?, active = ?
-        WHERE id = ?
+        property_name = $1, booking_url = $2, competitor_type = $3, ota_name = $4,
+        location = $5, category = $6, max_bundle_size = $7, active = $8
+        WHERE id = $9
       `, [
         this.property_name, this.booking_url, this.competitor_type, this.ota_name,
         this.location, this.category, this.max_bundle_size, this.active, this.id
       ]);
       return result;
     } else {
-      // Create new property
+      // Create new property - PostgreSQL style with RETURNING
       const result = await db.query(`
         INSERT INTO rate_shopper_properties (
           hotel_id, property_name, booking_url, competitor_type, ota_name,
           location, category, max_bundle_size, active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        RETURNING id, uuid
       `, [
         this.hotel_id, this.property_name, this.booking_url, this.competitor_type,
         this.ota_name, this.location, this.category, this.max_bundle_size, this.active
       ]);
       
-      this.id = result.insertId;
-      
-      // Get the generated UUID
-      const newProperty = await RateShopperProperty.findById(this.id);
-      this.uuid = newProperty.uuid;
+      if (result && result.length > 0) {
+        this.id = result[0].id;
+        this.uuid = result[0].uuid;
+      }
       
       return result;
     }

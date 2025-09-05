@@ -1,0 +1,107 @@
+{
+  "name": "OSH Hotels - Configuração Centralizada de Portas",
+  "version": "1.0.0",
+  "description": "Configuração centralizada de portas para todos os módulos do sistema OSH Hotels",
+  "last_updated": "2025-09-05",
+  "ports": {
+    "api": {
+      "name": "API Backend",
+      "port": 3001,
+      "path": "./api",
+      "description": "Servidor backend principal com todas as APIs",
+      "url": "http://localhost:3001",
+      "env_var": "PORT",
+      "dependencies": ["PostgreSQL:5432", "Redis:6379"]
+    },
+    "pms": {
+      "name": "PMS Frontend",
+      "port": 5175,
+      "path": "./pms",
+      "description": "Property Management System - Interface do sistema de gestão hoteleira",
+      "url": "http://localhost:5175",
+      "env_var": "VITE_PORT",
+      "dependencies": ["api:3001"]
+    },
+    "hotel-app": {
+      "name": "Hotel App Frontend",
+      "port": 5173,
+      "path": "./hotel-app",
+      "description": "Aplicação frontend principal do hotel",
+      "url": "http://localhost:5173",
+      "env_var": "VITE_PORT",
+      "dependencies": ["api:3001"]
+    },
+    "automacao": {
+      "name": "Automação Frontend",
+      "port": 5174,
+      "path": "./automacao",
+      "description": "Sistema de automação e fluxos",
+      "url": "http://localhost:5174",
+      "env_var": "VITE_PORT",
+      "dependencies": ["api:3001"]
+    },
+    "extrator-rate-shopper": {
+      "name": "Rate Shopper Extractor",
+      "port": 3002,
+      "path": "./extrator-rate-shopper",
+      "description": "Extrator de preços para Rate Shopper (CLI/Background service)",
+      "url": "http://localhost:3002",
+      "env_var": "PORT",
+      "dependencies": ["api:3001", "PostgreSQL:5432"],
+      "note": "Executa como serviço em background, sem interface web"
+    }
+  },
+  "database_ports": {
+    "postgresql": {
+      "port": 5432,
+      "description": "PostgreSQL Database",
+      "url": "localhost:5432"
+    },
+    "redis": {
+      "port": 6379,
+      "description": "Redis Cache",
+      "url": "localhost:6379"
+    },
+    "mariadb": {
+      "port": 3306,
+      "description": "MariaDB (para migração/backup)",
+      "url": "localhost:3306"
+    }
+  },
+  "port_ranges": {
+    "frontend_apps": "5173-5179",
+    "backend_apis": "3001-3010",
+    "databases": "3306, 5432, 6379"
+  },
+  "development_commands": {
+    "start_all": {
+      "description": "Comandos para iniciar todos os serviços",
+      "commands": [
+        "cd api && npm run dev (porta 3001)",
+        "cd pms && npm run dev (porta 5175)",
+        "cd hotel-app && npm run dev (porta 5173)",
+        "cd automacao && npm run dev (porta 5174)"
+      ]
+    },
+    "check_ports": "netstat -an | findstr :3001 :5173 :5174 :5175"
+  },
+  "troubleshooting": {
+    "port_conflicts": {
+      "description": "Como resolver conflitos de porta",
+      "steps": [
+        "1. Verificar portas em uso: netstat -an",
+        "2. Verificar arquivo .env do módulo",
+        "3. Verificar se o arquivo package.json tem scripts com --port",
+        "4. Reiniciar o serviço com a porta correta"
+      ]
+    },
+    "reset_ports": {
+      "description": "Como resetar todas as portas",
+      "commands": [
+        "taskkill /f /im node.exe",
+        "taskkill /f /im chrome.exe",
+        "Reiniciar os serviços um por vez seguindo a ordem: API -> PMS -> Hotel-App -> Automacao"
+      ]
+    }
+  }
+}

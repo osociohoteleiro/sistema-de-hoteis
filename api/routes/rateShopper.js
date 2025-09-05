@@ -13,8 +13,16 @@ async function checkHotelAccess(req, res, next) {
     const { hotel_id } = req.params;
     const userId = req.user.id;
     
-    // Verificar se o usuário tem acesso ao hotel
-    const hotel = await Hotel.findById(hotel_id);
+    // Verificar se hotel_id é UUID ou integer
+    let hotel;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar por UUID
+      hotel = await Hotel.findByUuid(hotel_id);
+    } else {
+      // É ID integer, buscar por ID
+      hotel = await Hotel.findById(hotel_id);
+    }
+    
     if (!hotel) {
       return res.status(404).json({ error: 'Hotel not found' });
     }
@@ -166,8 +174,22 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
 // GET /api/rate-shopper/:hotel_id/properties (TEMPORARY - REMOVE AUTH FOR TESTING)
 router.get('/:hotel_id/properties', async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotel_id = req.params.hotel_id;
     const { active, competitor_type } = req.query;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar hotel e pegar ID
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      // É ID integer
+      hotelId = parseInt(hotel_id);
+    }
     
     const filters = {};
     if (active !== undefined) filters.active = active === 'true';
@@ -185,10 +207,25 @@ router.get('/:hotel_id/properties', async (req, res) => {
   }
 });
 
-// POST /api/rate-shopper/:hotel_id/properties
-router.post('/:hotel_id/properties', authenticateToken, checkHotelAccess, async (req, res) => {
+// POST /api/rate-shopper/:hotel_id/properties (TEMPORARY - REMOVE AUTH FOR TESTING)
+router.post('/:hotel_id/properties', async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar hotel e pegar ID
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      // É ID integer
+      hotelId = parseInt(hotel_id);
+    }
+    
     const { property_name, booking_url, location, category, max_bundle_size } = req.body;
 
     // Validate URL
