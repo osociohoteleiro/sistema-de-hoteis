@@ -91,65 +91,21 @@ class DatabaseProcessor {
       console.log(`🌐 Extraindo preços de: ${extractorSearch.url}`);
       console.log(`📅 Período: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()}`);
       
-      // Executar extração (esta função não retorna dados, escreve em arquivo)
+      // Executar extração passando conexão do banco para salvar diretamente
       await extract_prices_from_booking(
         extractorSearch.url,
         startDate,
         endDate,
         extractorSearch.max_bundle_size,
-        resultsFile
+        resultsFile,
+        this.db, // Passar instância da database integration
+        searchId, // ID da busca
+        propertyId // ID da propriedade
       );
 
-      // Ler dados do arquivo gerado (formato: data_checkin;data_checkout;preco;tipo_quarto)
-      let pricesCount = 0;
-      try {
-        const csvContent = await fs.readFile(resultsFile, 'utf8');
-        const lines = csvContent.split('\n').filter(line => line.trim());
-        
-        console.log(`📋 Arquivo encontrado: ${lines.length} linhas`);
-        
-        // Processar todas as linhas (não há cabeçalho)
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (!line.trim()) continue;
-          
-          try {
-            // Formato: data_checkin;data_checkout;preco_brasileiro;tipo_quarto
-            const columns = line.split(';');
-            if (columns.length >= 3) {
-              const priceData = {
-                check_in_date: columns[0]?.trim(),
-                check_out_date: columns[1]?.trim(),
-                price: parseFloat(columns[2]?.trim().replace(',', '.')), // Converter vírgula brasileira para ponto
-                room_type: columns[3]?.trim() || 'Standard',
-                currency: 'BRL'
-              };
-
-              if (priceData.price && !isNaN(priceData.price)) {
-                await this.db.savePrice(searchId, propertyId, priceData);
-                pricesCount++;
-                console.log(`💰 Preço salvo: ${priceData.check_in_date} → R$ ${priceData.price}`);
-              }
-            }
-          } catch (lineError) {
-            logger.error('Failed to parse CSV line', { 
-              searchId, 
-              line, 
-              error: lineError.message 
-            });
-          }
-        }
-        
-        // Manter arquivo para auditoria (não deletar)
-        console.log(`📁 Arquivo salvo em: ${resultsFile}`);
-        
-      } catch (csvError) {
-        logger.error('Failed to read CSV results', { 
-          searchId, 
-          resultsFile, 
-          error: csvError.message 
-        });
-      }
+      // Contar preços salvos diretamente no banco durante a extração
+      const pricesCount = await this.db.getSearchPricesCount(searchId);
+      console.log(`💰 Total de preços extraídos e salvos: ${pricesCount}`);
 
       // Atualizar status para COMPLETED
       await this.db.updateSearchStatus(searchId, 'COMPLETED', {

@@ -23,9 +23,12 @@ const {
  * @param {Date} end_date - Data de fim
  * @param {number} max_bundle_size - Tamanho máximo do bundle (ignorado, sempre 1)
  * @param {string} results_filepath - Caminho do arquivo de resultados
+ * @param {Object} dbConnection - Conexão com banco de dados (opcional)
+ * @param {number} searchId - ID da busca no banco (opcional)
+ * @param {number} propertyId - ID da propriedade no banco (opcional)
  * @returns {Promise<void>}
  */
-async function extract_prices_from_booking(url, start_date, end_date, max_bundle_size, results_filepath) {
+async function extract_prices_from_booking(url, start_date, end_date, max_bundle_size, results_filepath, dbConnection = null, searchId = null, propertyId = null) {
   const startTime = Date.now();
   const dates = get_dates_between(start_date, end_date);
   const propertyName = extractPropertyNameFromUrl(url);
@@ -174,9 +177,32 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
                 const roomType = room.b_room_name || 'Standard';
                 
                 if (!isNaN(price) && price > 0) {
-                  // Salvar no formato CSV brasileiro
-                  const csvLine = `${generate_final_result_date(currentDate)};${generate_final_result_date(nextDate)};${price.toFixed(2).replace('.', ',')};${roomType}`;
-                  write_to_file(results_filepath, csvLine);
+                  // Salvar diretamente no banco (se conexão disponível)
+                  if (dbConnection && searchId && propertyId) {
+                    try {
+                      const priceData = {
+                        check_in_date: generate_final_result_date(currentDate),
+                        check_out_date: generate_final_result_date(nextDate),
+                        price: price,
+                        room_type: roomType,
+                        currency: 'BRL'
+                      };
+                      
+                      // Usar a instância de DatabaseIntegration passada como parâmetro
+                      await dbConnection.savePrice(searchId, propertyId, priceData);
+                      
+                      console.log(`   💾 Preço salvo no banco: R$ ${price.toFixed(2).replace('.', ',')} (${roomType})`);
+                    } catch (dbError) {
+                      console.log(`   ⚠️  Erro ao salvar no banco: ${dbError.message}`);
+                      // Fallback para CSV em caso de erro no banco
+                      const csvLine = `${generate_final_result_date(currentDate)};${generate_final_result_date(nextDate)};${price.toFixed(2).replace('.', ',')};${roomType}`;
+                      write_to_file(results_filepath, csvLine);
+                    }
+                  } else {
+                    // Fallback para CSV se não tiver conexão do banco
+                    const csvLine = `${generate_final_result_date(currentDate)};${generate_final_result_date(nextDate)};${price.toFixed(2).replace('.', ',')};${roomType}`;
+                    write_to_file(results_filepath, csvLine);
+                  }
                   
                   console.log(`   💰 Preço encontrado: R$ ${price.toFixed(2).replace('.', ',')} (${roomType})`);
                   

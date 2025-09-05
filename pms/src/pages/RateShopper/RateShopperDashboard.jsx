@@ -22,7 +22,53 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import NewSearchModal from './NewSearchModal';
+import LiveProgressTracker from './LiveProgressTracker';
 import axios from 'axios';
+
+// Função utilitária para formatar datas de forma segura
+const formatDate = (dateValue, locale = 'pt-BR', options = {}) => {
+  if (!dateValue) return 'Data inválida';
+  
+  try {
+    const date = new Date(dateValue);
+    
+    // Verificar se a data é válida
+    if (isNaN(date.getTime())) return 'Data inválida';
+    
+    return date.toLocaleDateString(locale, {
+      day: '2-digit',
+      month: '2-digit', 
+      year: 'numeric',
+      ...options
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error, dateValue);
+    return 'Data inválida';
+  }
+};
+
+// Função utilitária para formatar data e hora de forma segura
+const formatDateTime = (dateValue, locale = 'pt-BR') => {
+  if (!dateValue) return 'Data inválida';
+  
+  try {
+    const date = new Date(dateValue);
+    
+    // Verificar se a data é válida
+    if (isNaN(date.getTime())) return 'Data inválida';
+    
+    return date.toLocaleString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    console.error('Error formatting datetime:', error, dateValue);
+    return 'Data inválida';
+  }
+};
 
 const RateShopperDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -507,6 +553,25 @@ const RateShopperDashboard = () => {
         </div>
       </div>
 
+      {/* Live Progress Tracker */}
+      <div className="mb-8">
+        <LiveProgressTracker 
+          hotelId={2} // TODO: Get from context/props
+          onUpdateCounts={(stats) => {
+            // Atualizar contadores das estatísticas principais
+            if (dashboardData && dashboardData.summary) {
+              setDashboardData(prev => ({
+                ...prev,
+                summary: {
+                  ...prev.summary,
+                  running_searches: stats.running_count
+                }
+              }));
+            }
+          }}
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Price Trends Chart */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -520,14 +585,14 @@ const RateShopperDashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
-                  tickFormatter={(value) => new Date(value).toLocaleDateString()}
+                  tickFormatter={(value) => formatDate(value)}
                 />
                 <YAxis 
                   tickFormatter={(value) => `R$ ${value}`}
                 />
                 <Tooltip 
                   formatter={(value, name) => [`R$ ${value}`, name]}
-                  labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                  labelFormatter={(value) => formatDate(value)}
                 />
                 <Line 
                   type="monotone" 
@@ -607,7 +672,7 @@ const RateShopperDashboard = () => {
                           </span>
                         </div>
                         <div className="text-sm text-gray-600 space-y-1">
-                          <div>📅 {new Date(search.start_date).toLocaleDateString('pt-BR')} → {new Date(search.end_date).toLocaleDateString('pt-BR')}</div>
+                          <div>📅 {formatDate(search.start_date)} → {formatDate(search.end_date)}</div>
                           <div>
                             {search.status === 'RUNNING' 
                               ? `🔄 Processando: ${search.processed_dates || 0}/${search.total_dates} datas`
@@ -619,7 +684,7 @@ const RateShopperDashboard = () => {
                             }
                           </div>
                           <div className="text-xs text-gray-500">
-                            Criada: {new Date(search.started_at || search.created_at).toLocaleString('pt-BR')}
+                            Criada: {formatDateTime(search.started_at || search.created_at)}
                           </div>
                         </div>
                       </div>
@@ -849,7 +914,7 @@ const RateShopperDashboard = () => {
                     {property.price_count_30d}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(property.latest_scraped_at).toLocaleString()}
+                    {formatDateTime(property.latest_scraped_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button className="text-blue-600 hover:text-blue-900 mr-3">

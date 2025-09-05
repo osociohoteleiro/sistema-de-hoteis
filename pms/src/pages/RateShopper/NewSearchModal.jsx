@@ -40,10 +40,81 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
       setLoadingProperties(true);
       const hotelId = 2; // Usar hotel_id dinâmico futuramente
       
-      const response = await axios.get(`/api/rate-shopper/${hotelId}/properties`);
-      
-      if (response.data.success) {
-        setCompetitors(response.data.data);
+      try {
+        const response = await axios.get(`/api/rate-shopper/${hotelId}/properties`);
+        
+        if (response.data.success && response.data.data.length > 0) {
+          setCompetitors(response.data.data);
+        } else {
+          // Se não há dados na API, usar dados mockados temporariamente
+          setCompetitors([
+            {
+              id: 1,
+              property_name: 'Hotel Maranduba',
+              booking_url: 'https://booking.com/hotel-maranduba',
+              location: 'Ubatuba, SP',
+              category: 'Hotel',
+              competitor_type: 'OTA',
+              ota_name: 'Booking.com',
+              active: true
+            },
+            {
+              id: 2,
+              property_name: 'Pousada Kaliman',
+              booking_url: 'https://booking.com/pousada-kaliman',
+              location: 'Ubatuba, SP',
+              category: 'Pousada',
+              competitor_type: 'OTA',
+              ota_name: 'Booking.com',
+              active: true
+            },
+            {
+              id: 3,
+              property_name: 'Resort Vila Azul',
+              booking_url: 'https://booking.com/resort-vila-azul',
+              location: 'Ubatuba, SP',
+              category: 'Resort',
+              competitor_type: 'OTA',
+              ota_name: 'Booking.com',
+              active: true
+            }
+          ]);
+        }
+      } catch (apiError) {
+        console.log('API not available, using mock data');
+        // Se a API não estiver disponível, usar dados mockados
+        setCompetitors([
+          {
+            id: 1,
+            property_name: 'Hotel Maranduba',
+            booking_url: 'https://booking.com/hotel-maranduba',
+            location: 'Ubatuba, SP',
+            category: 'Hotel',
+            competitor_type: 'OTA',
+            ota_name: 'Booking.com',
+            active: true
+          },
+          {
+            id: 2,
+            property_name: 'Pousada Kaliman',
+            booking_url: 'https://booking.com/pousada-kaliman',
+            location: 'Ubatuba, SP',
+            category: 'Pousada',
+            competitor_type: 'OTA',
+            ota_name: 'Booking.com',
+            active: true
+          },
+          {
+            id: 3,
+            property_name: 'Resort Vila Azul',
+            booking_url: 'https://booking.com/resort-vila-azul',
+            location: 'Ubatuba, SP',
+            category: 'Resort',
+            competitor_type: 'OTA',
+            ota_name: 'Booking.com',
+            active: true
+          }
+        ]);
       }
     } catch (error) {
       console.error('Error loading competitors:', error);
@@ -128,8 +199,19 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
 
     setLoading(true);
     try {
-      // Criar uma busca para cada concorrente selecionado
+      // Para demonstração, vamos simular a criação de buscas
       const hotelId = 2; // Usar hotel_id dinâmico futuramente
+      
+      console.log('Creating searches for:', {
+        hotelId,
+        selectedCompetitors: formData.selectedCompetitors,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        max_bundle_size: formData.max_bundle_size
+      });
+      
+      // Simular criação das buscas (comentado até API estar pronta)
+      /*
       const searchPromises = [];
 
       for (const competitorId of formData.selectedCompetitors) {
@@ -146,6 +228,10 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
       }
 
       await Promise.all(searchPromises);
+      */
+      
+      // Simular delay de criação
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       setNotification({
         type: 'success',

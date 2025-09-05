@@ -1,31 +1,52 @@
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 const { logger } = require('./logger');
+const path = require('path');
+
+// Configurar dotenv para carregar do diretório correto
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 /**
- * Classe para integrar o extrator com o banco de dados da API
+ * Classe para integrar o extrator com o banco de dados da API (PostgreSQL)
  */
 class DatabaseIntegration {
   constructor() {
-    this.connection = null;
+    this.pool = null;
+    this.isConnected = false;
   }
 
   /**
-   * Conecta ao banco de dados
+   * Conecta ao banco de dados PostgreSQL
    */
   async connect() {
     try {
-      this.connection = await mysql.createConnection({
-        host: 'ep.osociohoteleiro.com.br',
-        user: 'mariadb',
-        password: 'OSH4040()Xx!..n',
-        database: 'osh-ia',
-        port: 3306
-      });
+      console.log('🔄 Conectando ao PostgreSQL para extração...');
+      
+      const config = {
+        host: process.env.POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.POSTGRES_PORT) || 5432,
+        user: process.env.POSTGRES_USER || 'osh_user',
+        password: process.env.POSTGRES_PASSWORD,
+        database: process.env.POSTGRES_DB || 'osh_db',
+        min: 2,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      };
 
-      logger.info('Connected to database successfully');
-      console.log('✅ Conectado ao banco de dados');
+      this.pool = new Pool(config);
+      
+      // Teste de conexão
+      const client = await this.pool.connect();
+      await client.query('SELECT NOW()');
+      client.release();
+      
+      this.isConnected = true;
+      logger.info('Connected to PostgreSQL successfully');
+      console.log('✅ Conectado ao banco de dados PostgreSQL');
     } catch (error) {
       logger.error('Failed to connect to database', { error: error.message });
+      console.error('❌ Erro ao conectar:', error.message);
       throw error;
     }
   }
@@ -39,23 +60,24 @@ class DatabaseIntegration {
     try {
       let whereConditions = ["rs.status = 'PENDING'"];
       let queryParams = [];
+      let paramCounter = 1;
 
       // Filtro por hotel específico
       if (hotelId) {
-        whereConditions.push("rs.hotel_id = ?");
-        queryParams.push(hotelId);
+        whereConditions.push(`rs.hotel_id = $${paramCounter++}`);
+        queryParams.push(parseInt(hotelId));
       }
 
       // Filtro por IDs específicos de buscas
       if (searchIds) {
-        const ids = searchIds.split(',').map(id => id.trim()).filter(id => id);
+        const ids = searchIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
         if (ids.length > 0) {
-          whereConditions.push(`rs.id IN (${ids.map(() => '?').join(',')})`);
-          queryParams.push(...ids);
+          whereConditions.push(`rs.id = ANY($${paramCounter++})`);
+          queryParams.push(ids);
         }
       }
 
-      const [rows] = await this.connection.execute(`
+      const query = `
         SELECT 
           rs.id,
           rs.uuid,
@@ -63,18 +85,21 @@ class DatabaseIntegration {
           rs.property_id,
           rs.start_date,
           rs.end_date,
-          rs.max_bundle_size,
           rs.total_dates,
           rsp.property_name,
           rsp.booking_url,
-          h.hotel_nome
+          rsp.max_bundle_size,
+          h.name as hotel_name
         FROM rate_shopper_searches rs
         JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
         JOIN hotels h ON rs.hotel_id = h.id
         WHERE ${whereConditions.join(' AND ')}
         ORDER BY rs.created_at ASC
         LIMIT 10
-      `, queryParams);
+      `;
+
+      const result = await this.pool.query(query, queryParams);
+      const rows = result.rows;
 
       logger.info(`Found ${rows.length} pending searches${hotelId ? ` for hotel ${hotelId}` : ''}${searchIds ? ` with IDs ${searchIds}` : ''}`);
       return rows;
@@ -89,34 +114,41 @@ class DatabaseIntegration {
    */
   async updateSearchStatus(searchId, status, additionalData = {}) {
     try {
-      let query = 'UPDATE rate_shopper_searches SET status = ?';
-      const params = [status, searchId];
+      let query = 'UPDATE rate_shopper_searches SET status = $1, updated_at = NOW()';
+      const params = [status];
+      let paramCounter = 2;
 
       if (status === 'RUNNING') {
-        query += ', started_at = CURRENT_TIMESTAMP';
-      } else if (status === 'COMPLETED' || status === 'FAILED') {
-        query += ', completed_at = CURRENT_TIMESTAMP';
+        query += ', started_at = NOW()';
+      } else if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED') {
+        query += ', completed_at = NOW()';
       }
 
       if (additionalData.processed_dates !== undefined) {
-        query += ', processed_dates = ?';
-        params.splice(-1, 0, additionalData.processed_dates);
+        query += `, processed_dates = $${paramCounter++}`;
+        params.push(additionalData.processed_dates);
       }
 
       if (additionalData.total_prices_found !== undefined) {
-        query += ', total_prices_found = ?';
-        params.splice(-1, 0, additionalData.total_prices_found);
+        query += `, total_prices_found = $${paramCounter++}`;
+        params.push(additionalData.total_prices_found);
       }
 
       if (additionalData.error_log) {
-        query += ', error_log = ?';
-        params.splice(-1, 0, additionalData.error_log);
+        query += `, error_log = $${paramCounter++}`;
+        params.push(additionalData.error_log);
       }
 
-      query += ' WHERE id = ?';
+      if (additionalData.duration_seconds) {
+        query += `, duration_seconds = $${paramCounter++}`;
+        params.push(additionalData.duration_seconds);
+      }
 
-      await this.connection.execute(query, params);
-      logger.info(`Updated search ${searchId} to status ${status}`);
+      query += ` WHERE id = $${paramCounter}`;
+      params.push(searchId);
+
+      await this.pool.query(query, params);
+      logger.info(`Updated search ${searchId} to status ${status}`, { additionalData });
     } catch (error) {
       logger.error('Failed to update search status', { 
         searchId, 
@@ -128,15 +160,34 @@ class DatabaseIntegration {
   }
 
   /**
-   * Converte data do formato brasileiro (DD/MM/YYYY) para MySQL (YYYY-MM-DD)
+   * Converte data do formato brasileiro (DD/MM/YYYY) para ISO (YYYY-MM-DD)
    */
-  convertDateToMysql(dateStr) {
+  convertDateToISO(dateStr) {
     try {
-      const parts = dateStr.split('/');
-      if (parts.length === 3) {
-        return `${parts[2]}-${parts[1]}-${parts[0]}`; // YYYY-MM-DD
+      if (!dateStr) return null;
+      
+      // Se já estiver no formato YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
       }
-      return dateStr; // Se já estiver no formato correto
+      
+      // Se estiver no formato DD/MM/YYYY
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+      }
+      
+      // Se estiver no formato DD-MM-YYYY
+      if (dateStr.includes('-') && dateStr.length === 10) {
+        const parts = dateStr.split('-');
+        if (parts.length === 3 && parts[0].length === 2) {
+          return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+      }
+      
+      return dateStr;
     } catch (error) {
       logger.error('Failed to convert date format', { dateStr, error: error.message });
       return dateStr;
@@ -148,38 +199,74 @@ class DatabaseIntegration {
    */
   async savePrice(searchId, propertyId, priceData) {
     try {
-      // Adicionar scraped_date (data atual) e converter datas para formato MySQL
-      const scrapedDate = new Date().toISOString().split('T')[0];
-      const checkinDate = this.convertDateToMysql(priceData.check_in_date);
-      const checkoutDate = this.convertDateToMysql(priceData.check_out_date);
+      // Obter hotel_id da busca
+      const searchResult = await this.pool.query('SELECT hotel_id FROM rate_shopper_searches WHERE id = $1', [searchId]);
+      if (searchResult.rows.length === 0) {
+        throw new Error(`Search ${searchId} not found`);
+      }
+      const hotelId = searchResult.rows[0].hotel_id;
+
+      // Converter datas para formato correto (YYYY-MM-DD)
+      const checkinDate = this.convertDateToISO(priceData.check_in_date);
+      const checkoutDate = this.convertDateToISO(priceData.check_out_date);
       
-      await this.connection.execute(`
+      const result = await this.pool.query(`
         INSERT INTO rate_shopper_prices (
-          search_id, property_id, scraped_date, checkin_date, checkout_date, 
-          price, scraped_at
-        ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          search_id, property_id, hotel_id, check_in_date, check_out_date,
+          price, currency, room_type, max_guests, is_bundle, bundle_size,
+          original_price, availability_status, extraction_method, scraped_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+        RETURNING id
       `, [
         searchId,
         propertyId,
-        scrapedDate,
+        hotelId,
         checkinDate,
         checkoutDate,
-        priceData.price
+        priceData.price,
+        priceData.currency || 'BRL',
+        priceData.room_type || 'Standard',
+        priceData.max_guests || 2,
+        priceData.is_bundle || false,
+        priceData.bundle_size || 1,
+        priceData.original_price || priceData.price,
+        priceData.availability_status || 'AVAILABLE',
+        priceData.extraction_method || 'JS_VARS'
       ]);
 
+      const priceId = result.rows[0].id;
+
       logger.info('Price saved to database', {
+        price_id: priceId,
         searchId,
         propertyId,
+        hotelId,
         price: priceData.price,
         checkIn: priceData.check_in_date
       });
+
+      return priceId;
     } catch (error) {
       logger.error('Failed to save price', { 
         searchId, 
         propertyId, 
+        priceData,
         error: error.message 
       });
       throw error;
+    }
+  }
+
+  /**
+   * Conta quantos preços foram salvos para uma busca específica
+   */
+  async getSearchPricesCount(searchId) {
+    try {
+      const result = await this.pool.query('SELECT COUNT(*) as count FROM rate_shopper_prices WHERE search_id = $1', [searchId]);
+      return parseInt(result.rows[0]?.count || 0);
+    } catch (error) {
+      logger.error('Failed to get prices count', { searchId, error: error.message });
+      return 0;
     }
   }
 
@@ -227,9 +314,12 @@ class DatabaseIntegration {
    * Fecha conexão
    */
   async close() {
-    if (this.connection) {
-      await this.connection.end();
-      logger.info('Database connection closed');
+    if (this.pool) {
+      await this.pool.end();
+      this.pool = null;
+      this.isConnected = false;
+      logger.info('PostgreSQL connection closed');
+      console.log('🔒 Conexão PostgreSQL fechada');
     }
   }
 }

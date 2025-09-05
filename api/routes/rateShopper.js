@@ -49,23 +49,6 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
   try {
     const hotelId = req.params.hotel_id;
 
-    // Summary stats
-    const summary = await db.query(`
-      SELECT 
-        COUNT(DISTINCT rsp.id) as total_properties,
-        COUNT(DISTINCT rs.id) as total_searches,
-        COUNT(DISTINCT rsp_prices.id) as total_prices,
-        COUNT(DISTINCT CASE WHEN rs.status = 'RUNNING' THEN rs.id END) as running_searches,
-        COALESCE(AVG(rsp_prices.price), 0) as avg_price,
-        COALESCE(MIN(rsp_prices.price), 0) as min_price,
-        COALESCE(MAX(rsp_prices.price), 0) as max_price
-      FROM hotels h
-      LEFT JOIN rate_shopper_properties rsp ON h.id = rsp.hotel_id AND rsp.active = TRUE
-      LEFT JOIN rate_shopper_searches rs ON h.id = rs.hotel_id
-      LEFT JOIN rate_shopper_prices rsp_prices ON rs.id = rsp_prices.search_id
-      WHERE h.id = ? AND rsp_prices.scraped_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    `, [hotelId]);
-
     // Recent searches
     const recentSearches = await RateShopperSearch.findByHotel(hotelId, { limit: 10 });
 
@@ -79,10 +62,10 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
-      WHERE rs.hotel_id = ?
-        AND rsp.scraped_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      WHERE rs.hotel_id = $1
+        AND rsp.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
         AND rs.status = 'COMPLETED'
-      GROUP BY DATE(rsp.scraped_at), rsp.property_id
+      GROUP BY DATE(rsp.scraped_at), rsp.property_id, rsp_prop.property_name
       ORDER BY date DESC, rsp_prop.property_name
     `, [hotelId]);
 
@@ -105,7 +88,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         FROM rate_shopper_prices rsp
         JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
         LEFT JOIN rate_shopper_prices rsp2 ON rsp.property_id = rsp2.property_id 
-          AND rsp2.scraped_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+          AND rsp2.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
         WHERE rsp.scraped_at = (
           SELECT MAX(rsp3.scraped_at)
           FROM rate_shopper_prices rsp3
@@ -114,11 +97,27 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         )
         GROUP BY rsp.property_id, rsp.price, rsp.scraped_at
       ) latest ON rsp_prop.id = latest.property_id
-      WHERE rsp_prop.hotel_id = ? AND rsp_prop.active = TRUE
+      WHERE rsp_prop.hotel_id = $1 AND rsp_prop.active = TRUE
       ORDER BY rsp_prop.property_name
     `, [hotelId]);
 
-    // Converter valores numéricos que vêm como strings do MySQL
+    // Summary statistics
+    const summary = await db.query(`
+      SELECT 
+        COUNT(DISTINCT rsp_prop.id) as total_properties,
+        COUNT(DISTINCT rs.id) as total_searches,
+        COUNT(rsp.id) as total_prices,
+        COUNT(CASE WHEN rs.status = 'RUNNING' THEN 1 END) as running_searches,
+        COALESCE(AVG(rsp.price), 0) as avg_price,
+        COALESCE(MIN(rsp.price), 0) as min_price,
+        COALESCE(MAX(rsp.price), 0) as max_price
+      FROM rate_shopper_properties rsp_prop
+      LEFT JOIN rate_shopper_searches rs ON rsp_prop.id = rs.property_id
+      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id
+      WHERE rsp_prop.hotel_id = $1 AND rsp_prop.active = TRUE
+    `, [hotelId]);
+
+    // Converter valores numéricos que vêm como strings do PostgreSQL
     const summaryData = summary[0] || {};
     if (summaryData.avg_price !== undefined) {
       summaryData.avg_price = parseFloat(summaryData.avg_price) || 0;
@@ -463,7 +462,7 @@ router.get('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req,
     const hotelId = req.params.hotel_id;
     
     const result = await db.query(
-      'SELECT * FROM rate_shopper_configs WHERE hotel_id = ?',
+      'SELECT * FROM rate_shopper_configs WHERE hotel_id = $1',
       [hotelId]
     );
 
@@ -476,7 +475,7 @@ router.get('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req,
       `, [hotelId]);
       
       const newResult = await db.query(
-        'SELECT * FROM rate_shopper_configs WHERE hotel_id = ?',
+        'SELECT * FROM rate_shopper_configs WHERE hotel_id = $1',
         [hotelId]
       );
       config = newResult[0];
@@ -538,7 +537,7 @@ router.put('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req,
     await db.query(`
       UPDATE rate_shopper_configs 
       SET ${setClause}, updated_at = CURRENT_TIMESTAMP
-      WHERE hotel_id = ?
+      WHERE hotel_id = $1
     `, [...values, hotelId]);
 
     res.json({
@@ -774,6 +773,180 @@ router.get('/:hotel_id/scheduler/logs', authenticateToken, checkHotelAccess, asy
   } catch (error) {
     console.error('Scheduler logs error:', error);
     res.status(500).json({ error: 'Failed to get scheduler logs' });
+  }
+});
+
+// ============================================
+// REAL-TIME PROGRESS TRACKING
+// ============================================
+
+// GET /api/rate-shopper/:hotel_id/searches/progress
+router.get('/:hotel_id/searches/progress', async (req, res) => {
+  try {
+    const hotelId = req.params.hotel_id;
+    
+    // Buscar searches em progresso e seus detalhes
+    const runningSearches = await db.query(`
+      SELECT 
+        rs.id,
+        rs.uuid,
+        rs.status,
+        rs.started_at,
+        rs.total_dates,
+        rs.processed_dates,
+        rs.total_prices_found,
+        rs.error_log,
+        rsp.property_name,
+        rsp.booking_url,
+        -- Progresso calculado
+        CASE 
+          WHEN rs.total_dates > 0 THEN ROUND((COALESCE(rs.processed_dates, 0)::DECIMAL / rs.total_dates::DECIMAL) * 100, 2)
+          ELSE 0 
+        END as progress_percent,
+        -- Tempo decorrido
+        EXTRACT(EPOCH FROM (NOW() - rs.started_at)) as elapsed_seconds,
+        -- Contagem real de preços salvos
+        COUNT(rsp_prices.id) as actual_prices_count
+      FROM rate_shopper_searches rs
+      JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+      LEFT JOIN rate_shopper_prices rsp_prices ON rs.id = rsp_prices.search_id
+      WHERE rs.hotel_id = $1 
+        AND rs.status IN ('RUNNING', 'PENDING')
+      GROUP BY rs.id, rs.uuid, rs.status, rs.started_at, rs.total_dates, 
+               rs.processed_dates, rs.total_prices_found, rs.error_log,
+               rsp.property_name, rsp.booking_url
+      ORDER BY rs.started_at DESC
+    `, [hotelId]);
+
+    // Buscar searches recém-completadas nas últimas 2 horas
+    const recentCompleted = await db.query(`
+      SELECT 
+        rs.id,
+        rs.uuid,
+        rs.status,
+        rs.completed_at,
+        rs.total_dates,
+        rs.processed_dates,
+        rs.total_prices_found,
+        rsp.property_name,
+        COUNT(rsp_prices.id) as actual_prices_count,
+        EXTRACT(EPOCH FROM (rs.completed_at - rs.started_at)) as duration_seconds
+      FROM rate_shopper_searches rs
+      JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+      LEFT JOIN rate_shopper_prices rsp_prices ON rs.id = rsp_prices.search_id
+      WHERE rs.hotel_id = $1 
+        AND rs.status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+        AND rs.completed_at >= NOW() - INTERVAL '2 hours'
+      GROUP BY rs.id, rs.uuid, rs.status, rs.completed_at, rs.total_dates,
+               rs.processed_dates, rs.total_prices_found, rsp.property_name,
+               rs.started_at
+      ORDER BY rs.completed_at DESC
+      LIMIT 5
+    `, [hotelId]);
+
+    // Estatísticas gerais do hotel
+    const stats = await db.query(`
+      SELECT 
+        COUNT(CASE WHEN status = 'RUNNING' THEN 1 END) as running_count,
+        COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_count,
+        COUNT(CASE WHEN status = 'COMPLETED' AND DATE(completed_at) = CURRENT_DATE THEN 1 END) as completed_today,
+        COUNT(CASE WHEN status = 'FAILED' AND DATE(completed_at) = CURRENT_DATE THEN 1 END) as failed_today
+      FROM rate_shopper_searches 
+      WHERE hotel_id = $1
+    `, [hotelId]);
+
+    res.json({
+      success: true,
+      data: {
+        running_searches: runningSearches,
+        recent_completed: recentCompleted,
+        stats: stats[0] || { running_count: 0, pending_count: 0, completed_today: 0, failed_today: 0 },
+        timestamp: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Get searches progress error:', error);
+    res.status(500).json({ error: 'Failed to get searches progress' });
+  }
+});
+
+// GET /api/rate-shopper/searches/:search_id/live-progress
+router.get('/searches/:search_id/live-progress', async (req, res) => {
+  try {
+    const searchId = req.params.search_id;
+    
+    // Detalhes da busca específica
+    const searchDetails = await db.query(`
+      SELECT 
+        rs.*,
+        rsp.property_name,
+        rsp.booking_url,
+        h.name as hotel_name,
+        -- Progresso calculado
+        CASE 
+          WHEN rs.total_dates > 0 THEN ROUND((COALESCE(rs.processed_dates, 0)::DECIMAL / rs.total_dates::DECIMAL) * 100, 2)
+          ELSE 0 
+        END as progress_percent,
+        -- Tempo decorrido
+        CASE 
+          WHEN rs.started_at IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - rs.started_at))
+          ELSE 0 
+        END as elapsed_seconds,
+        -- ETA estimado (se houver progresso)
+        CASE 
+          WHEN rs.processed_dates > 0 AND rs.total_dates > rs.processed_dates THEN 
+            ROUND(
+              (EXTRACT(EPOCH FROM (NOW() - rs.started_at)) / rs.processed_dates) * 
+              (rs.total_dates - rs.processed_dates)
+            )
+          ELSE 0 
+        END as eta_seconds
+      FROM rate_shopper_searches rs
+      JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+      JOIN hotels h ON rs.hotel_id = h.id
+      WHERE rs.id = $1
+    `, [searchId]);
+
+    if (searchDetails.length === 0) {
+      return res.status(404).json({ error: 'Search not found' });
+    }
+
+    // Últimos preços extraídos (top 10)
+    const latestPrices = await db.query(`
+      SELECT 
+        check_in_date,
+        price,
+        room_type,
+        scraped_at
+      FROM rate_shopper_prices 
+      WHERE search_id = $1 
+      ORDER BY scraped_at DESC 
+      LIMIT 10
+    `, [searchId]);
+
+    // Contagem total de preços salvos
+    const priceCount = await db.query(`
+      SELECT COUNT(*) as total_prices
+      FROM rate_shopper_prices 
+      WHERE search_id = $1
+    `, [searchId]);
+
+    const search = searchDetails[0];
+    search.actual_prices_count = parseInt(priceCount[0]?.total_prices || 0);
+
+    res.json({
+      success: true,
+      data: {
+        search: search,
+        latest_prices: latestPrices,
+        timestamp: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Get live progress error:', error);
+    res.status(500).json({ error: 'Failed to get live progress' });
   }
 });
 

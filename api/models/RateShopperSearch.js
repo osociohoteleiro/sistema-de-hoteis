@@ -22,12 +22,12 @@ class RateShopperSearch {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM rate_shopper_searches WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM rate_shopper_searches WHERE id = $1', [id]);
     return result.length > 0 ? new RateShopperSearch(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM rate_shopper_searches WHERE uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM rate_shopper_searches WHERE uuid = $1', [uuid]);
     return result.length > 0 ? new RateShopperSearch(result[0]) : null;
   }
 
@@ -93,9 +93,10 @@ class RateShopperSearch {
       // Update existing search
       const result = await db.query(`
         UPDATE rate_shopper_searches SET 
-        status = ?, total_dates = ?, processed_dates = ?, total_prices_found = ?,
-        error_log = ?, started_at = ?, completed_at = ?, duration_seconds = ?
-        WHERE id = ?
+        status = $1, total_dates = $2, processed_dates = $3, total_prices_found = $4,
+        error_log = $5, started_at = $6, completed_at = $7, duration_seconds = $8,
+        updated_at = NOW()
+        WHERE id = $9
       `, [
         this.status, this.total_dates, this.processed_dates, this.total_prices_found,
         this.error_log, this.started_at, this.completed_at, this.duration_seconds, this.id
@@ -107,17 +108,15 @@ class RateShopperSearch {
         INSERT INTO rate_shopper_searches (
           hotel_id, property_id, search_type, start_date, end_date,
           status, total_dates
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, uuid
       `, [
         this.hotel_id, this.property_id, this.search_type, this.start_date,
         this.end_date, this.status, this.total_dates
       ]);
       
-      this.id = result.insertId;
-      
-      // Get the generated UUID
-      const newSearch = await RateShopperSearch.findById(this.id);
-      this.uuid = newSearch.uuid;
+      this.id = result[0].id;
+      this.uuid = result[0].uuid;
       
       return result;
     }

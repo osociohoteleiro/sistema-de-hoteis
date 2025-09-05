@@ -159,7 +159,9 @@
       "Bash(sed:*)",
       "Bash(npm create:*)",
       "Bash(npm init:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(tasklist)",
+      "Bash(netstat:*)"
     ],
     "deny": [],
     "ask": []
