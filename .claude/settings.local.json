@@ -148,7 +148,18 @@
       "Bash(timeout 120 npm run process-database:headless)",
       "Bash(timeout 120 npm run process-database)",
       "Read(/\\d\\APPS-OSH/**)",
-      "Read(/\\d\\APPS-OSH/**)"
+      "Read(/\\d\\APPS-OSH/**)",
+      "Read(/D:\\d\\APPS-OSH/**)",
+      "Read(/D:\\d\\APPS-OSH/**)",
+      "Bash(copy .env.postgres .env)",
+      "Bash(start-postgres-redis.bat)",
+      "Bash(docker-compose:*)",
+      "Bash(docker:*)",
+      "Bash(timeout:*)",
+      "Bash(sed:*)",
+      "Bash(npm create:*)",
+      "Bash(npm init:*)",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

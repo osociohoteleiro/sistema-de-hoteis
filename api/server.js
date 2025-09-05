@@ -30,7 +30,11 @@ app.use(cors({
       callback(new Error('Não permitido pelo CORS'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 // Body parsing
@@ -124,6 +128,10 @@ const marketingMessagesRoutes = require('./routes/marketing-messages');
 const logosRoutes = require('./routes/logos');
 const whatsappCloudRoutes = require('./routes/whatsapp-cloud');
 const rateShopperRoutes = require('./routes/rateShopper');
+const sitesRoutes = require('./routes/sites');
+const siteThemesRoutes = require('./routes/siteThemes');
+const siteTemplatesRoutes = require('./routes/site-templates');
+const hotelSitesRoutes = require('./routes/hotel-sites');
 // const migrateRoutes = require('./routes/migrate'); // Removido por segurança
 
 // Rotas da API
@@ -149,6 +157,10 @@ app.use('/api/marketing-messages', marketingMessagesRoutes);
 app.use('/api/logos', logosRoutes);
 app.use('/api/whatsapp-cloud', whatsappCloudRoutes);
 app.use('/api/rate-shopper', rateShopperRoutes);
+app.use('/api/sites', sitesRoutes);
+app.use('/api/site-themes', siteThemesRoutes);
+app.use('/api/site-templates', siteTemplatesRoutes);
+app.use('/api/hotel-sites', hotelSitesRoutes);
 
 // Rate Shopper Extraction Control
 const rateShopperExtractionRoutes = require('./routes/rateShopperExtraction');

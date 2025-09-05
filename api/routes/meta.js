@@ -22,13 +22,13 @@ const validateHotelAccess = async (req, res, next) => {
     let hotelAccess;
     if (req.user.user_type === 'ADMIN' || req.user.user_type === 'SUPER' || req.user.user_type === 'SUPER_ADMIN') {
       hotelAccess = await db.query(`
-        SELECT h.id, h.hotel_nome, h.hotel_uuid
+        SELECT h.id, h.name, h.hotel_uuid
         FROM hotels h
         WHERE h.hotel_uuid = ?
       `, [hotelUuid]);
     } else {
       hotelAccess = await db.query(`
-        SELECT h.id, h.hotel_nome, h.hotel_uuid
+        SELECT h.id, h.name, h.hotel_uuid
         FROM hotels h
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
         WHERE h.hotel_uuid = ? AND uh.user_id = ? AND uh.active = true
@@ -93,7 +93,7 @@ router.post('/credentials/:hotelUuid', authenticateToken, validateHotelAccess, a
       message: 'Credenciais Meta configuradas com sucesso',
       hotel: {
         uuid: hotelUuid,
-        name: req.hotel.hotel_nome
+        name: req.hotel.name
       }
     });
 
@@ -110,12 +110,12 @@ router.get('/credentials/:hotelUuid', authenticateToken, validateHotelAccess, as
   try {
     const { hotelUuid } = req.params;
 
-    // Buscar APENAS contas efetivamente conectadas (com status active)
+    // Buscar contas conectadas
     const connectedAccounts = await db.query(`
       SELECT 
-        id, ad_account_id, ad_account_name, status, business_name, created_at, updated_at
+        id, account_id, account_name, account_status, business_name, created_at, updated_at
       FROM meta_connected_accounts 
-      WHERE hotel_uuid = ? AND status = 'active'
+      WHERE hotel_uuid = $1 AND account_status = 1
       ORDER BY created_at ASC
     `, [hotelUuid]);
 
@@ -132,7 +132,7 @@ router.get('/credentials/:hotelUuid', authenticateToken, validateHotelAccess, as
     res.json({
       success: true,
       credentials: {
-        app_id: process.env.FACEBOOK_APP_ID,
+        app_id: process.env.META_APP_ID,
         ad_account_id: primaryAccount.ad_account_id,
         created_at: primaryAccount.created_at,
         updated_at: primaryAccount.updated_at,
@@ -206,7 +206,7 @@ router.post('/sync/:hotelUuid', authenticateToken, validateHotelAccess, async (r
           sync_id: syncLogId,
           hotel: {
             uuid: hotelUuid,
-            name: req.hotel.hotel_nome
+            name: req.hotel.name
           }
         }
       });
@@ -364,7 +364,7 @@ router.get('/oauth/url/:hotelUuid', authenticateToken, validateHotelAccess, asyn
   try {
     const { hotelUuid } = req.params;
     
-    if (!process.env.FACEBOOK_APP_ID) {
+    if (!process.env.META_APP_ID) {
       return res.status(500).json({
         error: 'Configuração do Facebook não encontrada'
       });
@@ -375,12 +375,12 @@ router.get('/oauth/url/:hotelUuid', authenticateToken, validateHotelAccess, asyn
     
     // Salvar state temporariamente (cache ou banco)
     await db.query(`
-      INSERT INTO oauth_states (state, hotel_uuid, created_at, expires_at)
-      VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 10 MINUTE))
-      ON DUPLICATE KEY UPDATE
-        hotel_uuid = VALUES(hotel_uuid),
+      INSERT INTO oauth_states (state, hotel_uuid, expires_at)
+      VALUES ($1, $2, NOW() + INTERVAL '10 minutes')
+      ON CONFLICT (state) DO UPDATE SET
+        hotel_uuid = EXCLUDED.hotel_uuid,
         created_at = NOW(),
-        expires_at = VALUES(expires_at)
+        expires_at = EXCLUDED.expires_at
     `, [state, hotelUuid]);
 
     const redirectUri = `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/meta/oauth/callback`;
@@ -392,7 +392,7 @@ router.get('/oauth/url/:hotelUuid', authenticateToken, validateHotelAccess, asyn
     ].join(',');
 
     const authUrl = `https://www.facebook.com/v18.0/dialog/oauth` +
-      `?client_id=${process.env.FACEBOOK_APP_ID}` +
+      `?client_id=${process.env.META_APP_ID}` +
       `&redirect_uri=${encodeURIComponent(redirectUri)}` +
       `&scope=${encodeURIComponent(scopes)}` +
       `&response_type=code` +
@@ -420,31 +420,32 @@ router.get('/oauth/callback', async (req, res) => {
     // Verificar se houve erro na autorização
     if (error) {
       console.error('OAuth error:', error, error_description);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=${encodeURIComponent(error_description || error)}`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/marketing?error=${encodeURIComponent(error_description || error)}`);
     }
 
     if (!code || !state) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=missing_parameters`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/marketing?error=missing_parameters`);
     }
 
     // Validar state
-    const [stateRecord] = await db.query(`
+    const stateRecords = await db.query(`
       SELECT hotel_uuid, expires_at
       FROM oauth_states 
-      WHERE state = ? AND expires_at > NOW()
+      WHERE state = $1 AND expires_at > NOW()
       LIMIT 1
     `, [state]);
+    const stateRecord = stateRecords[0];
 
     if (!stateRecord) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=invalid_state`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/marketing?error=invalid_state`);
     }
 
     const hotelUuid = stateRecord.hotel_uuid;
 
     // Trocar código por access token
     const tokenResponse = await axios.post('https://graph.facebook.com/v18.0/oauth/access_token', {
-      client_id: process.env.FACEBOOK_APP_ID,
-      client_secret: process.env.FACEBOOK_APP_SECRET,
+      client_id: process.env.META_APP_ID,
+      client_secret: process.env.META_APP_SECRET,
       redirect_uri: `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/meta/oauth/callback`,
       code: code
     });
@@ -475,24 +476,22 @@ router.get('/oauth/callback', async (req, res) => {
     // Limpar contas disponíveis antigas deste hotel primeiro (reconexão)
     await db.query(`
       DELETE FROM meta_available_accounts 
-      WHERE hotel_uuid = ?
+      WHERE hotel_uuid = $1
     `, [hotelUuid]);
 
     // Inserir cada conta como DISPONÍVEL (não conectada)
     for (const account of availableAccounts) {
       await db.query(`
         INSERT INTO meta_available_accounts (
-          hotel_uuid, ad_account_id, ad_account_name, business_id, business_name,
-          account_status, currency, access_token, token_expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-          ad_account_name = VALUES(ad_account_name),
-          business_id = VALUES(business_id),
-          business_name = VALUES(business_name),
-          account_status = VALUES(account_status),
-          currency = VALUES(currency),
-          access_token = VALUES(access_token),
-          token_expires_at = VALUES(token_expires_at),
+          hotel_uuid, account_id, account_name, business_id, business_name,
+          account_status, currency
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (hotel_uuid, account_id) DO UPDATE SET
+          account_name = EXCLUDED.account_name,
+          business_id = EXCLUDED.business_id,
+          business_name = EXCLUDED.business_name,
+          account_status = EXCLUDED.account_status,
+          currency = EXCLUDED.currency,
           updated_at = NOW()
       `, [
         hotelUuid,
@@ -501,25 +500,23 @@ router.get('/oauth/callback', async (req, res) => {
         account.business?.id || '',
         account.business?.name || '',
         account.account_status || 1,
-        account.currency || '',
-        access_token,
-        tokenExpiresAt
+        account.currency || ''
       ]);
     }
 
     console.log(`✅ Salvou ${availableAccounts.length} contas DISPONÍVEIS para hotel: ${hotelUuid}`);
 
     // Limpar state usado
-    await db.query('DELETE FROM oauth_states WHERE state = ?', [state]);
+    await db.query('DELETE FROM oauth_states WHERE state = $1', [state]);
 
     console.log(`✅ OAuth completed successfully for hotel: ${hotelUuid}`);
 
     // Redirecionar para seleção de contas (não conectar automaticamente)
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?oauth_success=1&select_accounts=1`);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/marketing?oauth_success=1&select_accounts=1`);
 
   } catch (error) {
     console.error('OAuth callback error:', error);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/relatorios/marketing?error=oauth_failed`);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/hotel/marketing?error=oauth_failed`);
   }
 });
 
@@ -530,21 +527,21 @@ router.get('/oauth/available-accounts/:hotelUuid', authenticateToken, validateHo
 
     // Buscar contas disponíveis (após OAuth)
     const availableAccounts = await db.query(`
-      SELECT ad_account_id, ad_account_name, business_id, business_name, 
-             account_status, currency, token_expires_at, created_at
+      SELECT account_id, account_name, business_id, business_name, 
+             account_status, currency, created_at
       FROM meta_available_accounts 
-      WHERE hotel_uuid = ?
-      ORDER BY ad_account_name ASC
+      WHERE hotel_uuid = $1
+      ORDER BY account_name ASC
     `, [hotelUuid]);
 
     // Buscar contas já conectadas
     const connectedAccounts = await db.query(`
-      SELECT ad_account_id
+      SELECT account_id
       FROM meta_connected_accounts 
-      WHERE hotel_uuid = ? AND status = 'active'
+      WHERE hotel_uuid = $1 AND account_status = 1
     `, [hotelUuid]);
 
-    const connectedAccountIds = connectedAccounts.map(acc => acc.ad_account_id);
+    const connectedAccountIds = connectedAccounts.map(acc => acc.account_id);
 
     if (!availableAccounts || availableAccounts.length === 0) {
       return res.json({
@@ -558,17 +555,17 @@ router.get('/oauth/available-accounts/:hotelUuid', authenticateToken, validateHo
     res.json({
       success: true,
       accounts: availableAccounts.map(acc => ({
-        id: `act_${acc.ad_account_id}`,
-        account_id: acc.ad_account_id,
-        name: acc.ad_account_name,
+        id: `act_${acc.account_id}`,
+        account_id: acc.account_id,
+        name: acc.account_name,
         business: {
           id: acc.business_id,
           name: acc.business_name
         },
         account_status: acc.account_status,
         currency: acc.currency,
-        isConnected: connectedAccountIds.includes(acc.ad_account_id),
-        token_expires_at: acc.token_expires_at
+        isConnected: connectedAccountIds.includes(acc.account_id),
+        created_at: acc.created_at
       })),
       connectedAccountIds: connectedAccountIds,
       total: availableAccounts.length
@@ -587,22 +584,29 @@ router.get('/oauth/accounts/:hotelUuid', authenticateToken, validateHotelAccess,
   try {
     const { hotelUuid } = req.params;
 
-    // Buscar contas já conectadas
+    // Buscar contas conectadas da tabela PostgreSQL com status completo
     const connectedAccounts = await db.query(`
-      SELECT ad_account_id, ad_account_name
+      SELECT account_id, account_name, business_name, account_status, 
+             business_id, created_at, updated_at
       FROM meta_connected_accounts 
-      WHERE hotel_uuid = ? AND status = 'active'
+      WHERE hotel_uuid = $1 AND account_status = 1
     `, [hotelUuid]);
 
     res.json({
       success: true,
       accounts: connectedAccounts.map(acc => ({
-        id: `act_${acc.ad_account_id}`,
-        name: acc.ad_account_name || `Conta ${acc.ad_account_id}`
+        id: `act_${acc.account_id}`,
+        name: acc.account_name || `Conta ${acc.account_id}`,
+        business_name: acc.business_name,
+        business_id: acc.business_id,
+        account_status: acc.account_status, // Campo importante para status Ativa/Inativa
+        status: acc.account_status, // Compatibilidade
+        created_at: acc.created_at,
+        updated_at: acc.updated_at
       })),
       selectedAccount: connectedAccounts.length > 0 ? {
-        id: `act_${connectedAccounts[0].ad_account_id}`,
-        name: connectedAccounts[0].ad_account_name
+        id: `act_${connectedAccounts[0].account_id}`,
+        name: connectedAccounts[0].account_name
       } : null,
       connectedAccounts: connectedAccounts
     });
@@ -634,13 +638,13 @@ router.post('/oauth/connect-accounts/:hotelUuid', authenticateToken, validateHot
       const cleanAccountId = accountId.replace('act_', '');
       
       // Buscar dados da conta disponível
-      const [availableAccount] = await db.query(`
-        SELECT ad_account_id, ad_account_name, business_id, business_name,
-               access_token, token_expires_at
+      const availableAccountResults = await db.query(`
+        SELECT account_id, account_name, business_id, business_name
         FROM meta_available_accounts 
-        WHERE hotel_uuid = ? AND ad_account_id = ?
+        WHERE hotel_uuid = $1 AND account_id = $2
         LIMIT 1
       `, [hotelUuid, cleanAccountId]);
+      const availableAccount = availableAccountResults[0];
 
       if (!availableAccount) {
         console.warn(`Conta ${accountId} não encontrada nas disponíveis`);
@@ -648,32 +652,30 @@ router.post('/oauth/connect-accounts/:hotelUuid', authenticateToken, validateHot
       }
 
       // Inserir na tabela de contas conectadas
+      const tempToken = `temp_token_${availableAccount.account_id}`;
       await db.query(`
         INSERT INTO meta_connected_accounts (
-          hotel_uuid, ad_account_id, ad_account_name, business_id, business_name,
-          status, access_token, token_expires_at
-        ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
-        ON DUPLICATE KEY UPDATE
-          ad_account_name = VALUES(ad_account_name),
-          business_id = VALUES(business_id),
-          business_name = VALUES(business_name),
-          status = 'active',
-          access_token = VALUES(access_token),
-          token_expires_at = VALUES(token_expires_at),
+          hotel_uuid, account_id, account_name, business_id, business_name,
+          account_status, access_token
+        ) VALUES ($1, $2, $3, $4, $5, 1, $6)
+        ON CONFLICT (hotel_uuid, account_id) DO UPDATE SET
+          account_name = EXCLUDED.account_name,
+          business_id = EXCLUDED.business_id,
+          business_name = EXCLUDED.business_name,
+          account_status = 1,
           updated_at = NOW()
       `, [
         hotelUuid,
-        availableAccount.ad_account_id,
-        availableAccount.ad_account_name,
+        availableAccount.account_id,
+        availableAccount.account_name,
         availableAccount.business_id,
         availableAccount.business_name,
-        availableAccount.access_token,
-        availableAccount.token_expires_at
+        tempToken
       ]);
 
       connectedAccounts.push({
         id: accountId,
-        name: availableAccount.ad_account_name
+        name: availableAccount.account_name
       });
     }
 
@@ -709,7 +711,7 @@ router.post('/oauth/disconnect-account/:hotelUuid', authenticateToken, validateH
     // Remover da tabela de conectadas
     const result = await db.query(`
       DELETE FROM meta_connected_accounts 
-      WHERE hotel_uuid = ? AND ad_account_id = ?
+      WHERE hotel_uuid = $1 AND account_id = $2
     `, [hotelUuid, cleanAccountId]);
 
     if (result.affectedRows === 0) {
