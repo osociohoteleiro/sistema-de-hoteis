@@ -22,9 +22,13 @@ const {
  * @param {Date} end_date - Data de fim
  * @param {number} max_bundle_size - Tamanho máximo do bundle
  * @param {string} results_filepath - Caminho do arquivo de resultados
+ * @param {Object} dbConnection - Conexão com banco de dados (opcional)
+ * @param {number} searchId - ID da busca no banco (opcional)
+ * @param {number} propertyId - ID da propriedade no banco (opcional)
+ * @param {number} hotelId - ID do hotel para APIs de progresso (opcional)
  * @returns {Promise<void>}
  */
-async function extract_prices_from_booking(url, start_date, end_date, max_bundle_size, results_filepath) {
+async function extract_prices_from_booking(url, start_date, end_date, max_bundle_size, results_filepath, dbConnection = null, searchId = null, propertyId = null, hotelId = null) {
   const startTime = Date.now();
   const dates = get_dates_between(start_date, end_date);
   const propertyName = extractPropertyNameFromUrl(url);
@@ -33,6 +37,7 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
 
   let browser = null;
   let totalPricesExtracted = 0;
+  let processedDates = 0;
   
   try {
     // Configuração otimizada do browser
@@ -201,8 +206,32 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
               const final_result_current_date = generate_final_result_date(bundle_part_date);
               const final_result_next_day_date = generate_final_result_date(next_bundle_day_date);
 
-              const value = `${final_result_current_date};${final_result_next_day_date};${selected_block_price_string_parsed_to_brazil_locale};${bundle_size > 1 ? "BUNDLE " + bundle_size : ""}`;
-              await write_to_file(results_filepath, value);
+              // Salvar diretamente no banco (se conexão disponível)
+              if (dbConnection && searchId && propertyId) {
+                try {
+                  const priceData = {
+                    check_in_date: final_result_current_date,
+                    check_out_date: final_result_next_day_date,
+                    price: calculated_selected_block_price,
+                    room_type: cheapest_room_block.b_room_name || 'Standard',
+                    currency: 'BRL',
+                    is_bundle: bundle_size > 1,
+                    bundle_size: bundle_size
+                  };
+                  
+                  await dbConnection.savePrice(searchId, propertyId, priceData);
+                  console.log(`   💾 Preço salvo no banco: R$ ${calculated_selected_block_price.toFixed(2).replace('.', ',')} (${priceData.room_type})`);
+                } catch (dbError) {
+                  console.log(`   ⚠️  Erro ao salvar no banco: ${dbError.message}`);
+                  // Fallback para CSV em caso de erro no banco
+                  const value = `${final_result_current_date};${final_result_next_day_date};${selected_block_price_string_parsed_to_brazil_locale};${bundle_size > 1 ? "BUNDLE " + bundle_size : ""}`;
+                  await write_to_file(results_filepath, value);
+                }
+              } else {
+                // Fallback para CSV se não tiver conexão do banco
+                const value = `${final_result_current_date};${final_result_next_day_date};${selected_block_price_string_parsed_to_brazil_locale};${bundle_size > 1 ? "BUNDLE " + bundle_size : ""}`;
+                await write_to_file(results_filepath, value);
+              }
               
               logPriceExtracted(propertyName, final_result_current_date, selected_block_price_string_parsed_to_brazil_locale, bundle_size);
               totalPricesExtracted++;
@@ -231,6 +260,11 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
         property: propertyName,
         progress: Math.round((current_execution / dates.length) * 100)
       });
+
+      // Atualizar progresso via API em tempo real
+      if (dbConnection && searchId && hotelId) {
+        await dbConnection.updateExtractionProgress(searchId, hotelId, current_execution, dates.length, totalPricesExtracted);
+      }
     }
 
   } catch (error) {

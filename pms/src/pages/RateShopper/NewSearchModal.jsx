@@ -5,8 +5,8 @@ import axios from 'axios';
 const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
     selectedCompetitors: [], // Array de IDs dos concorrentes selecionados
-    start_date: '',
-    end_date: '',
+    start_date: null,
+    end_date: null,
     max_bundle_size: 7
   });
 
@@ -26,8 +26,8 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
   const resetForm = () => {
     setFormData({
       selectedCompetitors: [],
-      start_date: '',
-      end_date: '',
+      start_date: null,
+      end_date: null,
       max_bundle_size: 7
     });
     setErrors({});
@@ -164,17 +164,17 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
     }
 
     if (formData.start_date && formData.end_date) {
-      const startDate = new Date(formData.start_date);
-      const endDate = new Date(formData.end_date);
+      const startDate = formData.start_date;
+      const endDate = formData.end_date;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
       if (startDate < today) {
-        newErrors.start_date = 'Data de início não pode ser no passado';
+        newErrors.dateRange = 'Data de início não pode ser no passado';
       }
 
       if (endDate <= startDate) {
-        newErrors.end_date = 'Data de fim deve ser após a data de início';
+        newErrors.dateRange = 'Data de fim deve ser após a data de início';
       }
 
       // Validar limite de 12 meses
@@ -182,7 +182,7 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
       maxDate.setMonth(maxDate.getMonth() + 12);
       
       if (endDate > maxDate) {
-        newErrors.end_date = 'Período não pode exceder 12 meses';
+        newErrors.dateRange = 'Período não pode exceder 12 meses';
       }
     }
 
@@ -205,50 +205,51 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
       console.log('Creating searches for:', {
         hotelId,
         selectedCompetitors: formData.selectedCompetitors,
-        start_date: formData.start_date,
-        end_date: formData.end_date,
+        start_date: formData.start_date?.toISOString().split('T')[0],
+        end_date: formData.end_date?.toISOString().split('T')[0],
         max_bundle_size: formData.max_bundle_size
       });
       
-      // Simular criação das buscas (comentado até API estar pronta)
-      /*
+      // Criar buscas reais na API
       const searchPromises = [];
 
       for (const competitorId of formData.selectedCompetitors) {
         const searchData = {
           property_id: competitorId,
-          start_date: formData.start_date,
-          end_date: formData.end_date,
+          start_date: formData.start_date?.toISOString().split('T')[0],
+          end_date: formData.end_date?.toISOString().split('T')[0],
           max_bundle_size: formData.max_bundle_size
         };
 
+        console.log('Creating search:', searchData);
+        
         searchPromises.push(
           axios.post(`/api/rate-shopper/${hotelId}/searches`, searchData)
         );
       }
 
-      await Promise.all(searchPromises);
-      */
-      
-      // Simular delay de criação
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const results = await Promise.all(searchPromises);
+      console.log('Search creation results:', results);
 
       setNotification({
         type: 'success',
         message: `${formData.selectedCompetitors.length} busca(s) criada(s) com sucesso!`
       });
 
+      // Recarregar dados imediatamente
+      onSubmit?.();
+
       // Aguardar um momento para mostrar o sucesso, depois fechar
       setTimeout(() => {
-        onSubmit?.();
         onClose();
       }, 1500);
 
     } catch (error) {
       console.error('Error creating searches:', error);
+      console.error('Error details:', error.response?.data);
       setNotification({
         type: 'error',
-        message: 'Erro ao criar buscas: ' + (error.response?.data?.error || error.message)
+        message: 'Erro ao criar buscas: ' + (error.response?.data?.error || error.response?.data?.message || error.message)
       });
     } finally {
       setLoading(false);
@@ -257,9 +258,7 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
 
   const calculateDateRange = () => {
     if (formData.start_date && formData.end_date) {
-      const start = new Date(formData.start_date);
-      const end = new Date(formData.end_date);
-      const diffTime = Math.abs(end - start);
+      const diffTime = Math.abs(formData.end_date - formData.start_date);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays;
     }
@@ -369,45 +368,82 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
                 )}
               </div>
 
-              {/* Datas */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Data de Início
-                  </label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <input
-                      type="date"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData({...formData, start_date: e.target.value})}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+              {/* Período de Datas */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Período de Monitoramento
+                </label>
+                <div className="grid grid-cols-2 gap-3 p-4 border border-gray-300 rounded-lg bg-gray-50">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Data de Início
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <input
+                        type="date"
+                        value={formData.start_date ? formData.start_date.toISOString().split('T')[0] : ''}
+                        onChange={(e) => {
+                          const date = e.target.value ? new Date(e.target.value) : null;
+                          setFormData(prev => ({...prev, start_date: date}));
+                          // Limpar erros
+                          if (errors.start_date || errors.dateRange) {
+                            setErrors(prev => ({
+                              ...prev,
+                              start_date: undefined,
+                              dateRange: undefined
+                            }));
+                          }
+                        }}
+                        min={new Date().toISOString().split('T')[0]}
+                        className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
+                    </div>
                   </div>
-                  {errors.start_date && (
-                    <p className="mt-1 text-sm text-red-600">{errors.start_date}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Data de Fim
-                  </label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <input
-                      type="date"
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({...formData, end_date: e.target.value})}
-                      min={formData.start_date || new Date().toISOString().split('T')[0]}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Data de Fim
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <input
+                        type="date"
+                        value={formData.end_date ? formData.end_date.toISOString().split('T')[0] : ''}
+                        onChange={(e) => {
+                          const date = e.target.value ? new Date(e.target.value) : null;
+                          setFormData(prev => ({...prev, end_date: date}));
+                          // Limpar erros
+                          if (errors.end_date || errors.dateRange) {
+                            setErrors(prev => ({
+                              ...prev,
+                              end_date: undefined,
+                              dateRange: undefined
+                            }));
+                          }
+                        }}
+                        min={formData.start_date ? formData.start_date.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+                        className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                      />
+                    </div>
                   </div>
-                  {errors.end_date && (
-                    <p className="mt-1 text-sm text-red-600">{errors.end_date}</p>
-                  )}
                 </div>
+                
+                {(errors.start_date || errors.end_date || errors.dateRange) && (
+                  <p className="mt-2 text-sm text-red-600">
+                    {errors.start_date || errors.end_date || errors.dateRange}
+                  </p>
+                )}
+                
+                {/* Indicador visual do período */}
+                {formData.start_date && formData.end_date && (
+                  <div className="mt-2 text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-md border border-blue-200">
+                    📅 Período: <span className="font-medium">
+                      {formData.start_date.toLocaleDateString('pt-BR')} → {formData.end_date.toLocaleDateString('pt-BR')}
+                    </span>
+                    <span className="ml-2 text-blue-600">({calculateDateRange()} dias)</span>
+                  </div>
+                )}
               </div>
 
               {/* Resumo */}

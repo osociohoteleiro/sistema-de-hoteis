@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const { logger } = require('./logger');
 const path = require('path');
+const axios = require('axios');
 
 // Configurar dotenv para carregar do diretório correto
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
@@ -307,6 +308,38 @@ class DatabaseIntegration {
     } catch (error) {
       logger.error('Date formatting error', { date, error: error.message });
       return null;
+    }
+  }
+
+  /**
+   * Atualiza o progresso da extração via API
+   */
+  async updateExtractionProgress(searchId, hotelId, processedDates, totalDates, totalPricesFound = null) {
+    try {
+      const apiUrl = process.env.API_URL || 'http://localhost:3001';
+      const progressData = {
+        processed_dates: processedDates,
+        total_dates: totalDates
+      };
+
+      if (totalPricesFound !== null) {
+        progressData.total_prices_found = totalPricesFound;
+      }
+
+      await axios.put(`${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`, progressData);
+      
+      console.log(`📡 Progresso atualizado via API: ${processedDates}/${totalDates} datas`);
+      logger.info('Progress updated via API', { searchId, hotelId, processedDates, totalDates, totalPricesFound });
+    } catch (error) {
+      logger.error('Failed to update progress via API', { 
+        searchId, 
+        hotelId, 
+        processedDates, 
+        totalDates,
+        error: error.message 
+      });
+      console.log(`⚠️  Erro ao atualizar progresso via API: ${error.message}`);
+      // Não propagar o erro para não interromper a extração
     }
   }
 

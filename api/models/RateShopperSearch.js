@@ -36,29 +36,33 @@ class RateShopperSearch {
       SELECT rs.*, rsp.property_name
       FROM rate_shopper_searches rs
       LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
-      WHERE rs.hotel_id = ?
+      WHERE rs.hotel_id = $1
     `;
     const params = [hotelId];
+    let paramIndex = 2;
 
     if (filters.status) {
-      query += ' AND rs.status = ?';
+      query += ` AND rs.status = $${paramIndex}`;
       params.push(filters.status);
+      paramIndex++;
     }
 
     if (filters.search_type) {
-      query += ' AND rs.search_type = ?';
+      query += ` AND rs.search_type = $${paramIndex}`;
       params.push(filters.search_type);
+      paramIndex++;
     }
 
     if (filters.property_id) {
-      query += ' AND rs.property_id = ?';
+      query += ` AND rs.property_id = $${paramIndex}`;
       params.push(filters.property_id);
+      paramIndex++;
     }
 
     query += ' ORDER BY rs.created_at DESC';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      query += ` LIMIT $${paramIndex}`;
       params.push(filters.limit);
     }
 
@@ -115,8 +119,12 @@ class RateShopperSearch {
         this.end_date, this.status, this.total_dates
       ]);
       
-      this.id = result[0].id;
-      this.uuid = result[0].uuid;
+      if (result && result.length > 0 && result[0]) {
+        this.id = result[0].id;
+        this.uuid = result[0].uuid;
+      } else {
+        throw new Error('Failed to create search: No result returned from database');
+      }
       
       return result;
     }
@@ -141,6 +149,26 @@ class RateShopperSearch {
     Object.assign(this, additionalData);
     
     await this.save();
+  }
+
+  // Update progress during extraction
+  async updateProgress(processedDates, totalPricesFound = null) {
+    this.processed_dates = processedDates;
+    
+    if (totalPricesFound !== null) {
+      this.total_prices_found = totalPricesFound;
+    }
+
+    // Update only progress-related fields for efficiency
+    const result = await db.query(`
+      UPDATE rate_shopper_searches SET 
+      processed_dates = $1, 
+      total_prices_found = $2,
+      updated_at = NOW()
+      WHERE id = $3
+    `, [this.processed_dates, this.total_prices_found, this.id]);
+    
+    return result;
   }
 
   // Calculate progress percentage
@@ -186,17 +214,19 @@ class RateShopperSearch {
   async getPrices(filters = {}) {
     let query = `
       SELECT * FROM rate_shopper_prices 
-      WHERE search_id = ?
+      WHERE search_id = $1
     `;
     const params = [this.id];
+    let paramIndex = 2;
 
     if (filters.date_from) {
-      query += ' AND check_in_date >= ?';
+      query += ` AND check_in_date >= $${paramIndex}`;
       params.push(filters.date_from);
+      paramIndex++;
     }
 
     if (filters.date_to) {
-      query += ' AND check_in_date <= ?';
+      query += ` AND check_in_date <= $${paramIndex}`;
       params.push(filters.date_to);
     }
 
@@ -217,7 +247,7 @@ class RateShopperSearch {
         COUNT(CASE WHEN availability_status = 'AVAILABLE' THEN 1 END) as available_count,
         COUNT(CASE WHEN is_bundle = TRUE THEN 1 END) as bundle_count
       FROM rate_shopper_prices 
-      WHERE search_id = ?
+      WHERE search_id = $1
     `, [this.id]);
 
     return stats[0] || {};
@@ -329,6 +359,16 @@ class RateShopperSearch {
       created_at: this.created_at,
       updated_at: this.updated_at
     };
+
+    // Include property_name if available (from JOINs)
+    if (this.property_name) {
+      json.property_name = this.property_name;
+    }
+
+    // Include hotel_name if available (from JOINs)
+    if (this.hotel_name) {
+      json.hotel_name = this.hotel_name;
+    }
 
     // Add estimated time remaining if running
     if (this.status === 'RUNNING') {

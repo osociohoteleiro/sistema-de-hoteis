@@ -5,6 +5,7 @@ const RateShopperProperty = require('../models/RateShopperProperty');
 const RateShopperSearch = require('../models/RateShopperSearch');
 const Hotel = require('../models/Hotel');
 const db = require('../config/database');
+const { emitExtractionProgress, emitExtractionStatus, emitNewSearch, emitSearchDeleted } = require('../utils/socketEmitters');
 
 // Middleware para verificar se o usuário tem acesso ao hotel
 async function checkHotelAccess(req, res, next) {
@@ -871,6 +872,54 @@ router.get('/:hotel_id/searches/progress', async (req, res) => {
   }
 });
 
+// DELETE /api/rate-shopper/:hotel_id/searches/failed
+router.delete('/:hotel_id/searches/failed', async (req, res) => {
+  try {
+    const hotelId = req.params.hotel_id;
+    
+    // Identificar buscas mal sucedidas (FAILED ou sem preços)
+    const failedSearches = await db.query(`
+      SELECT id FROM rate_shopper_searches 
+      WHERE hotel_id = $1 
+        AND (status = 'FAILED' OR total_prices_found = 0 OR total_prices_found IS NULL)
+        AND status != 'RUNNING'
+    `, [hotelId]);
+    
+    if (failedSearches.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No failed searches found',
+        deleted_count: 0
+      });
+    }
+    
+    const searchIds = failedSearches.map(s => s.id);
+    
+    // Excluir preços relacionados primeiro
+    await db.query(`
+      DELETE FROM rate_shopper_prices 
+      WHERE search_id = ANY($1)
+    `, [searchIds]);
+    
+    // Excluir as searches
+    const result = await db.query(`
+      DELETE FROM rate_shopper_searches 
+      WHERE id = ANY($1)
+    `, [searchIds]);
+    
+    res.json({
+      success: true,
+      message: `${searchIds.length} failed searches deleted successfully`,
+      deleted_count: searchIds.length,
+      deleted_ids: searchIds
+    });
+
+  } catch (error) {
+    console.error('Delete failed searches error:', error);
+    res.status(500).json({ error: 'Failed to delete failed searches' });
+  }
+});
+
 // GET /api/rate-shopper/searches/:search_id/live-progress
 router.get('/searches/:search_id/live-progress', async (req, res) => {
   try {
@@ -947,6 +996,150 @@ router.get('/searches/:search_id/live-progress', async (req, res) => {
   } catch (error) {
     console.error('Get live progress error:', error);
     res.status(500).json({ error: 'Failed to get live progress' });
+  }
+});
+
+// DELETE /api/rate-shopper/:hotel_id/searches/:search_id
+router.delete('/:hotel_id/searches/:search_id', async (req, res) => {
+  try {
+    const { hotel_id, search_id } = req.params;
+    
+    // Verificar se a busca existe e pertence ao hotel
+    const search = await db.query(`
+      SELECT rs.*, rsp.property_name
+      FROM rate_shopper_searches rs
+      LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+      WHERE rs.id = $1 AND rs.hotel_id = $2
+    `, [search_id, hotel_id]);
+
+    if (search.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Busca não encontrada ou não pertence a este hotel' 
+      });
+    }
+
+    const searchData = search[0];
+
+    // Não permitir deletar buscas que estão em execução
+    if (searchData.status === 'RUNNING') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Não é possível excluir uma busca em execução. Pare a extração primeiro.' 
+      });
+    }
+
+    // Deletar primeiro os preços relacionados (foreign key constraint)
+    await db.query(`
+      DELETE FROM rate_shopper_prices 
+      WHERE search_id = $1
+    `, [search_id]);
+    
+    // Deletar a busca
+    const result = await db.query(`
+      DELETE FROM rate_shopper_searches 
+      WHERE id = $1 AND hotel_id = $2
+    `, [search_id, hotel_id]);
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Busca não encontrada' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Busca "${searchData.property_name || `#${search_id}`}" excluída com sucesso`,
+      deleted_search: {
+        id: searchData.id,
+        property_name: searchData.property_name,
+        status: searchData.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Delete search error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Falha ao excluir busca' 
+    });
+  }
+});
+
+// PUT /api/rate-shopper/:hotel_id/searches/:search_id/progress
+router.put('/:hotel_id/searches/:search_id/progress', async (req, res) => {
+  try {
+    const { hotel_id, search_id } = req.params;
+    const { processed_dates, total_prices_found } = req.body;
+    
+    // Verificar se a busca existe e pertence ao hotel
+    const search = await RateShopperSearch.findById(search_id);
+    if (!search || search.hotel_id != hotel_id) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Busca não encontrada ou não pertence a este hotel' 
+      });
+    }
+
+    // Atualizar progresso
+    await search.updateProgress(processed_dates, total_prices_found);
+    
+    // Buscar dados atualizados com JOIN para pegar property_name
+    const updatedSearchData = await db.query(`
+      SELECT rs.*, rsp.property_name
+      FROM rate_shopper_searches rs
+      LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+      WHERE rs.id = $1
+    `, [search_id]);
+    
+    if (updatedSearchData.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Busca não encontrada após atualização' 
+      });
+    }
+    
+    const updatedSearch = new RateShopperSearch(updatedSearchData[0]);
+    updatedSearch.property_name = updatedSearchData[0].property_name;
+
+    // Emitir evento Socket.io para clientes conectados
+    const io = req.app.get('socketio');
+    if (io) {
+      emitExtractionProgress(io, hotel_id, {
+        searchId: search_id,
+        id: updatedSearch.id,
+        status: updatedSearch.status,
+        processed_dates: updatedSearch.processed_dates,
+        total_dates: updatedSearch.total_dates,
+        progress_percentage: updatedSearch.getProgressPercentage(),
+        total_prices_found: updatedSearch.total_prices_found,
+        duration_seconds: updatedSearch.duration_seconds,
+        started_at: updatedSearch.started_at,
+        completed_at: updatedSearch.completed_at,
+        property_name: updatedSearch.property_name,
+        error_log: updatedSearch.error_log
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Progresso atualizado com sucesso',
+      data: {
+        id: updatedSearch.id,
+        processed_dates: updatedSearch.processed_dates,
+        total_dates: updatedSearch.total_dates,
+        progress_percentage: updatedSearch.getProgressPercentage(),
+        total_prices_found: updatedSearch.total_prices_found
+      }
+    });
+
+  } catch (error) {
+    console.error('Update progress error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Falha ao atualizar progresso' 
+    });
   }
 });
 

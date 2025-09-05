@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -8,6 +10,22 @@ require('dotenv').config();
 const db = require('./config/database');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: function (origin, callback) {
+      // Permitir requisições sem origin e qualquer localhost
+      if (!origin || origin.startsWith('http://localhost:')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Não permitido pelo CORS'));
+      }
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 
 // Middleware de segurança
@@ -16,7 +34,7 @@ app.use(helmet());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100 // máximo 100 requests por IP por janela
+  max: 500 // máximo 500 requests por IP por janela (aumentado para desenvolvimento)
 });
 app.use(limiter);
 
@@ -167,6 +185,25 @@ const rateShopperExtractionRoutes = require('./routes/rateShopperExtraction');
 app.use('/api/rate-shopper-extraction', rateShopperExtractionRoutes);
 // app.use('/api/migrate', migrateRoutes); // Removido por segurança
 
+// Socket.io configuration
+io.on('connection', (socket) => {
+  console.log('🔌 Cliente conectado:', socket.id);
+  
+  // Join room baseado no hotel ID para segregar eventos
+  socket.on('join-hotel-room', (hotelId) => {
+    const roomName = `hotel-${hotelId}`;
+    socket.join(roomName);
+    console.log(`👥 Socket ${socket.id} entrou na sala: ${roomName}`);
+  });
+  
+  socket.on('disconnect', () => {
+    console.log('🔌 Cliente desconectado:', socket.id);
+  });
+});
+
+// Fazer o io disponível para as rotas
+app.set('socketio', io);
+
 // Middleware de erro global
 app.use((err, req, res, next) => {
   console.error('Erro não tratado:', err);
@@ -198,8 +235,9 @@ async function startServer() {
     
     await db.connect();
     
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`✅ Servidor rodando na porta ${PORT}`);
+      console.log(`🔌 Socket.io habilitado`);
       console.log(`🌍 CORS configurado para: ${process.env.CORS_ORIGIN}`);
       console.log(`🗄️  Conectado ao banco: ${db.currentHost}/${process.env.DB_NAME}`);
       console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
@@ -210,8 +248,9 @@ async function startServer() {
     console.error('❌ Erro ao iniciar servidor:', error.message);
     console.log('⚠️  Servidor iniciando sem conexão com banco...');
     
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`⚠️  Servidor rodando na porta ${PORT} (sem DB)`);
+      console.log(`🔌 Socket.io habilitado`);
       console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
     });
   }

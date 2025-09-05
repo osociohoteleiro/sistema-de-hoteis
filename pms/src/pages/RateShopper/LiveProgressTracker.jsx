@@ -65,8 +65,8 @@ const LiveProgressTracker = ({ hotelId, onUpdateCounts }) => {
     // Buscar dados imediatamente
     fetchProgress();
     
-    // Configurar polling a cada 3 segundos
-    const interval = setInterval(fetchProgress, 3000);
+    // Configurar polling a cada 10 segundos para evitar rate limiting
+    const interval = setInterval(fetchProgress, 10000);
     
     return () => clearInterval(interval);
   }, [hotelId]);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TrendingUp,
@@ -18,11 +18,14 @@ import {
   Calendar,
   Building,
   Settings,
-  X
+  X,
+  Trash
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import NewSearchModal from './NewSearchModal';
-import LiveProgressTracker from './LiveProgressTracker';
+import SearchDetailsModal from './SearchDetailsModal';
+import ConfirmationModal from '../../components/ConfirmationModal';
+import { io } from 'socket.io-client';
 import axios from 'axios';
 
 // Função utilitária para formatar datas de forma segura
@@ -81,38 +84,165 @@ const RateShopperDashboard = () => {
   const [searchesPolling, setSearchesPolling] = useState(false);
   const [extractionStatuses, setExtractionStatuses] = useState({});
   const [startingExtractions, setStartingExtractions] = useState(new Set());
+  const [showSearchDetails, setShowSearchDetails] = useState(false);
+  const [selectedSearch, setSelectedSearch] = useState(null);
+  const [lazyModeActive, setLazyModeActive] = useState(false);
+  const [socket, setSocket] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    type: 'warning',
+    title: '',
+    message: '',
+    onConfirm: null,
+    confirmText: 'Confirmar',
+    cancelText: 'Cancelar'
+  });
+
+  // Função para mostrar confirmação personalizada
+  const showConfirmation = ({ title, message, type = 'warning', confirmText = 'Confirmar', cancelText = 'Cancelar', onConfirm }) => {
+    return new Promise((resolve) => {
+      setConfirmModal({
+        isOpen: true,
+        type,
+        title,
+        message,
+        confirmText,
+        cancelText,
+        onConfirm: () => {
+          resolve(true);
+          onConfirm && onConfirm();
+        }
+      });
+    });
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmModal(prev => ({
+      ...prev,
+      isOpen: false
+    }));
+  };
+
+  // Configuração do Socket.io
+  useEffect(() => {
+    const newSocket = io('http://localhost:3002', {
+      transports: ['websocket', 'polling'],
+      timeout: 5000,
+      forceNew: true
+    });
+    
+    newSocket.on('connect', () => {
+      console.log('🔌 Conectado ao Socket.io:', newSocket.id);
+      
+      // Entrar na sala do hotel
+      const hotelId = 2; // Temporário - usar o hotel atual
+      newSocket.emit('join-hotel-room', hotelId);
+    });
+    
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ Erro na conexão Socket.io:', error);
+    });
+    
+    newSocket.on('disconnect', (reason) => {
+      console.log('🔌 Desconectado do Socket.io:', reason);
+    });
+    
+    // Listener para atualizações de progresso em tempo real
+    newSocket.on('extraction-progress', (data) => {
+      console.log('📡 Progresso recebido via Socket.io:', data);
+      console.log('🏃 Estado do Modo Preguiça:', lazyModeActive);
+      
+      const { searchId, progress } = data;
+      
+      // Atualizar o estado do dashboard em tempo real
+      setDashboardData(prevData => ({
+        ...prevData,
+        recent_searches: prevData.recent_searches?.map(search => {
+          if (search.id == searchId) {
+            return {
+              ...search,
+              status: progress.status,
+              processed_dates: progress.processed_dates,
+              total_dates: progress.total_dates,
+              progress_percentage: progress.progress_percentage,
+              total_prices_found: progress.total_prices_found,
+              duration_seconds: progress.duration_seconds,
+              started_at: progress.started_at,
+              completed_at: progress.completed_at,
+              property_name: progress.property_name || search.property_name,
+              error_log: progress.error_log
+            };
+          }
+          return search;
+        }) || []
+      }));
+      
+      // Mostrar notificação de progresso se necessário
+      if (progress.status === 'COMPLETED') {
+        setNotification({
+          type: 'success',
+          title: 'Extração Concluída!',
+          message: `${progress.property_name || `#${searchId}`} terminou com ${progress.total_prices_found || 0} preços`
+        });
+        
+        // Se Modo Preguiça estiver ativo, iniciar próxima extração
+        setTimeout(() => {
+          if (lazyModeRef.current) {
+            console.log('✅ Extração concluída - chamando próxima no Modo Preguiça');
+            lazyModeRef.current();
+          }
+        }, 1000); // Aguardar 1 segundo para garantir que o estado foi atualizado
+        
+      } else if (progress.status === 'FAILED') {
+        setNotification({
+          type: 'error',
+          title: 'Extração Falhou!',
+          message: `${progress.property_name || `#${searchId}`}: ${progress.error_log || 'Erro desconhecido'}`
+        });
+        
+        // Se Modo Preguiça estiver ativo, continuar com próxima mesmo se falhou
+        setTimeout(() => {
+          if (lazyModeRef.current) {
+            console.log('❌ Extração falhou - tentando próxima no Modo Preguiça');
+            lazyModeRef.current();
+          }
+        }, 1000);
+      }
+    });
+    
+    // Listener para status de extração
+    newSocket.on('extraction-status', (data) => {
+      console.log('📡 Status recebido via Socket.io:', data);
+      
+      if (data.message) {
+        setNotification({
+          type: data.status === 'COMPLETED' ? 'success' : 'info',
+          title: 'Status da Extração',
+          message: data.message
+        });
+      }
+    });
+    
+    setSocket(newSocket);
+    
+    return () => {
+      console.log('🔌 Limpando conexão Socket.io');
+      newSocket.disconnect();
+    };
+  }, []);
 
   // Mock data - será substituído pela chamada real da API
   const mockData = {
     summary: {
-      total_properties: 4,
-      total_searches: 15,
-      total_prices: 1250,
-      running_searches: 1,
-      avg_price: 285.50,
-      min_price: 180.00,
-      max_price: 420.00
+      total_properties: 0,
+      total_searches: 0,
+      total_prices: 0,
+      running_searches: 0,
+      avg_price: 0,
+      min_price: 0,
+      max_price: 0
     },
-    recent_searches: [
-      {
-        id: 1,
-        property_name: 'HOTEL MARANDUBA',
-        status: 'RUNNING',
-        progress_percentage: 65,
-        total_dates: 30,
-        processed_dates: 19,
-        started_at: '2025-01-04T10:30:00Z'
-      },
-      {
-        id: 2,
-        property_name: 'POUSADA KALIMAN',
-        status: 'COMPLETED',
-        progress_percentage: 100,
-        total_dates: 30,
-        total_prices_found: 28,
-        completed_at: '2025-01-04T09:45:00Z'
-      }
-    ],
+    recent_searches: [],
     properties: [
       {
         id: 1,
@@ -309,37 +439,259 @@ const RateShopperDashboard = () => {
     }
   };
 
+  // Referência para a função do Modo Preguiça (usada no Socket.io listener)
+  const lazyModeRef = useRef();
+  
+  // Função para iniciar próxima extração no Modo Preguiça
+  const startNextLazyExtraction = useCallback(async () => {
+    console.log('🔄 startNextLazyExtraction chamada - lazyModeActive:', lazyModeActive);
+    
+    if (!lazyModeActive) {
+      console.log('❌ Modo Preguiça não ativo, ignorando');
+      return;
+    }
+    
+    // Buscar próxima extração pendente
+    const pendingSearches = dashboardData?.recent_searches?.filter(search => 
+      search.status === 'PENDING'
+    ) || [];
+    
+    console.log('📋 Extrações pendentes encontradas:', pendingSearches.length);
+    
+    if (pendingSearches.length === 0) {
+      // Não há mais extrações pendentes - finalizar Modo Preguiça
+      console.log('✅ Modo Preguiça concluído - sem extrações pendentes');
+      setLazyModeActive(false);
+      setNotification({
+        type: 'success',
+        title: 'Modo Preguiça Concluído!',
+        message: 'Todas as extrações pendentes foram processadas.'
+      });
+      return;
+    }
+    
+    // Iniciar próxima extração
+    const nextSearch = pendingSearches[0];
+    try {
+      console.log(`🚀 Modo Preguiça: Iniciando próxima extração - ${nextSearch.property_name}`);
+      await handleStartExtraction(nextSearch);
+      
+      setNotification({
+        type: 'info',
+        title: 'Próxima Extração Iniciada',
+        message: `Iniciando extração de ${nextSearch.property_name}. ${pendingSearches.length - 1} restantes.`
+      });
+    } catch (error) {
+      console.error('❌ Erro ao iniciar próxima extração do Modo Preguiça:', error);
+      setNotification({
+        type: 'warning',
+        title: 'Erro na Próxima Extração',
+        message: `Falha ao iniciar ${nextSearch.property_name}. Continuando com as demais.`
+      });
+      
+      // Tentar a próxima após um delay
+      setTimeout(() => {
+        if (lazyModeRef.current) {
+          console.log('🔄 Tentando próxima extração após erro...');
+          lazyModeRef.current();
+        }
+      }, 2000);
+    }
+  }, [lazyModeActive, dashboardData?.recent_searches, setNotification, handleStartExtraction]);
+
+  // Manter referência atualizada para uso no Socket.io listener
+  useEffect(() => {
+    lazyModeRef.current = startNextLazyExtraction;
+  }, [startNextLazyExtraction]);
+
+  const handleDeleteSearch = async (search) => {
+    const confirmed = await new Promise((resolve) => {
+      setConfirmModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Excluir Busca',
+        message: `Tem certeza que deseja excluir a busca "${search.property_name || `#${search.id}`}"? Esta ação não pode ser desfeita.`,
+        confirmText: 'Excluir',
+        cancelText: 'Cancelar',
+        onConfirm: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const hotelId = 2;
+      const response = await axios.delete(`/api/rate-shopper/${hotelId}/searches/${search.id}`);
+
+      if (response.data.success) {
+        setNotification({
+          type: 'success',
+          title: 'Busca Excluída!',
+          message: `Busca "${search.property_name || `#${search.id}`}" excluída com sucesso`
+        });
+
+        // Remover a busca da lista local imediatamente
+        setDashboardData(prevData => ({
+          ...prevData,
+          recent_searches: prevData.recent_searches.filter(s => s.id !== search.id)
+        }));
+        
+        // Recarregar dados do servidor para confirmar
+        setTimeout(() => {
+          loadDashboardData();
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error deleting search:', error);
+      setNotification({
+        type: 'error',
+        title: 'Erro ao Excluir Busca',
+        message: error.response?.data?.error || 'Ocorreu um erro inesperado'
+      });
+    }
+  };
+
+  const handleLazyMode = async () => {
+    if (lazyModeActive) {
+      // Se já está ativo, desativar
+      setLazyModeActive(false);
+      setNotification({
+        type: 'info',
+        title: 'Modo Preguiça Desativado',
+        message: 'As extrações automáticas foram interrompidas'
+      });
+      return;
+    }
+
+    // Buscar todas as extrações pendentes
+    const pendingSearches = dashboardData?.recent_searches?.filter(search => 
+      search.status === 'PENDING'
+    ) || [];
+
+    if (pendingSearches.length === 0) {
+      setNotification({
+        type: 'warning',
+        title: 'Nenhuma Extração Pendente',
+        message: 'Não há extrações pendentes para iniciar'
+      });
+      return;
+    }
+
+    const confirmed = await new Promise((resolve) => {
+      setConfirmModal({
+        isOpen: true,
+        type: 'info',
+        title: 'Ativar Modo Preguiça',
+        message: `Deseja iniciar o Modo Preguiça? Isso iniciará ${pendingSearches.length} extrações pendentes sequencialmente (uma por vez).`,
+        confirmText: 'Iniciar Todas',
+        cancelText: 'Cancelar',
+        onConfirm: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+
+    if (!confirmed) return;
+
+    setLazyModeActive(true);
+    
+    setNotification({
+      type: 'success',
+      title: 'Modo Preguiça Ativado!',
+      message: `Iniciando ${pendingSearches.length} extrações sequencialmente. A primeira será iniciada agora.`
+    });
+
+    // Iniciar apenas a primeira extração
+    // As próximas serão iniciadas automaticamente via Socket.io quando as anteriores terminarem
+    try {
+      const firstSearch = pendingSearches[0];
+      console.log(`Modo Preguiça: Iniciando primeira extração - ${firstSearch.property_name}`);
+      await handleStartExtraction(firstSearch);
+    } catch (error) {
+      console.error('Erro ao iniciar primeira extração do Modo Preguiça:', error);
+      setLazyModeActive(false);
+      setNotification({
+        type: 'error',
+        title: 'Erro no Modo Preguiça',
+        message: 'Falha ao iniciar a primeira extração. Modo Preguiça desativado.'
+      });
+    }
+  };
+
   // Polling específico para status de extração
   const startExtractionPolling = (searchId) => {
     const hotelId = 2;
     
     const pollInterval = setInterval(async () => {
       try {
-        const response = await axios.get(`/api/rate-shopper-extraction/${hotelId}/extraction-status`);
+        // Usar a rota correta que retorna progresso em tempo real
+        const response = await axios.get(`/api/rate-shopper/searches/${searchId}/live-progress`);
         
         if (response.data.success) {
-          const status = response.data.data;
+          const searchData = response.data.data.search;
           
+          // Atualizar o progresso na lista de searches
+          setDashboardData(prevData => ({
+            ...prevData,
+            recent_searches: prevData.recent_searches?.map(search => {
+              if (search.id === searchId) {
+                return {
+                  ...search,
+                  status: searchData.status,
+                  processed_dates: searchData.processed_dates,
+                  total_dates: searchData.total_dates,
+                  progress_percentage: searchData.progress_percent,
+                  total_prices_found: searchData.actual_prices_count || search.total_prices_found,
+                  duration_seconds: searchData.elapsed_seconds,
+                  started_at: searchData.started_at,
+                  completed_at: searchData.completed_at
+                };
+              }
+              return search;
+            }) || []
+          }));
+          
+          // Atualizar status de extração específico
           setExtractionStatuses(prev => ({
             ...prev,
-            [searchId]: status
+            [searchId]: {
+              ...searchData,
+              progress_percent: searchData.progress_percent,
+              elapsed_seconds: searchData.elapsed_seconds,
+              eta_seconds: searchData.eta_seconds
+            }
           }));
           
           // Parar polling se extração terminou
-          if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+          if (searchData.status === 'COMPLETED' || searchData.status === 'FAILED' || searchData.status === 'CANCELLED') {
             clearInterval(pollInterval);
-            setTimeout(loadDashboardData, 2000);
+            // Recarregar dados completos após terminar
+            setTimeout(loadDashboardData, 1000);
           }
         }
       } catch (error) {
-        console.error('Error polling extraction status:', error);
+        console.error('Error polling extraction progress:', error);
+        // Em caso de erro, tentar recarregar dados completos
+        setTimeout(loadDashboardData, 5000);
       }
-    }, 3000);
+    }, 2000); // Polling mais frequente para progresso em tempo real
 
-    // Auto-stop após 10 minutos
+    // Auto-stop após 15 minutos (mais tempo para extrações longas)
     setTimeout(() => {
       clearInterval(pollInterval);
-    }, 600000);
+    }, 900000);
   };
 
   const handleNewSearch = async (searchData) => {
@@ -396,6 +748,40 @@ const RateShopperDashboard = () => {
     } finally {
       setSubmittingSearch(false);
     }
+  };
+
+  const cleanFailedSearches = async () => {
+    try {
+      const hotelId = 2; // Temporário - usando hotel existente (Pousada Bugaendrus)
+      
+      const response = await axios.delete(`/api/rate-shopper/${hotelId}/searches/failed`);
+      
+      if (response.data.success) {
+        // Mostrar notificação de sucesso
+        setNotification({
+          type: 'success',
+          title: 'Limpeza Concluída!',
+          message: `${response.data.deletedCount} busca(s) mal sucedida(s) foram excluídas.`
+        });
+        
+        // Recarregar os dados do dashboard
+        loadDashboardData();
+      }
+    } catch (error) {
+      console.error('Error cleaning failed searches:', error);
+      
+      // Mostrar notificação de erro
+      setNotification({
+        type: 'error',
+        title: 'Erro ao Limpar Buscas',
+        message: error.response?.data?.error || 'Ocorreu um erro ao excluir as buscas mal sucedidas. Tente novamente.'
+      });
+    }
+  };
+
+  const handleSearchClick = (search) => {
+    setSelectedSearch(search);
+    setShowSearchDetails(true);
   };
 
   if (loading) {
@@ -480,6 +866,15 @@ const RateShopperDashboard = () => {
               <option value="90d">Últimos 90 dias</option>
             </select>
 
+            <button
+              onClick={cleanFailedSearches}
+              className="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50"
+              title="Excluir buscas mal sucedidas"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Limpar Falhas
+            </button>
+
             <Link
               to="/rate-shopper/properties"
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
@@ -553,24 +948,6 @@ const RateShopperDashboard = () => {
         </div>
       </div>
 
-      {/* Live Progress Tracker */}
-      <div className="mb-8">
-        <LiveProgressTracker 
-          hotelId={2} // TODO: Get from context/props
-          onUpdateCounts={(stats) => {
-            // Atualizar contadores das estatísticas principais
-            if (dashboardData && dashboardData.summary) {
-              setDashboardData(prev => ({
-                ...prev,
-                summary: {
-                  ...prev.summary,
-                  running_searches: stats.running_count
-                }
-              }));
-            }
-          }}
-        />
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Price Trends Chart */}
@@ -619,21 +996,42 @@ const RateShopperDashboard = () => {
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Buscas Recentes</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Extrações em Andamento</h3>
                 <p className="text-sm text-gray-600">
-                  Acompanhe o status das suas extrações de preços em tempo real
+                  Buscas ativas e concluídas recentemente (até 1 hora)
                 </p>
               </div>
-              <div className="text-right">
-                <div className="text-xs text-gray-500">
-                  📌 Processar: <code className="bg-gray-100 px-2 py-1 rounded text-xs">npm run process-database:saas</code>
-                </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  🤖 Modo headless (sem interface gráfica)
-                </div>
+              <div className="text-right flex flex-col items-end space-y-2">
+                <button
+                  onClick={handleLazyMode}
+                  disabled={!dashboardData?.recent_searches?.some(search => search.status === 'PENDING')}
+                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    lazyModeActive
+                      ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                      : dashboardData?.recent_searches?.some(search => search.status === 'PENDING')
+                        ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {lazyModeActive ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Modo Ativo - Clique para Parar
+                    </>
+                  ) : (
+                    <>
+                      😴 Modo Preguiça
+                    </>
+                  )}
+                </button>
                 {searchesPolling && (
-                  <div className="text-xs text-blue-600 mt-1">
+                  <div className="text-xs text-blue-600">
                     🔄 Atualizando automaticamente...
+                  </div>
+                )}
+                {lazyModeActive && (
+                  <div className="text-xs text-orange-600">
+                    🔄 Iniciando extrações sequencialmente...
                   </div>
                 )}
               </div>
@@ -642,8 +1040,17 @@ const RateShopperDashboard = () => {
           <div className="p-6">
             {recent_searches && recent_searches.length > 0 ? (
               <div className="space-y-4">
-                {recent_searches.map((search, index) => (
-                <div key={`${search.id}-${index}`} className="p-4 bg-gray-50 rounded-lg">
+                {recent_searches.filter(search => {
+                  // Mostrar apenas buscas em andamento ou concluídas há menos de 1 hora
+                  if (search.status === 'RUNNING' || search.status === 'PENDING') return true;
+                  if (search.status === 'COMPLETED') {
+                    const completedAt = new Date(search.completed_at || search.started_at);
+                    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                    return completedAt > oneHourAgo;
+                  }
+                  return false;
+                }).map((search, index) => (
+                <div key={`${search.id}-${index}`} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors" onClick={() => handleSearchClick(search)}>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3 flex-1">
                       <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
@@ -757,6 +1164,17 @@ const RateShopperDashboard = () => {
                             )}
                           </button>
                         )}
+                        
+                        {/* Botão de exclusão - disponível sempre exceto durante execução */}
+                        {search.status !== 'RUNNING' && (
+                          <button
+                            onClick={() => handleDeleteSearch(search)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                          >
+                            <Trash className="h-3 w-3 mr-1" />
+                            Excluir
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -823,8 +1241,8 @@ const RateShopperDashboard = () => {
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Propriedades Monitoradas</h3>
-              <p className="text-sm text-gray-600">Visão geral dos preços mais recentes</p>
+              <h3 className="text-lg font-semibold text-gray-900">Histórico Completo</h3>
+              <p className="text-sm text-gray-600">Todas as extrações realizadas - clique para ver os preços</p>
             </div>
             <div className="flex gap-3">
               <button
@@ -853,76 +1271,84 @@ const RateShopperDashboard = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Propriedade
+                  Busca
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Último Preço
+                  Período
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Média (30d)
+                  Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Preços Coletados
+                  Preços Encontrados
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Última Atualização
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ações
+                  Data da Busca
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {properties?.map((property, index) => (
-                <tr key={`${property.id}-${index}`} className="hover:bg-gray-50">
+              {recent_searches?.map((search, index) => (
+                <tr 
+                  key={`${search.id}-${index}`} 
+                  className="hover:bg-gray-50 cursor-pointer transition-colors" 
+                  onClick={() => handleSearchClick(search)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Building className="h-5 w-5 text-blue-600" />
+                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                        search.status === 'RUNNING' ? 'bg-blue-100' : 
+                        search.status === 'COMPLETED' ? 'bg-green-100' : 
+                        search.status === 'FAILED' ? 'bg-red-100' : 'bg-gray-100'
+                      }`}>
+                        {search.status === 'RUNNING' ? (
+                          <RefreshCw className="h-5 w-5 text-blue-600 animate-spin" />
+                        ) : search.status === 'COMPLETED' ? (
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        ) : search.status === 'FAILED' ? (
+                          <AlertCircle className="h-5 w-5 text-red-600" />
+                        ) : (
+                          <Clock className="h-5 w-5 text-gray-600" />
+                        )}
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
-                          {property.property_name}
+                          {search.property_name}
                         </div>
                         <div className="text-sm text-gray-500">
-                          Booking.com
+                          #{search.id}
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      R$ {property.latest_price?.toFixed(2)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">
-                      R$ {property.avg_price_30d?.toFixed(2)}
-                    </div>
-                    <div className={`text-xs flex items-center ${
-                      property.latest_price > property.avg_price_30d ? 'text-red-600' : 'text-green-600'
-                    }`}>
-                      {property.latest_price > property.avg_price_30d ? (
-                        <TrendingUp className="h-3 w-3 mr-1" />
-                      ) : (
-                        <TrendingDown className="h-3 w-3 mr-1" />
-                      )}
-                      {Math.abs(((property.latest_price - property.avg_price_30d) / property.avg_price_30d) * 100).toFixed(1)}%
+                      {formatDate(search.start_date)} → {formatDate(search.end_date)}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {property.price_count_30d}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                      search.status === 'RUNNING' 
+                        ? 'bg-blue-100 text-blue-800'
+                        : search.status === 'COMPLETED' 
+                        ? 'bg-green-100 text-green-800'
+                        : search.status === 'FAILED'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {search.status === 'RUNNING' ? '🔄 Executando' : 
+                       search.status === 'COMPLETED' ? '✅ Concluída' :
+                       search.status === 'FAILED' ? '❌ Erro' :
+                       '⏳ Pendente'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-green-600">
+                      {search.total_prices_found || 0} preços
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDateTime(property.latest_scraped_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3">
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button className="text-green-600 hover:text-green-900">
-                      <Search className="h-4 w-4" />
-                    </button>
+                    {formatDateTime(search.started_at || search.created_at)}
                   </td>
                 </tr>
               ))}
@@ -940,6 +1366,19 @@ const RateShopperDashboard = () => {
           loadDashboardData();
           setShowNewSearchModal(false);
         }}
+      />
+
+      {/* Modal de Confirmação */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel || (() => setConfirmModal(prev => ({ ...prev, isOpen: false })))}
+        type={confirmModal.type}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
       />
     </>
   );

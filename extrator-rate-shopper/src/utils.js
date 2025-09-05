@@ -124,7 +124,9 @@ function get_dates_between(start_date, end_date) {
    */
   const dates = [];
 
-  while (start_date <= end_date) {
+  // Para reservas de hotel: incluir check-in até o dia ANTES do check-out
+  // Exemplo: 15/09 até 19/09 = preços para [15/09, 16/09, 17/09, 18/09]
+  while (start_date < end_date) {
     const new_date = new Date(start_date.getTime())
 
     dates.push(new_date);

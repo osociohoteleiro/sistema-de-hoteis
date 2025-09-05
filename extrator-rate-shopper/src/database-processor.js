@@ -1,5 +1,5 @@
 const DatabaseIntegration = require('./database-integration');
-const { extract_prices_from_booking } = require('./booking-extractor-single-date');
+const { extract_prices_from_booking } = require('./booking-extractor-optimized');
 const { logger } = require('./logger');
 const fs = require('fs').promises;
 const path = require('path');
@@ -100,7 +100,8 @@ class DatabaseProcessor {
         resultsFile,
         this.db, // Passar instância da database integration
         searchId, // ID da busca
-        propertyId // ID da propriedade
+        propertyId, // ID da propriedade
+        dbSearch.hotel_id // ID do hotel para APIs
       );
 
       // Contar preços salvos diretamente no banco durante a extração
