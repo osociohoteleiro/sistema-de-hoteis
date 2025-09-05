@@ -19,33 +19,42 @@ class Hotel {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM hotels WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM hotels WHERE id = $1', [id]);
     return result.length > 0 ? new Hotel(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM hotels WHERE hotel_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM hotels WHERE hotel_uuid = $1', [uuid]);
     return result.length > 0 ? new Hotel(result[0]) : null;
   }
 
   static async findAll(filters = {}) {
     let query = 'SELECT * FROM hotels WHERE 1=1';
     const params = [];
+    let paramCount = 0;
 
     if (filters.status) {
-      query += ' AND status = ?';
+      paramCount++;
+      query += ` AND status = $${paramCount}`;
       params.push(filters.status);
     }
 
     if (filters.search) {
-      query += ' AND (name LIKE ? OR description LIKE ? OR address LIKE ?)';
+      paramCount++;
+      const searchParam1 = paramCount;
+      paramCount++;
+      const searchParam2 = paramCount;
+      paramCount++;
+      const searchParam3 = paramCount;
+      query += ` AND (name LIKE $${searchParam1} OR description LIKE $${searchParam2} OR address LIKE $${searchParam3})`;
       params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY created_at DESC';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      paramCount++;
+      query += ` LIMIT $${paramCount}`;
       params.push(parseInt(filters.limit));
     }
 
@@ -58,17 +67,20 @@ class Hotel {
       SELECT h.*, uh.role, uh.permissions, uh.active as user_active
       FROM hotels h
       JOIN user_hotels uh ON h.id = uh.hotel_id
-      WHERE uh.user_id = ? AND uh.active = true
+      WHERE uh.user_id = $1 AND uh.active = true
     `;
     const params = [userId];
+    let paramCount = 1;
 
     if (filters.status) {
-      query += ' AND h.status = ?';
+      paramCount++;
+      query += ` AND h.status = $${paramCount}`;
       params.push(filters.status);
     }
 
     if (filters.role) {
-      query += ' AND uh.role = ?';
+      paramCount++;
+      query += ` AND uh.role = $${paramCount}`;
       params.push(filters.role);
     }
 
@@ -86,12 +98,12 @@ class Hotel {
 
   async save() {
     if (this.id) {
-      // Update existing hotel
+      // Update existing hotel - PostgreSQL style
       const result = await db.query(`
         UPDATE hotels SET 
-        name = ?, checkin_time = ?, checkout_time = ?, cover_image = ?,
-        description = ?, address = ?, phone = ?, email = ?, website = ?, status = ?
-        WHERE id = ?
+        name = $1, checkin_time = $2, checkout_time = $3, cover_image = $4,
+        description = $5, address = $6, phone = $7, email = $8, website = $9, status = $10
+        WHERE id = $11
       `, [
         this.name, this.checkin_time, this.checkout_time, this.cover_image,
         this.description, this.address, this.phone, this.email, this.website,
@@ -99,21 +111,21 @@ class Hotel {
       ]);
       return result;
     } else {
-      // Create new hotel
+      // Create new hotel - PostgreSQL style with RETURNING
       const result = await db.query(`
         INSERT INTO hotels (name, checkin_time, checkout_time, cover_image, description, 
                            address, phone, email, website, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id, hotel_uuid
       `, [
         this.name, this.checkin_time, this.checkout_time, this.cover_image,
         this.description, this.address, this.phone, this.email, this.website, this.status
       ]);
       
-      this.id = result.insertId;
-      
-      // Get the generated UUID
-      const newHotel = await Hotel.findById(this.id);
-      this.uuid = newHotel.hotel_uuid;
+      if (result && result.length > 0) {
+        this.id = result[0].id;
+        this.uuid = result[0].hotel_uuid;
+      }
       
       return result;
     }
@@ -123,7 +135,7 @@ class Hotel {
     if (!this.id) {
       throw new Error('Cannot delete hotel without ID');
     }
-    return await db.query('DELETE FROM hotels WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM hotels WHERE id = $1', [this.id]);
   }
 
   // Get hotel users
@@ -133,7 +145,7 @@ class Hotel {
              uh.role, uh.permissions, uh.active as hotel_active, uh.created_at as joined_at
       FROM users u
       JOIN user_hotels uh ON u.id = uh.user_id
-      WHERE uh.hotel_id = ? AND uh.active = true
+      WHERE uh.hotel_id = $1 AND uh.active = true
       ORDER BY uh.role, u.name
     `, [this.id]);
     

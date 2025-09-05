@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Building, Search, AlertCircle, CheckCircle } from 'lucide-react';
-import axios from 'axios';
+import { useApp } from '../../context/AppContext';
+import apiService from '../../services/api';
 
 const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
+  const { selectedHotelUuid } = useApp();
   const [formData, setFormData] = useState({
     selectedCompetitors: [], // Array de IDs dos concorrentes selecionados
     start_date: null,
@@ -36,91 +38,34 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
 
   // Carregar lista de concorrentes pré-cadastrados
   const loadCompetitors = async () => {
+    if (!selectedHotelUuid) {
+      setNotification({
+        type: 'error',
+        message: 'Nenhum hotel selecionado'
+      });
+      setLoadingProperties(false);
+      return;
+    }
+
     try {
       setLoadingProperties(true);
-      const hotelId = 2; // Usar hotel_id dinâmico futuramente
+      const response = await apiService.getRateShopperProperties(selectedHotelUuid, { active: true });
       
-      try {
-        const response = await axios.get(`/api/rate-shopper/${hotelId}/properties`);
-        
-        if (response.data.success && response.data.data.length > 0) {
-          setCompetitors(response.data.data);
-        } else {
-          // Se não há dados na API, usar dados mockados temporariamente
-          setCompetitors([
-            {
-              id: 1,
-              property_name: 'Hotel Maranduba',
-              booking_url: 'https://booking.com/hotel-maranduba',
-              location: 'Ubatuba, SP',
-              category: 'Hotel',
-              competitor_type: 'OTA',
-              ota_name: 'Booking.com',
-              active: true
-            },
-            {
-              id: 2,
-              property_name: 'Pousada Kaliman',
-              booking_url: 'https://booking.com/pousada-kaliman',
-              location: 'Ubatuba, SP',
-              category: 'Pousada',
-              competitor_type: 'OTA',
-              ota_name: 'Booking.com',
-              active: true
-            },
-            {
-              id: 3,
-              property_name: 'Resort Vila Azul',
-              booking_url: 'https://booking.com/resort-vila-azul',
-              location: 'Ubatuba, SP',
-              category: 'Resort',
-              competitor_type: 'OTA',
-              ota_name: 'Booking.com',
-              active: true
-            }
-          ]);
-        }
-      } catch (apiError) {
-        console.log('API not available, using mock data');
-        // Se a API não estiver disponível, usar dados mockados
-        setCompetitors([
-          {
-            id: 1,
-            property_name: 'Hotel Maranduba',
-            booking_url: 'https://booking.com/hotel-maranduba',
-            location: 'Ubatuba, SP',
-            category: 'Hotel',
-            competitor_type: 'OTA',
-            ota_name: 'Booking.com',
-            active: true
-          },
-          {
-            id: 2,
-            property_name: 'Pousada Kaliman',
-            booking_url: 'https://booking.com/pousada-kaliman',
-            location: 'Ubatuba, SP',
-            category: 'Pousada',
-            competitor_type: 'OTA',
-            ota_name: 'Booking.com',
-            active: true
-          },
-          {
-            id: 3,
-            property_name: 'Resort Vila Azul',
-            booking_url: 'https://booking.com/resort-vila-azul',
-            location: 'Ubatuba, SP',
-            category: 'Resort',
-            competitor_type: 'OTA',
-            ota_name: 'Booking.com',
-            active: true
-          }
-        ]);
+      if (response.success && response.data.length > 0) {
+        setCompetitors(response.data);
+      } else {
+        setCompetitors([]);
+        setNotification({
+          type: 'error',
+          message: 'Nenhuma propriedade concorrente cadastrada. Configure primeiro em Gerenciar Propriedades.'
+        });
       }
     } catch (error) {
       console.error('Error loading competitors:', error);
+      setCompetitors([]);
       setNotification({
         type: 'error',
-        message: 'Erro ao carregar concorrentes'
+        message: 'Erro ao carregar concorrentes: ' + (error.message || 'Erro desconhecido')
       });
     } finally {
       setLoadingProperties(false);
@@ -197,13 +142,18 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
       return;
     }
 
+    if (!selectedHotelUuid) {
+      setNotification({
+        type: 'error',
+        message: 'Nenhum hotel selecionado'
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      // Para demonstração, vamos simular a criação de buscas
-      const hotelId = 2; // Usar hotel_id dinâmico futuramente
-      
       console.log('Creating searches for:', {
-        hotelId,
+        hotelUuid: selectedHotelUuid,
         selectedCompetitors: formData.selectedCompetitors,
         start_date: formData.start_date?.toISOString().split('T')[0],
         end_date: formData.end_date?.toISOString().split('T')[0],
@@ -224,7 +174,10 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
         console.log('Creating search:', searchData);
         
         searchPromises.push(
-          axios.post(`/api/rate-shopper/${hotelId}/searches`, searchData)
+          apiService.request(`/rate-shopper/${selectedHotelUuid}/searches`, {
+            method: 'POST',
+            body: JSON.stringify(searchData)
+          })
         );
       }
 

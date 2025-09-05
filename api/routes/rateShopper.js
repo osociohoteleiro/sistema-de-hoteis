@@ -56,7 +56,21 @@ async function checkHotelAccess(req, res, next) {
 // GET /api/rate-shopper/:hotel_id/dashboard (TEMPORARY - REMOVE AUTH FOR TESTING)
 router.get('/:hotel_id/dashboard', async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar hotel e pegar ID
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      // É ID integer
+      hotelId = parseInt(hotel_id);
+    }
 
     // Recent searches
     const recentSearches = await RateShopperSearch.findByHotel(hotelId, { limit: 10 });
@@ -354,16 +368,30 @@ router.get('/:hotel_id/searches', authenticateToken, checkHotelAccess, async (re
 // POST /api/rate-shopper/:hotel_id/searches (TEMPORARY - REMOVE AUTH FOR TESTING)
 router.post('/:hotel_id/searches', async (req, res) => {
   try {
-    const hotelId = req.params.hotel_id;
+    const hotel_id = req.params.hotel_id;
     const { property_id, start_date, end_date } = req.body;
 
     if (!property_id || !start_date || !end_date) {
       return res.status(400).json({ error: 'Property ID, start date and end date are required' });
     }
 
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar hotel e pegar ID
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      // É ID integer
+      hotelId = parseInt(hotel_id);
+    }
+
     // Verify property belongs to hotel
     const property = await RateShopperProperty.findById(property_id);
-    if (!property || property.hotel_id !== parseInt(hotelId)) {
+    if (!property || property.hotel_id !== hotelId) {
       return res.status(404).json({ error: 'Property not found or does not belong to this hotel' });
     }
 
@@ -1041,13 +1069,27 @@ router.delete('/:hotel_id/searches/:search_id', async (req, res) => {
   try {
     const { hotel_id, search_id } = req.params;
     
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      // É UUID, buscar hotel e pegar ID
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      // É ID integer
+      hotelId = parseInt(hotel_id);
+    }
+    
     // Verificar se a busca existe e pertence ao hotel
     const search = await db.query(`
       SELECT rs.*, rsp.property_name
       FROM rate_shopper_searches rs
       LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       WHERE rs.id = $1 AND rs.hotel_id = $2
-    `, [search_id, hotel_id]);
+    `, [search_id, hotelId]);
 
     if (search.length === 0) {
       return res.status(404).json({ 
@@ -1076,7 +1118,7 @@ router.delete('/:hotel_id/searches/:search_id', async (req, res) => {
     const result = await db.query(`
       DELETE FROM rate_shopper_searches 
       WHERE id = $1 AND hotel_id = $2
-    `, [search_id, hotel_id]);
+    `, [search_id, hotelId]);
     
     if (result.rowCount === 0) {
       return res.status(404).json({ 

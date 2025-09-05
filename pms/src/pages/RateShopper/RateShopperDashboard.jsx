@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 import {
   TrendingUp,
   TrendingDown,
@@ -27,6 +28,7 @@ import SearchDetailsModal from './SearchDetailsModal';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { io } from 'socket.io-client';
 import axios from 'axios';
+import apiService from '../../services/api';
 
 // Função utilitária para formatar datas de forma segura
 const formatDate = (dateValue, locale = 'pt-BR', options = {}) => {
@@ -74,6 +76,7 @@ const formatDateTime = (dateValue, locale = 'pt-BR') => {
 };
 
 const RateShopperDashboard = () => {
+  const { selectedHotelUuid } = useApp();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedProperty, setSelectedProperty] = useState('all');
@@ -125,7 +128,7 @@ const RateShopperDashboard = () => {
 
   // Configuração do Socket.io
   useEffect(() => {
-    const newSocket = io('http://localhost:3002', {
+    const newSocket = io('http://localhost:3001', {
       transports: ['websocket', 'polling'],
       timeout: 5000,
       forceNew: true
@@ -271,7 +274,7 @@ const RateShopperDashboard = () => {
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedProperty, dateRange]);
+  }, [selectedProperty, dateRange, selectedHotelUuid]);
 
   // Polling seletivo apenas para buscas (quando necessário)
   const startSearchesPolling = () => {
@@ -332,28 +335,45 @@ const RateShopperDashboard = () => {
   }, [notification]);
 
   const loadDashboardData = async () => {
+    console.log('🔄 loadDashboardData called with:', { selectedHotelUuid, selectedProperty, dateRange });
+    
+    if (!selectedHotelUuid) {
+      console.warn('❌ No hotel selected');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       
-      // Obter hotel_id do usuário logado (assumindo que está em localStorage ou context)
-      const hotelId = 2; // Temporário - usando hotel existente (Pousada Bugaendrus)
-      
-      const response = await axios.get(`/api/rate-shopper/${hotelId}/dashboard`, {
-        params: {
-          property_id: selectedProperty === 'all' ? undefined : selectedProperty,
-          days: dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 90
-        }
+      console.log('📡 Making dashboard API call to:', `/api/rate-shopper/${selectedHotelUuid}/dashboard`);
+      console.log('📊 API params:', {
+        property_id: selectedProperty === 'all' ? undefined : selectedProperty,
+        days: dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 90
       });
       
-      if (response.data.success) {
-        setDashboardData(response.data.data);
+      // Usar apiService em vez de axios direto
+      const queryString = new URLSearchParams({
+        property_id: selectedProperty === 'all' ? undefined : selectedProperty,
+        days: dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 90
+      }).toString();
+      
+      const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/dashboard?${queryString}`);
+      
+      console.log('📈 API response:', response);
+      
+      if (response.success) {
+        console.log('✅ Dashboard data loaded successfully:', response.data);
+        console.log('🏨 Properties count:', response.data.properties?.length || 0);
+        console.log('🔍 Recent searches count:', response.data.recent_searches?.length || 0);
+        setDashboardData(response.data);
       } else {
-        console.error('Failed to load dashboard data');
+        console.error('❌ Failed to load dashboard data - response not successful');
         // Fallback para dados mock
         setDashboardData(mockData);
       }
     } catch (error) {
-      console.error('Error loading dashboard:', error);
+      console.error('💥 Error loading dashboard:', error);
       // Fallback para dados mock em caso de erro
       setDashboardData(mockData);
     } finally {
@@ -527,10 +547,12 @@ const RateShopperDashboard = () => {
     if (!confirmed) return;
 
     try {
-      const hotelId = 2;
-      const response = await axios.delete(`/api/rate-shopper/${hotelId}/searches/${search.id}`);
+      console.log('🗑️ Deleting search:', search.id, 'for hotel:', selectedHotelUuid);
+      const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/searches/${search.id}`, {
+        method: 'DELETE'
+      });
 
-      if (response.data.success) {
+      if (response.success) {
         setNotification({
           type: 'success',
           title: 'Busca Excluída!',
@@ -1364,7 +1386,7 @@ const RateShopperDashboard = () => {
         onSubmit={() => {
           // Recarregar dashboard após nova busca ser criada
           loadDashboardData();
-          setShowNewSearchModal(false);
+          // O modal se fechará automaticamente após mostrar mensagem de sucesso
         }}
       />
 

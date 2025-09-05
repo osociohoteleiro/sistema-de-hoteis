@@ -18,31 +18,36 @@ class RateShopperProperty {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE id = $1', [id]);
     return result.length > 0 ? new RateShopperProperty(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE uuid = $1', [uuid]);
     return result.length > 0 ? new RateShopperProperty(result[0]) : null;
   }
 
   static async findByHotel(hotelId, filters = {}) {
-    let query = 'SELECT * FROM rate_shopper_properties WHERE hotel_id = ?';
+    let query = 'SELECT * FROM rate_shopper_properties WHERE hotel_id = $1';
     const params = [hotelId];
 
+    let paramCount = 1;
+    
     if (filters.active !== undefined) {
-      query += ' AND active = ?';
+      paramCount++;
+      query += ` AND active = $${paramCount}`;
       params.push(filters.active);
     }
 
     if (filters.competitor_type) {
-      query += ' AND competitor_type = ?';
+      paramCount++;
+      query += ` AND competitor_type = $${paramCount}`;
       params.push(filters.competitor_type);
     }
 
     if (filters.ota_name) {
-      query += ' AND ota_name = ?';
+      paramCount++;
+      query += ` AND ota_name = $${paramCount}`;
       params.push(filters.ota_name);
     }
 
