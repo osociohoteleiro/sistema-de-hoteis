@@ -57,6 +57,7 @@ async function checkHotelAccess(req, res, next) {
 router.get('/:hotel_id/dashboard', async (req, res) => {
   try {
     const hotel_id = req.params.hotel_id;
+    const { start_date, end_date, days } = req.query;
     
     // Verificar se hotel_id é UUID ou integer e converter para ID
     let hotelId;
@@ -75,7 +76,24 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
     // Recent searches
     const recentSearches = await RateShopperSearch.findByHotel(hotelId, { limit: 10 });
 
-    // Price trends (last 30 days)
+    // Determinar período para price trends
+    let dateCondition;
+    let dateParams = [hotelId];
+    
+    if (start_date && end_date) {
+      // Período personalizado
+      dateCondition = `AND rsp.scraped_at >= $2 AND rsp.scraped_at <= $3`;
+      dateParams.push(start_date, end_date);
+    } else if (days) {
+      // Número de dias especificado
+      const daysNum = parseInt(days) || 30;
+      dateCondition = `AND rsp.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '${daysNum} days'`;
+    } else {
+      // Padrão: últimos 30 dias
+      dateCondition = `AND rsp.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'`;
+    }
+
+    // Price trends com período customizável
     const priceTrends = await db.query(`
       SELECT 
         DATE(rsp.scraped_at) as date,
@@ -86,11 +104,11 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
       WHERE rs.hotel_id = $1
-        AND rsp.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+        ${dateCondition}
         AND rs.status = 'COMPLETED'
       GROUP BY DATE(rsp.scraped_at), rsp.property_id, rsp_prop.property_name
-      ORDER BY date DESC, rsp_prop.property_name
-    `, [hotelId]);
+      ORDER BY date ASC, rsp_prop.property_name
+    `, dateParams);
 
     // Properties with latest prices
     const propertiesWithPrices = await db.query(`
@@ -178,6 +196,359 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
   } catch (error) {
     console.error('Dashboard error:', error);
     res.status(500).json({ error: 'Failed to load dashboard data' });
+  }
+});
+
+// GET /api/rate-shopper/:hotel_id/price-trends
+router.get('/:hotel_id/price-trends', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    const { start_date, end_date, days = 30, future_days = 30 } = req.query;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
+    // Determinar período
+    let dateCondition;
+    let dateParams = [hotelId];
+    let startDateObj, endDateObj;
+    
+    if (start_date && end_date) {
+      // Período personalizado
+      startDateObj = new Date(start_date);
+      endDateObj = new Date(end_date);
+      dateCondition = `AND DATE(rsp.check_in_date) >= $2 AND DATE(rsp.check_in_date) <= $3`;
+      dateParams.push(start_date, end_date);
+    } else {
+      // Baseado em número de dias (30 passados + 30 futuros por padrão)
+      const daysNum = parseInt(days) || 30;
+      const futureDaysNum = parseInt(future_days) || 30;
+      
+      const today = new Date();
+      startDateObj = new Date(today);
+      startDateObj.setDate(startDateObj.getDate() - daysNum);
+      
+      endDateObj = new Date(today);
+      endDateObj.setDate(endDateObj.getDate() + futureDaysNum);
+      
+      dateCondition = `AND DATE(rsp.check_in_date) >= $2 AND DATE(rsp.check_in_date) <= $3`;
+      dateParams.push(startDateObj.toISOString().split('T')[0], endDateObj.toISOString().split('T')[0]);
+    }
+
+    // Buscar dados históricos
+    const historicalData = await db.query(`
+      SELECT 
+        DATE(rsp.check_in_date) as date,
+        rsp_prop.property_name,
+        COALESCE(AVG(rsp.price), 0) as avg_price,
+        COALESCE(MIN(rsp.price), 0) as min_price,
+        COALESCE(MAX(rsp.price), 0) as max_price,
+        COUNT(rsp.id) as price_count,
+        CASE WHEN DATE(rsp.check_in_date) > CURRENT_DATE THEN true ELSE false END as is_future
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+      JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
+      WHERE rs.hotel_id = $1
+        ${dateCondition}
+        AND rs.status IN ('COMPLETED', 'CANCELLED')
+      GROUP BY DATE(rsp.check_in_date), rsp_prop.property_name
+      ORDER BY date ASC, rsp_prop.property_name
+    `, dateParams);
+
+    // DEBUG: Log dos dados históricos retornados (removido para produção)
+    // console.log('📊 DEBUG Price Trends - historicalData.length:', historicalData.length);
+    // console.log('📊 DEBUG Price Trends - historicalData:', JSON.stringify(historicalData, null, 2));
+    
+    // Converter para formato do gráfico
+    const chartData = {};
+    const properties = new Set();
+    
+    historicalData.forEach(row => {
+      const date = row.date.toISOString().split('T')[0];
+      properties.add(row.property_name);
+      
+      if (!chartData[date]) {
+        chartData[date] = { 
+          date,
+          isFuture: row.is_future
+        };
+      }
+      
+      chartData[date][row.property_name] = parseFloat(row.avg_price);
+      chartData[date][`${row.property_name}_min`] = parseFloat(row.min_price);
+      chartData[date][`${row.property_name}_max`] = parseFloat(row.max_price);
+      chartData[date][`${row.property_name}_count`] = parseInt(row.price_count);
+    });
+
+    // TEMPORARIAMENTE DESABILITADO: Se há poucos dados históricos, adicionar alguns dados simulados para demonstração
+    /*
+    if (historicalData.length === 1 && properties.size > 0) {
+      const todayData = historicalData[0];
+      const today = new Date(todayData.date);
+      
+      // Adicionar 7 dias de dados simulados baseados no preço real de hoje
+      for (let i = 7; i >= 1; i--) {
+        const pastDate = new Date(today);
+        pastDate.setDate(pastDate.getDate() - i);
+        const dateStr = pastDate.toISOString().split('T')[0];
+        
+        if (!chartData[dateStr]) {
+          chartData[dateStr] = { date: dateStr, isSimulated: true };
+          
+          properties.forEach(prop => {
+            const realPrice = parseFloat(todayData.avg_price) || 200;
+            // Adicionar variação aleatória de ±15% do preço real
+            const variation = (Math.random() - 0.5) * 0.3; // -15% a +15%
+            const simulatedPrice = realPrice * (1 + variation);
+            
+            chartData[dateStr][prop] = Math.round(simulatedPrice * 100) / 100;
+            chartData[dateStr][`${prop}_min`] = Math.round(simulatedPrice * 0.85 * 100) / 100;
+            chartData[dateStr][`${prop}_max`] = Math.round(simulatedPrice * 1.15 * 100) / 100;
+            chartData[dateStr][`${prop}_count`] = Math.floor(Math.random() * 20) + 10;
+          });
+        }
+      }
+    }
+    */
+
+    // Gerar dados futuros (próximos 30 dias por padrão)
+    const futureDaysNum = parseInt(future_days) || 30;
+    const futureEndDate = new Date(endDateObj);
+    futureEndDate.setDate(futureEndDate.getDate() + futureDaysNum);
+    
+    // Adicionar datas futuras ao chartData (sem dados de preço) - começando do próximo dia
+    const futureStartDate = new Date(endDateObj);
+    futureStartDate.setDate(futureStartDate.getDate() + 1); // Começar do próximo dia
+    
+    for (let d = new Date(futureStartDate); d <= futureEndDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      if (!chartData[dateStr]) {
+        chartData[dateStr] = { date: dateStr, isFuture: true };
+        properties.forEach(prop => {
+          chartData[dateStr][prop] = null; // Null para datas futuras
+        });
+      }
+    }
+
+    // Converter para array ordenado
+    const chartArray = Object.values(chartData).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // DEBUG: Log dos dados finais enviados (removido para produção)
+    // console.log('📊 DEBUG Price Trends - chartArray.length:', chartArray.length);
+    // console.log('📊 DEBUG Price Trends - properties:', Array.from(properties));
+    // console.log('📊 DEBUG Price Trends - primeiros 3 itens do chartArray:', chartArray.slice(0, 3));
+
+    res.json({
+      success: true,
+      data: {
+        chart_data: chartArray,
+        properties: Array.from(properties),
+        date_range: {
+          start: startDateObj.toISOString().split('T')[0],
+          end: endDateObj.toISOString().split('T')[0],
+          future_end: futureEndDate.toISOString().split('T')[0]
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Price trends error:', error);
+    res.status(500).json({ error: 'Failed to load price trends' });
+  }
+});
+
+// ROTA TEMPORÁRIA PARA VERIFICAR DATAS NO BANCO
+router.get('/check-dates-simple', async (req, res) => {
+  try {
+    // Verificar total de registros na tabela
+    const totalPrices = await db.query(`SELECT COUNT(*) as total FROM rate_shopper_prices`);
+    const totalSearches = await db.query(`SELECT COUNT(*) as total FROM rate_shopper_searches`);
+    
+    // Buscar amostras básicas
+    const samples = await db.query(`
+      SELECT 
+        check_in_date,
+        price,
+        search_id,
+        id
+      FROM rate_shopper_prices 
+      ORDER BY id DESC
+      LIMIT 5
+    `);
+
+    res.json({
+      success: true,
+      data: {
+        total_prices: totalPrices.rows?.[0]?.total || 0,
+        total_searches: totalSearches.rows?.[0]?.total || 0,
+        sample_records: samples.rows || []
+      }
+    });
+  } catch (error) {
+    console.error('Check dates simple error:', error);
+    res.status(500).json({ 
+      error: 'Failed to check dates',
+      message: error.message
+    });
+  }
+});
+
+// ROTA TEMPORÁRIA PARA VERIFICAR DATAS ESPECÍFICAS DE UM HOTEL
+router.get('/:hotel_uuid/check-dates', async (req, res) => {
+  try {
+    // Usar hotel_id = 2 por simplicidade (baseado nos logs do servidor)
+    const hotel_id = 2;
+
+    // Verificar todas as datas no banco
+    const allDates = await db.query(`
+      SELECT 
+        DATE(check_in_date) as date,
+        COUNT(*) as count,
+        MIN(price) as min_price,
+        MAX(price) as max_price
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id  
+      WHERE rs.hotel_id = $1
+      GROUP BY DATE(check_in_date)
+      ORDER BY date
+    `, [hotel_id]);
+    
+    // Verificar quantos registros estão fora do período correto (05/09/2025 - 31/10/2025)
+    const wrongDates = await db.query(`
+      SELECT COUNT(*) as total
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+      WHERE rs.hotel_id = $1
+        AND (DATE(rsp.check_in_date) < '2025-09-05' OR DATE(rsp.check_in_date) > '2025-10-31')
+    `, [hotel_id]);
+
+    res.json({
+      success: true,
+      data: {
+        hotel_id: hotel_id,
+        all_dates: allDates.rows,
+        wrong_dates_count: wrongDates.rows[0].total
+      }
+    });
+  } catch (error) {
+    console.error('Check dates error:', error);
+    res.status(500).json({ error: 'Failed to check dates' });
+  }
+});
+
+// ROTA TEMPORÁRIA PARA VISUALIZAR DADOS DA TABELA
+router.get('/:hotel_id/debug-prices', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    const { start_date, end_date } = req.query;
+    
+    console.log('🔍 API debug-prices: Parâmetros recebidos:', { hotel_id, start_date, end_date });
+    
+    // Verificar se hotel_id é UUID e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
+    // Construir query com filtros de data opcionais
+    let query = `
+      SELECT 
+        rsp.id,
+        rsp.check_in_date,
+        rsp.check_out_date,
+        rsp.price,
+        rsp.room_type,
+        rsp.scraped_at,
+        rsp_prop.property_name,
+        rs.status as search_status,
+        rs.start_date as search_start,
+        rs.end_date as search_end,
+        rs.completed_at as search_completed
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+      JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
+      WHERE rs.hotel_id = $1
+    `;
+    
+    const queryParams = [hotelId];
+    
+    // Adicionar filtros de data se fornecidos
+    if (start_date) {
+      query += ` AND rsp.check_in_date >= $${queryParams.length + 1}`;
+      queryParams.push(start_date);
+    }
+    
+    if (end_date) {
+      query += ` AND rsp.check_in_date <= $${queryParams.length + 1}`;
+      queryParams.push(end_date);
+    }
+    
+    query += ` ORDER BY rsp.check_in_date ASC, rsp.scraped_at DESC LIMIT 100`;
+    
+    console.log('📊 API debug-prices: Query final:', query, queryParams);
+
+    // Buscar preços filtrados por período
+    const allPrices = await db.query(query, queryParams);
+
+    // Buscar estatísticas com os mesmos filtros de data
+    let statsQuery = `
+      SELECT 
+        COUNT(*) as total_records,
+        COUNT(DISTINCT rsp.property_id) as unique_properties,
+        MIN(rsp.check_in_date) as oldest_date,
+        MAX(rsp.check_in_date) as newest_date,
+        MIN(rsp.price) as min_price,
+        MAX(rsp.price) as max_price,
+        AVG(rsp.price) as avg_price
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+      WHERE rs.hotel_id = $1
+    `;
+    
+    const statsParams = [hotelId];
+    
+    // Aplicar os mesmos filtros de data nas estatísticas
+    if (start_date) {
+      statsQuery += ` AND rsp.check_in_date >= $${statsParams.length + 1}`;
+      statsParams.push(start_date);
+    }
+    
+    if (end_date) {
+      statsQuery += ` AND rsp.check_in_date <= $${statsParams.length + 1}`;
+      statsParams.push(end_date);
+    }
+    
+    const stats = await db.query(statsQuery, statsParams);
+    
+    console.log('📈 API debug-prices: Resultado -', allPrices.length, 'registros encontrados para período:', start_date, 'até', end_date);
+
+    res.json({
+      success: true,
+      data: {
+        statistics: stats[0] || {},
+        prices: allPrices,
+        total_found: allPrices.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Debug prices error:', error);
+    res.status(500).json({ error: 'Failed to get debug prices: ' + error.message });
   }
 });
 
@@ -1361,6 +1732,104 @@ router.put('/:hotel_id/searches/:search_id/complete', async (req, res) => {
       success: false, 
       error: 'Falha ao processar notificação de conclusão' 
     });
+  }
+});
+
+// ROTA TEMPORÁRIA PARA INVESTIGAR DATA ESPECÍFICA
+router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    const target_date = req.params.date;
+    
+    console.log('🔍 API debug-specific-date: Investigando data:', target_date, 'para hotel:', hotel_id);
+    
+    // Verificar se hotel_id é UUID e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+    
+    // Buscar todas as variações possíveis dessa data
+    const exactMatches = await db.query(`
+      SELECT 
+        rsp.id,
+        rsp.check_in_date,
+        rsp.price,
+        rsp.scraped_at,
+        rsp_prop.property_name,
+        rs.status,
+        rs.completed_at
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+      JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
+      WHERE rs.hotel_id = $1 
+      AND rsp.check_in_date::date = $2::date
+      ORDER BY rsp.scraped_at DESC
+    `, [hotelId, target_date]);
+    
+    // Buscar próximas datas disponíveis
+    const nearbyDates = await db.query(`
+      SELECT 
+        DISTINCT rsp.check_in_date::date as date,
+        COUNT(*) as total_prices
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+      WHERE rs.hotel_id = $1 
+      AND rsp.check_in_date::date BETWEEN $2::date - INTERVAL '5 days' AND $2::date + INTERVAL '5 days'
+      GROUP BY rsp.check_in_date::date
+      ORDER BY rsp.check_in_date::date
+    `, [hotelId, target_date]);
+    
+    // Verificar se há buscas realizadas que cobriam essa data
+    const searchesCovering = await db.query(`
+      SELECT 
+        rs.id,
+        rs.start_date,
+        rs.end_date,
+        rs.status,
+        rs.created_at,
+        rs.completed_at,
+        COUNT(rsp.id) as prices_found
+      FROM rate_shopper_searches rs
+      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id AND rsp.check_in_date::date = $2::date
+      WHERE rs.hotel_id = $1 
+      AND rs.start_date <= $2::date 
+      AND rs.end_date >= $2::date
+      GROUP BY rs.id, rs.start_date, rs.end_date, rs.status, rs.created_at, rs.completed_at
+      ORDER BY rs.created_at DESC
+    `, [hotelId, target_date]);
+    
+    console.log('🔍 API debug-specific-date: Resultados para', target_date, ':', {
+      exactMatches: exactMatches.length,
+      nearbyDatesWithData: nearbyDates.length,
+      searchesCoveringDate: searchesCovering.length
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        target_date,
+        exact_matches: exactMatches,
+        nearby_dates: nearbyDates,
+        searches_covering_date: searchesCovering,
+        summary: {
+          has_exact_data: exactMatches.length > 0,
+          total_exact_matches: exactMatches.length,
+          nearby_dates_count: nearbyDates.length,
+          searches_covering_count: searchesCovering.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Debug specific date error:', error);
+    res.status(500).json({ error: 'Failed to debug specific date: ' + error.message });
   }
 });
 

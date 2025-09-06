@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import {
@@ -26,9 +26,13 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import NewSearchModal from './NewSearchModal';
 import SearchDetailsModal from './SearchDetailsModal';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import PriceTrendChart from '../../components/PriceTrendChart';
+import ChartJsPriceChart from '../../components/ChartJsPriceChart';
+import PriceDebugTable from '../../components/PriceDebugTable';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import apiService from '../../services/api';
+import { format, addDays, startOfDay } from 'date-fns';
 
 // Função utilitária para formatar datas de forma segura
 const formatDate = (dateValue, locale = 'pt-BR', options = {}) => {
@@ -127,6 +131,57 @@ const RateShopperDashboard = () => {
   const [notification, setNotification] = useState(null);
   const [searchesPolling, setSearchesPolling] = useState(false);
   const [extractionStatuses, setExtractionStatuses] = useState({});
+  
+  // Estados compartilhados para sincronizar gráfico e tabela (usar mesmos padrões do gráfico)
+  const [chartStartDate, setChartStartDate] = useState(() => {
+    const today = startOfDay(new Date());
+    console.log('🚀 Dashboard: Inicializando com data:', format(today, 'yyyy-MM-dd'));
+    return today;
+  });
+  const [chartPeriodDays, setChartPeriodDays] = useState(30);
+  
+  // Estados para dados do gráfico compartilhados com a tabela
+  const [sharedChartData, setSharedChartData] = useState(null);
+  const [sharedPropertyNames, setSharedPropertyNames] = useState([]);
+  
+  // Debug: Log das mudanças de estado
+  useEffect(() => {
+    const endDate = addDays(chartStartDate, chartPeriodDays - 1);
+    console.log('📊 Dashboard: Estados sincronizados atualizados:', {
+      startDate: format(chartStartDate, 'yyyy-MM-dd'),
+      endDate: format(endDate, 'yyyy-MM-dd'),
+      periodDays: chartPeriodDays
+    });
+  }, [chartStartDate, chartPeriodDays]);
+  
+  // Callbacks com useCallback para evitar re-renderizações
+  const handleStartDateChange = useCallback((newDate) => {
+    console.log('📊 Dashboard: Recebendo mudança de data do gráfico:', format(newDate, 'yyyy-MM-dd'));
+    setChartStartDate(newDate);
+  }, []);
+  
+  const handlePeriodDaysChange = useCallback((newDays) => {
+    console.log('📊 Dashboard: Recebendo mudança de período do gráfico:', newDays, 'dias');
+    setChartPeriodDays(newDays);
+  }, []);
+
+  // Callback para receber dados do gráfico
+  const handleDataChange = useCallback((chartData, propertyNames) => {
+    console.log('📊 Dashboard: Recebendo dados do gráfico:', {
+      processedData: chartData?.processedData?.length,
+      properties: propertyNames?.length
+    });
+    setSharedChartData(chartData);
+    setSharedPropertyNames(propertyNames || []);
+  }, []);
+  
+  // Memoizar as datas da tabela para evitar re-cálculos
+  const tableDateRange = useMemo(() => {
+    const startDateStr = format(chartStartDate, 'yyyy-MM-dd');
+    const endDateStr = format(addDays(chartStartDate, chartPeriodDays - 1), 'yyyy-MM-dd');
+    console.log('📅 Dashboard: Calculando range da tabela:', { startDateStr, endDateStr });
+    return { startDateStr, endDateStr };
+  }, [chartStartDate, chartPeriodDays]);
   const [startingExtractions, setStartingExtractions] = useState(new Set());
   const [showSearchDetails, setShowSearchDetails] = useState(false);
   const [selectedSearch, setSelectedSearch] = useState(null);
@@ -518,6 +573,21 @@ const RateShopperDashboard = () => {
       const searchId = search.id;
       setStartingExtractions(prev => new Set([...prev, searchId]));
       
+      // MELHORIA: Mudar imediatamente o status local para RUNNING e mostrar barra de progresso em 0%
+      setDashboardData(prevData => ({
+        ...prevData,
+        recent_searches: prevData.recent_searches?.map(s => 
+          s.id === searchId 
+            ? { 
+                ...s, 
+                status: 'RUNNING', 
+                progress_percentage: 0,
+                processed_dates: 0
+              }
+            : s
+        ) || []
+      }));
+      
       const response = await apiService.request(`/rate-shopper-extraction/${selectedHotelUuid}/start-extraction`, {
         method: 'POST',
         body: JSON.stringify({
@@ -543,9 +613,40 @@ const RateShopperDashboard = () => {
         }
         
         // Não precisamos recarregar dados - Socket.io ou polling vai atualizar
+      } else {
+        // Se a API falhou, reverter o status local para PENDING
+        setDashboardData(prevData => ({
+          ...prevData,
+          recent_searches: prevData.recent_searches?.map(s => 
+            s.id === searchId 
+              ? { 
+                  ...s, 
+                  status: 'PENDING', 
+                  progress_percentage: 0,
+                  processed_dates: 0
+                }
+              : s
+          ) || []
+        }));
       }
     } catch (error) {
       console.error('Error starting extraction:', error);
+      
+      // Se houve erro, reverter o status local para PENDING
+      setDashboardData(prevData => ({
+        ...prevData,
+        recent_searches: prevData.recent_searches?.map(s => 
+          s.id === search.id 
+            ? { 
+                ...s, 
+                status: 'PENDING', 
+                progress_percentage: 0,
+                processed_dates: 0
+              }
+            : s
+        ) || []
+      }));
+      
       setNotification({
         type: 'error',
         title: 'Erro ao Iniciar Extração',
@@ -962,6 +1063,22 @@ const RateShopperDashboard = () => {
     );
   }
 
+  if (!dashboardData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-gray-600 mb-4">Erro ao carregar dados do dashboard</p>
+          <button 
+            onClick={loadDashboardData} 
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const { summary, recent_searches, properties, price_trends } = dashboardData;
 
   return (
@@ -1116,46 +1233,42 @@ const RateShopperDashboard = () => {
       </div>
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Price Trends Chart */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">Tendência de Preços</h3>
-            <p className="text-sm text-gray-600">Evolução dos preços nos últimos dias</p>
-          </div>
-          <div className="p-6">
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={price_trends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="date" 
-                  tickFormatter={(value) => formatDate(value)}
-                />
-                <YAxis 
-                  tickFormatter={(value) => `R$ ${value}`}
-                />
-                <Tooltip 
-                  formatter={(value, name) => [`R$ ${value}`, name]}
-                  labelFormatter={(value) => formatDate(value)}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="HOTEL MARANDUBA" 
-                  stroke="#3B82F6" 
-                  strokeWidth={2}
-                  dot={{ fill: '#3B82F6', strokeWidth: 2 }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="POUSADA KALIMAN" 
-                  stroke="#EF4444" 
-                  strokeWidth={2}
-                  dot={{ fill: '#EF4444', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {/* Chart.js Price Trends Chart */}
+      <div className="mb-8">
+        <ChartJsPriceChart 
+          selectedHotelUuid={selectedHotelUuid}
+          externalStartDate={chartStartDate}
+          externalPeriodDays={chartPeriodDays}
+          onStartDateChange={handleStartDateChange}
+          onPeriodDaysChange={handlePeriodDaysChange}
+          onDataChange={handleDataChange}
+        />
+      </div>
+
+      {/* Debug: Tabela de Preços Salvos */}
+      <div className="mb-8">
+        {tableDateRange.startDateStr && tableDateRange.endDateStr ? (
+          <>
+            {console.log('🎯 Dashboard: Renderizando tabela com datas:', tableDateRange)}
+            <PriceDebugTable 
+              selectedHotelUuid={selectedHotelUuid}
+              startDate={tableDateRange.startDateStr}
+              endDate={tableDateRange.endDateStr}
+              chartData={sharedChartData}
+              propertyNames={sharedPropertyNames}
+            />
+          </>
+        ) : (
+          <>
+            {console.log('⏳ Dashboard: Aguardando datas para tabela:', { chartStartDate, chartPeriodDays, tableDateRange })}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-2 p-6">
+              <p className="text-gray-600">Aguardando sincronização com o gráfico...</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
 
 
         {/* Recent Searches */}
