@@ -3,7 +3,7 @@ const db = require('../config/database');
 class RateShopperProperty {
   constructor(data = {}) {
     this.id = data.id;
-    this.uuid = data.property_uuid || data.uuid;
+    this.uuid = data.uuid;
     this.hotel_id = data.hotel_id;
     this.property_name = data.property_name;
     this.booking_url = data.booking_url;
@@ -23,7 +23,7 @@ class RateShopperProperty {
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE property_uuid = $1', [uuid]);
+    const result = await db.query('SELECT * FROM rate_shopper_properties WHERE uuid = $1', [uuid]);
     return result.length > 0 ? new RateShopperProperty(result[0]) : null;
   }
 
@@ -62,12 +62,12 @@ class RateShopperProperty {
     const params = [];
 
     if (filters.active !== undefined) {
-      query += ' AND rsp.active = ?';
+      query += ' AND rsp.active = $2';
       params.push(filters.active);
     }
 
     if (filters.hotel_id) {
-      query += ' AND rsp.hotel_id = ?';
+      query += ' AND rsp.hotel_id = $3';
       params.push(filters.hotel_id);
     }
 
@@ -101,7 +101,7 @@ class RateShopperProperty {
           hotel_id, property_name, booking_url, competitor_type, ota_name,
           location, category, max_bundle_size, active
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING id, property_uuid as uuid
+        RETURNING id, uuid
       `, [
         this.hotel_id, this.property_name, this.booking_url, this.competitor_type,
         this.ota_name, this.location, this.category, this.max_bundle_size, this.active
@@ -120,7 +120,7 @@ class RateShopperProperty {
     if (!this.id) {
       throw new Error('Cannot delete property without ID');
     }
-    return await db.query('DELETE FROM rate_shopper_properties WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM rate_shopper_properties WHERE id = $1', [this.id]);
   }
 
   // Get latest prices for this property
@@ -129,24 +129,24 @@ class RateShopperProperty {
       SELECT rsp.*, rs.search_type, rs.completed_at as search_completed_at
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
-      WHERE rsp.property_id = ?
+      WHERE rsp.property_id = $1
     `;
     const params = [this.id];
 
     if (dateRange.start) {
-      query += ' AND rsp.check_in_date >= ?';
+      query += ' AND rsp.check_in_date >= $2';
       params.push(dateRange.start);
     }
 
     if (dateRange.end) {
-      query += ' AND rsp.check_in_date <= ?';
+      query += ' AND rsp.check_in_date <= $' + (params.length + 1);
       params.push(dateRange.end);
     }
 
     query += ' ORDER BY rsp.check_in_date, rsp.scraped_at DESC';
 
     if (dateRange.limit) {
-      query += ' LIMIT ?';
+      query += ' LIMIT $' + (params.length + 1);
       params.push(dateRange.limit);
     }
 
@@ -165,8 +165,8 @@ class RateShopperProperty {
         COUNT(CASE WHEN rsp.availability_status = 'AVAILABLE' THEN 1 END) as available_count
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
-      WHERE rsp.property_id = ?
-        AND rsp.check_in_date >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+      WHERE rsp.property_id = $1
+        AND rsp.check_in_date >= CURRENT_DATE - INTERVAL '$2 days'
         AND rs.status = 'COMPLETED'
       GROUP BY DATE(rsp.check_in_date)
       ORDER BY date
@@ -177,23 +177,23 @@ class RateShopperProperty {
 
   // Get searches for this property
   async getSearches(filters = {}) {
-    let query = 'SELECT * FROM rate_shopper_searches WHERE property_id = ?';
+    let query = 'SELECT * FROM rate_shopper_searches WHERE property_id = $1';
     const params = [this.id];
 
     if (filters.status) {
-      query += ' AND status = ?';
+      query += ' AND status = $' + (params.length + 1);
       params.push(filters.status);
     }
 
     if (filters.search_type) {
-      query += ' AND search_type = ?';
+      query += ' AND search_type = $' + (params.length + 1);
       params.push(filters.search_type);
     }
 
     query += ' ORDER BY created_at DESC';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      query += ' LIMIT $' + (params.length + 1);
       params.push(filters.limit);
     }
 
