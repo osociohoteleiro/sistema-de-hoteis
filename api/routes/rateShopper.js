@@ -73,7 +73,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       hotelId = parseInt(hotel_id);
     }
 
-    // Recent searches
+    // Recent searches  
     const recentSearches = await RateShopperSearch.findByHotel(hotelId, { limit: 10 });
 
     // Determinar período para price trends
@@ -183,6 +183,14 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       }
     });
 
+    // Prevent cache for dashboard data
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+    
     res.json({
       success: true,
       data: {
@@ -611,7 +619,7 @@ router.post('/:hotel_id/properties', async (req, res) => {
       hotelId = parseInt(hotel_id);
     }
     
-    const { property_name, booking_url, location, category, max_bundle_size } = req.body;
+    const { property_name, booking_url, location, category, max_bundle_size, is_main_property } = req.body;
 
     // Validate URL
     if (!RateShopperProperty.isValidBookingUrl(booking_url)) {
@@ -629,7 +637,8 @@ router.post('/:hotel_id/properties', async (req, res) => {
       category,
       max_bundle_size: max_bundle_size || 7,
       competitor_type: urlInfo.competitor_type,
-      ota_name: urlInfo.ota_name
+      ota_name: urlInfo.ota_name,
+      is_main_property: is_main_property || false
     });
 
     const errors = property.validate();
@@ -648,6 +657,43 @@ router.post('/:hotel_id/properties', async (req, res) => {
   } catch (error) {
     console.error('Create property error:', error);
     res.status(500).json({ error: 'Failed to create property' });
+  }
+});
+
+// PUT /api/rate-shopper/properties/:property_id/main-property
+router.put('/properties/:property_id/main-property', async (req, res) => {
+  try {
+    const propertyId = req.params.property_id;
+    const { is_main_property } = req.body;
+
+    // Buscar a propriedade
+    const property = await RateShopperProperty.findById(propertyId);
+    if (!property) {
+      return res.status(404).json({ error: 'Property not found' });
+    }
+
+    // Se está definindo como principal, remover outras propriedades principais do mesmo hotel
+    if (is_main_property) {
+      await db.query(`
+        UPDATE rate_shopper_properties 
+        SET is_main_property = false 
+        WHERE hotel_id = $1 AND id != $2 AND is_main_property = true
+      `, [property.hotel_id, propertyId]);
+    }
+
+    // Atualizar a propriedade atual
+    property.is_main_property = is_main_property;
+    await property.save();
+
+    res.json({
+      success: true,
+      message: is_main_property ? 'Property set as main' : 'Property removed as main',
+      data: property
+    });
+
+  } catch (error) {
+    console.error('Update main property error:', error);
+    res.status(500).json({ error: 'Failed to update main property' });
   }
 });
 
@@ -1732,6 +1778,131 @@ router.put('/:hotel_id/searches/:search_id/complete', async (req, res) => {
       success: false, 
       error: 'Falha ao processar notificação de conclusão' 
     });
+  }
+});
+
+// ROTA TEMPORÁRIA PARA TESTAR A CONSULTA COM JOIN CORRETO
+router.get('/:hotel_id/test-main-property-join', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+    
+    // Testar a consulta do dashboard com JOIN correto
+    const searchesWithMainProperty = await db.query(`
+      SELECT 
+        rs.id,
+        rs.status,
+        rs.created_at,
+        rsp.property_name,
+        rsp.is_main_property,
+        CASE 
+          WHEN rsp.is_main_property = true THEN 'SIM ✅'
+          ELSE 'NÃO ❌'
+        END as is_main_display
+      FROM rate_shopper_searches rs
+      LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+      WHERE rs.hotel_id = $1
+      ORDER BY rsp.is_main_property DESC, rs.created_at DESC
+      LIMIT 10
+    `, [hotelId]);
+    
+    console.log('🔍 JOIN Test Result:', searchesWithMainProperty);
+    
+    res.json({
+      success: true,
+      message: 'JOIN test executado com sucesso',
+      data: {
+        hotel_id: hotelId,
+        searches_count: searchesWithMainProperty.length,
+        searches: searchesWithMainProperty,
+        main_property_searches: searchesWithMainProperty.filter(s => s.is_main_property),
+        explanation: 'A coluna is_main_property vem da tabela rate_shopper_properties via JOIN, não existe na tabela rate_shopper_searches'
+      }
+    });
+
+  } catch (error) {
+    console.error('JOIN test error:', error);
+    res.status(500).json({ error: 'Failed to test JOIN: ' + error.message });
+  }
+});
+
+// ROTA TEMPORÁRIA PARA VERIFICAR DADOS DAS PROPRIEDADES
+router.get('/:hotel_id/debug-properties', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+    
+    // Buscar todas as propriedades do hotel
+    const properties = await db.query(`
+      SELECT 
+        id,
+        property_name,
+        is_main_property,
+        active,
+        created_at
+      FROM rate_shopper_properties
+      WHERE hotel_id = $1
+      ORDER BY property_name
+    `, [hotelId]);
+    
+    // Buscar todas as buscas do hotel com JOIN para pegar is_main_property
+    const searches = await db.query(`
+      SELECT 
+        rs.id as search_id,
+        rs.status,
+        rs.created_at,
+        rsp.id as property_id,
+        rsp.property_name,
+        rsp.is_main_property
+      FROM rate_shopper_searches rs
+      LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+      WHERE rs.hotel_id = $1
+      ORDER BY rs.created_at DESC
+      LIMIT 20
+    `, [hotelId]);
+    
+    console.log('🔍 DEBUG Properties:', properties);
+    console.log('🔍 DEBUG Searches:', searches);
+    
+    res.json({
+      success: true,
+      data: {
+        hotel_id: hotelId,
+        properties_count: properties.length,
+        searches_count: searches.length,
+        properties: properties,
+        searches: searches,
+        main_properties: properties.filter(p => p.is_main_property),
+        eco_encanto_property: properties.find(p => p.property_name.toLowerCase().includes('eco encanto')),
+        eco_encanto_searches: searches.filter(s => s.property_name && s.property_name.toLowerCase().includes('eco encanto'))
+      }
+    });
+
+  } catch (error) {
+    console.error('Debug properties error:', error);
+    res.status(500).json({ error: 'Failed to debug properties: ' + error.message });
   }
 });
 

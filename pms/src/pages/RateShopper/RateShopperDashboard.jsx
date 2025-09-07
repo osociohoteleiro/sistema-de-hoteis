@@ -131,6 +131,7 @@ const RateShopperDashboard = () => {
   const [notification, setNotification] = useState(null);
   const [searchesPolling, setSearchesPolling] = useState(false);
   const [extractionStatuses, setExtractionStatuses] = useState({});
+  const [debugModal, setDebugModal] = useState({ isOpen: false, content: '', title: '' });
   
   // Estados compartilhados para sincronizar gráfico e tabela (usar mesmos padrões do gráfico)
   const [chartStartDate, setChartStartDate] = useState(() => {
@@ -1081,8 +1082,67 @@ const RateShopperDashboard = () => {
 
   const { summary, recent_searches, properties, price_trends } = dashboardData;
 
+  // Modal de Debug
+  const DebugModal = () => {
+    if (!debugModal.isOpen) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={() => setDebugModal({ isOpen: false, content: '', title: '' })}></div>
+          </div>
+          
+          <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <div className="flex items-start">
+                <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    {debugModal.title}
+                  </h3>
+                  <div className="mt-2">
+                    <textarea
+                      className="w-full h-96 p-3 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50"
+                      value={debugModal.content}
+                      readOnly
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <button
+                type="button"
+                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(debugModal.content);
+                  setNotification({
+                    type: 'success',
+                    title: 'Copiado!',
+                    message: 'Conteúdo copiado para a área de transferência'
+                  });
+                }}
+              >
+                📋 Copiar
+              </button>
+              <button
+                type="button"
+                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                onClick={() => setDebugModal({ isOpen: false, content: '', title: '' })}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
+      <DebugModal />
+      
       {/* Notificação */}
       {notification && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg border-l-4 ${
@@ -1157,6 +1217,120 @@ const RateShopperDashboard = () => {
             >
               <X className="h-4 w-4 mr-2" />
               Limpar Falhas
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/debug-properties`);
+                  if (response.success) {
+                    const data = response.data;
+                    
+                    let debugInfo = `🔍 DEBUG DO BANCO DE DADOS\n\n`;
+                    debugInfo += `📊 RESUMO:\n`;
+                    debugInfo += `• Total de propriedades: ${data.properties_count}\n`;
+                    debugInfo += `• Propriedades principais: ${data.main_properties.length}\n`;
+                    debugInfo += `• Total de buscas: ${data.searches_count}\n\n`;
+                    
+                    debugInfo += `🏨 PROPRIEDADES PRINCIPAIS:\n`;
+                    data.main_properties.forEach(prop => {
+                      debugInfo += `• ID: ${prop.id} - Nome: ${prop.property_name}\n`;
+                    });
+                    
+                    debugInfo += `\n🌿 ECO ENCANTO:\n`;
+                    if (data.eco_encanto_property) {
+                      debugInfo += `• ID: ${data.eco_encanto_property.id}\n`;
+                      debugInfo += `• Nome: ${data.eco_encanto_property.property_name}\n`;
+                      debugInfo += `• É principal: ${data.eco_encanto_property.is_main_property ? 'SIM ✅' : 'NÃO ❌'}\n`;
+                    } else {
+                      debugInfo += `• Não encontrada no banco ❌\n`;
+                    }
+                    
+                    debugInfo += `\n🔍 BUSCAS DA ECO ENCANTO (${data.eco_encanto_searches.length}):\n`;
+                    data.eco_encanto_searches.slice(0, 5).forEach(search => {
+                      debugInfo += `• Busca #${search.search_id} - Principal: ${search.is_main_property ? 'SIM ✅' : 'NÃO ❌'}\n`;
+                    });
+                    
+                    if (data.eco_encanto_searches.length > 5) {
+                      debugInfo += `• ... e mais ${data.eco_encanto_searches.length - 5} buscas\n`;
+                    }
+                    
+                    // JSON completo para debug técnico
+                    debugInfo += `\n\n📋 JSON COMPLETO (para debug técnico):\n`;
+                    debugInfo += JSON.stringify(data, null, 2);
+                    
+                    setDebugModal({
+                      isOpen: true,
+                      title: '🔍 Debug do Banco de Dados',
+                      content: debugInfo
+                    });
+                  }
+                } catch (error) {
+                  setDebugModal({
+                    isOpen: true,
+                    title: '❌ Erro no Debug',
+                    content: `Erro ao executar debug: ${error.message}`
+                  });
+                }
+              }}
+              className="inline-flex items-center px-4 py-2 border border-yellow-300 rounded-lg text-sm font-medium text-yellow-700 bg-white hover:bg-yellow-50"
+              title="Debug: Verificar propriedades no banco"
+            >
+              🔍 Debug DB
+            </button>
+
+            <button
+              onClick={async () => {
+                try {
+                  const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/test-main-property-join`);
+                  
+                  if (response.success) {
+                    const data = response.data;
+                    let testInfo = `🔍 TESTE DO JOIN CORRETO\n\n`;
+                    testInfo += `📊 RESULTADO:\n`;
+                    testInfo += `• Total de buscas: ${data.searches_count}\n`;
+                    testInfo += `• Buscas principais: ${data.main_property_searches.length}\n\n`;
+                    
+                    testInfo += `✅ EXPLICAÇÃO:\n${data.explanation}\n\n`;
+                    
+                    testInfo += `🔍 BUSCAS COM JOIN:\n`;
+                    data.searches.forEach(search => {
+                      testInfo += `• Busca #${search.id} - ${search.property_name} - Principal: ${search.is_main_display}\n`;
+                    });
+                    
+                    // JSON completo para debug técnico
+                    testInfo += `\n\n📋 JSON COMPLETO (para debug técnico):\n`;
+                    testInfo += JSON.stringify(data, null, 2);
+                    
+                    setDebugModal({
+                      isOpen: true,
+                      title: '🧪 Teste do JOIN de Propriedades',
+                      content: testInfo
+                    });
+                    
+                    if (data.main_property_searches.length > 0) {
+                      setTimeout(() => {
+                        setNotification({
+                          type: 'success',
+                          title: 'JOIN Funcionando!',
+                          message: 'Recarregando dados para aplicar destaque na tabela...'
+                        });
+                        loadDashboardData();
+                      }, 2000);
+                    }
+                  }
+                } catch (error) {
+                  setDebugModal({
+                    isOpen: true,
+                    title: '❌ Erro no Teste JOIN',
+                    content: `Erro no teste: ${error.message}`
+                  });
+                }
+              }}
+              className="inline-flex items-center px-4 py-2 border border-green-300 rounded-lg text-sm font-medium text-green-700 bg-white hover:bg-green-50"
+              title="Testar JOIN das propriedades principais"
+            >
+              🧪 Test JOIN
             </button>
 
             <Link
@@ -1323,14 +1497,44 @@ const RateShopperDashboard = () => {
                 {recent_searches.filter(search => {
                   // Mostrar apenas buscas em andamento ou concluídas há menos de 1 hora
                   if (search.status === 'RUNNING' || search.status === 'PENDING') return true;
-                  if (search.status === 'COMPLETED') {
+                  if (search.status === 'COMPLETED' || search.status === 'FAILED' || search.status === 'CANCELLED') {
                     const completedAt = new Date(search.completed_at || search.started_at);
                     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-                    return completedAt > oneHourAgo;
+                    const isRecent = completedAt > oneHourAgo;
+                    console.log('🕐 Filtro 1 hora:', {
+                      searchId: search.id,
+                      status: search.status,
+                      completedAt: completedAt.toISOString(),
+                      oneHourAgo: oneHourAgo.toISOString(),
+                      isRecent
+                    });
+                    return isRecent;
                   }
                   return false;
-                }).map((search, index) => (
-                <div key={`${search.id}-${index}`} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors" onClick={() => handleSearchClick(search)}>
+                })
+                .sort((a, b) => {
+                  // Ordenar: principal primeiro, depois por ID decrescente
+                  if (a.is_main_property && !b.is_main_property) return -1;
+                  if (!a.is_main_property && b.is_main_property) return 1;
+                  return b.id - a.id;
+                })
+                .map((search, index) => {
+                  // TEMP DEBUG: Ver se is_main_property está chegando na seção "Em Andamento"
+                  console.log('🔍 PROGRESS RENDER:', {
+                    id: search.id,
+                    name: search.property_name,
+                    is_main_property: search.is_main_property,
+                    willHighlight: search.is_main_property ? 'SIM' : 'NÃO'
+                  });
+                  
+                  return (
+                <div 
+                  key={`${search.id}-${index}`} 
+                  className={`p-4 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors ${
+                    search.is_main_property ? 'bg-blue-100 border-2 border-blue-500 shadow-lg' : 'bg-gray-50'
+                  }`} 
+                  onClick={() => handleSearchClick(search)}
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3 flex-1">
                       <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
@@ -1353,7 +1557,10 @@ const RateShopperDashboard = () => {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-900">{search.property_name}</p>
+                          <p className="font-medium text-gray-900">
+                            {search.property_name}
+                            {search.is_main_property && <span className="text-blue-600 font-bold"> 🏆 HOTEL PRINCIPAL 🏆</span>}
+                          </p>
                           <span className="text-xs text-gray-500">
                             #{search.id}
                           </span>
@@ -1445,16 +1652,6 @@ const RateShopperDashboard = () => {
                           </button>
                         )}
                         
-                        {/* Botão de exclusão - disponível sempre exceto durante execução */}
-                        {search.status !== 'RUNNING' && (
-                          <button
-                            onClick={() => handleDeleteSearch(search)}
-                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
-                          >
-                            <Trash className="h-3 w-3 mr-1" />
-                            Excluir
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1490,7 +1687,8 @@ const RateShopperDashboard = () => {
                     </div>
                   )}
                 </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-8">
@@ -1565,13 +1763,26 @@ const RateShopperDashboard = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Data da Busca
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {recent_searches?.map((search, index) => (
+              {recent_searches
+                ?.sort((a, b) => {
+                  // Ordenar: principal primeiro, depois por ID decrescente
+                  if (a.is_main_property && !b.is_main_property) return -1;
+                  if (!a.is_main_property && b.is_main_property) return 1;
+                  return b.id - a.id;
+                })
+                ?.map((search, index) => {
+                  return (
                 <tr 
                   key={`${search.id}-${index}`} 
-                  className="hover:bg-gray-50 cursor-pointer transition-colors" 
+                  className={`hover:bg-gray-50 cursor-pointer transition-colors ${
+                    search.is_main_property ? 'bg-blue-100 border-2 border-blue-500' : ''
+                  }`}
                   onClick={() => handleSearchClick(search)}
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -1592,11 +1803,22 @@ const RateShopperDashboard = () => {
                         )}
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {search.property_name}
+                        <div className="flex items-center">
+                          <div className="text-sm font-medium text-gray-900">
+                            {search.property_name}
+                            {search.is_main_property && <span className="text-blue-600 font-bold"> 🏆 HOTEL PRINCIPAL 🏆</span>}
+                          </div>
+                          {search.is_main_property && (
+                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              ⭐ Principal
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-gray-500">
                           #{search.id}
+                          {search.is_main_property && (
+                            <span className="text-blue-600 ml-1">• Hotel Selecionado</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1630,8 +1852,21 @@ const RateShopperDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDateTime(search.started_at || search.created_at)}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSearch(search);
+                      }}
+                      className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+                    >
+                      <Trash className="h-3 w-3 mr-1" />
+                      Excluir
+                    </button>
+                  </td>
                 </tr>
-              ))}
+                  );
+                })}
             </tbody>
           </table>
         </div>

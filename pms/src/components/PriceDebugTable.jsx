@@ -1,11 +1,102 @@
 import React, { useState, useEffect } from 'react';
+import { useApp } from '../context/AppContext';
 import apiService from '../services/api';
 
 const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, propertyNames }) => {
+  const { selectedHotelUuid: contextHotelUuid } = useApp();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedHotelName, setSelectedHotelName] = useState(null);
 
+  // Função para buscar o nome do hotel selecionado
+  const fetchSelectedHotelName = async () => {
+    if (!contextHotelUuid) {
+      setSelectedHotelName(null);
+      return;
+    }
+
+    try {
+      const response = await apiService.getHotels();
+      const hotels = response.hotels || [];
+      const selectedHotel = hotels.find(h => 
+        (h.hotel_uuid && h.hotel_uuid === contextHotelUuid) ||
+        (h.id && h.id.toString() === contextHotelUuid)
+      );
+      
+      if (selectedHotel) {
+        const hotelName = selectedHotel.hotel_nome || selectedHotel.name;
+        setSelectedHotelName(hotelName);
+        console.log('🏨 Hotel selecionado na tabela:', hotelName);
+      } else {
+        setSelectedHotelName(null);
+        console.log('❌ Hotel não encontrado:', contextHotelUuid);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar hotel selecionado:', error);
+      setSelectedHotelName(null);
+    }
+  };
+
+  // Carregar nome do hotel selecionado quando contextHotelUuid mudar
+  useEffect(() => {
+    fetchSelectedHotelName();
+  }, [contextHotelUuid]);
+
+  // Função para verificar se um hotel é o principal (selecionado)
+  const isMainHotel = (hotelName) => {
+    if (!selectedHotelName || !hotelName) return false;
+    
+    // Comparação case-insensitive e removendo espaços extras
+    const normalizeString = (str) => str?.trim().toLowerCase();
+    return normalizeString(hotelName) === normalizeString(selectedHotelName);
+  };
+
+  // Função para obter o preço do hotel principal em uma data específica
+  const getMainHotelPrice = (date, hotelRows) => {
+    if (!selectedHotelName) return null;
+    
+    // Encontrar o hotel principal nos dados
+    const mainHotelEntry = Object.entries(hotelRows).find(([hotelName]) => 
+      isMainHotel(hotelName)
+    );
+    
+    if (!mainHotelEntry) return null;
+    
+    const [, dates] = mainHotelEntry;
+    return dates[date] || null;
+  };
+
+  // Função para determinar a cor do preço baseada na comparação com o hotel principal
+  const getPriceColor = (currentPrice, mainPrice, isMainHotel) => {
+    // Se é o hotel principal, manter verde
+    if (isMainHotel) {
+      return 'text-green-600';
+    }
+    
+    // Se não há preço do hotel principal para comparar, usar cor padrão
+    if (!mainPrice || !currentPrice) {
+      return 'text-green-600';
+    }
+    
+    // Calcular diferença percentual
+    const percentDifference = ((currentPrice - mainPrice) / mainPrice) * 100;
+    
+    // Lógica de coloração:
+    if (percentDifference < -10) {
+      // Mais de 10% mais barato = VERMELHO
+      return 'text-red-600';
+    } else if (percentDifference < 0) {
+      // Mais barato (menos de 10%) = LARANJA
+      return 'text-orange-600';
+    } else if (percentDifference > 10) {
+      // Mais de 10% mais caro = VERDE
+      return 'text-green-600';
+    } else {
+      // Mais caro (até 10%) = AZUL
+      return 'text-blue-600';
+    }
+  };
 
   const loadDebugData = async () => {
     if (!selectedHotelUuid) return;
@@ -225,13 +316,41 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {Object.entries(hotelRows).map(([hotelName, dates], rowIndex) => (
-              <tr key={hotelName} className="hover:bg-gray-50">
+            {Object.entries(hotelRows)
+              .sort(([hotelNameA], [hotelNameB]) => {
+                // Hotel selecionado sempre primeiro
+                const isASelected = isMainHotel(hotelNameA);
+                const isBSelected = isMainHotel(hotelNameB);
+                
+                if (isASelected && !isBSelected) return -1; // A vai primeiro
+                if (!isASelected && isBSelected) return 1;  // B vai primeiro
+                
+                // Se nenhum é selecionado ou ambos são, ordenar alfabeticamente
+                return hotelNameA.localeCompare(hotelNameB);
+              })
+              .map(([hotelName, dates], rowIndex) => {
+              const isSelected = isMainHotel(hotelName);
+              
+              return (
+              <tr 
+                key={hotelName} 
+                className={`hover:bg-gray-50 transition-colors ${
+                  isSelected ? 'bg-orange-50 border-l-4 border-l-orange-500' : ''
+                }`}
+              >
                 {/* Coluna A - Nome do hotel */}
-                <td className="px-4 py-3 text-sm font-medium text-gray-900 border-r border-gray-300 sticky left-0 bg-white">
+                <td className={`px-4 py-3 text-sm font-medium border-r border-gray-300 sticky left-0 ${
+                  isSelected ? 'bg-orange-50' : 'bg-white'
+                }`}>
                   <div className="max-w-56">
                     <div className="font-semibold text-blue-600">A{rowIndex + 2}</div>
-                    <div className="text-gray-900 mt-1">{hotelName}</div>
+                    <div className={`mt-1 ${
+                      isSelected 
+                        ? 'text-orange-700 font-bold' 
+                        : 'text-gray-900'
+                    }`}>
+                      {hotelName}
+                    </div>
                     <div className="text-xs text-gray-500 mt-1">
                       {Object.keys(dates).length} dias com preços
                     </div>
@@ -243,11 +362,17 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
                   const columnLetter = String.fromCharCode(66 + colIndex);
                   const cellRef = `${columnLetter}${rowIndex + 2}`;
                   
+                  // Obter preço do hotel principal para esta data
+                  const mainPrice = getMainHotelPrice(date, hotelRows);
+                  
+                  // Determinar cor do preço baseada na comparação
+                  const priceColor = price ? getPriceColor(price, mainPrice, isSelected) : 'text-gray-300';
+                  
                   return (
                     <td key={date} className="px-3 py-3 text-center border-r border-gray-300">
                       <div className="text-xs text-gray-400 mb-1">{cellRef}</div>
                       {price ? (
-                        <div className="text-sm font-bold text-green-600">
+                        <div className={`text-sm font-bold ${priceColor}`}>
                           R$ {price.toFixed(2)}
                         </div>
                       ) : (
@@ -257,7 +382,8 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
                   );
                 })}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 

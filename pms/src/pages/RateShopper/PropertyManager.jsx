@@ -27,12 +27,14 @@ const PropertyManager = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProperty, setEditingProperty] = useState(null);
+  const [hotels, setHotels] = useState([]);
   const [formData, setFormData] = useState({
     property_name: '',
     booking_url: '',
     location: '',
     category: '',
-    max_bundle_size: 7
+    max_bundle_size: 7,
+    is_main_property: false
   });
   const [errors, setErrors] = useState({});
 
@@ -58,7 +60,28 @@ const PropertyManager = () => {
 
   useEffect(() => {
     loadProperties();
+    loadHotels();
   }, [selectedHotelUuid]);
+
+  const loadHotels = async () => {
+    try {
+      const response = await apiService.getHotels();
+      const hotelsList = response.hotels || [];
+      setHotels(hotelsList);
+    } catch (error) {
+      console.error('Erro ao buscar hotéis:', error);
+      setHotels([]);
+    }
+  };
+
+  const getSelectedHotelName = () => {
+    if (!selectedHotelUuid) return null;
+    const selectedHotel = hotels.find(h => 
+      (h.hotel_uuid && h.hotel_uuid === selectedHotelUuid) ||
+      (h.id && h.id.toString() === selectedHotelUuid)
+    );
+    return selectedHotel ? (selectedHotel.hotel_nome || selectedHotel.name || 'Hotel') : null;
+  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -114,7 +137,8 @@ const PropertyManager = () => {
         booking_url: '',
         location: '',
         category: '',
-        max_bundle_size: 7
+        max_bundle_size: 7,
+        is_main_property: false
       });
       setErrors({});
     } catch (error) {
@@ -130,7 +154,8 @@ const PropertyManager = () => {
       booking_url: property.booking_url,
       location: property.location || '',
       category: property.category || '',
-      max_bundle_size: property.max_bundle_size
+      max_bundle_size: property.max_bundle_size,
+      is_main_property: false
     });
     setShowModal(true);
   };
@@ -156,6 +181,48 @@ const PropertyManager = () => {
     ));
   };
 
+  const handleToggleMainProperty = async (propertyId, isMain) => {
+    try {
+      const selectedProperty = properties.find(p => p.id === propertyId);
+      const currentMainProperty = properties.find(p => p.is_main_property);
+      const selectedHotelName = getSelectedHotelName();
+      
+      // Se estiver definindo como principal e já existe uma propriedade principal
+      if (isMain && currentMainProperty && currentMainProperty.id !== propertyId) {
+        const confirmed = window.confirm(
+          `"${currentMainProperty.property_name}" atualmente é a propriedade principal.\n\nDeseja substituí-la por "${selectedProperty?.property_name}"?`
+        );
+        if (!confirmed) return;
+      }
+      
+      // Se estiver removendo uma propriedade principal, confirmar
+      if (!isMain && selectedProperty?.is_main_property) {
+        const confirmed = window.confirm(
+          `Tem certeza que deseja remover "${selectedProperty.property_name}" como propriedade principal${selectedHotelName ? ` de ${selectedHotelName}` : ''}?`
+        );
+        if (!confirmed) return;
+      }
+      
+      // Fazer chamada para a API
+      await apiService.updateMainProperty(propertyId, isMain);
+      
+      // Recarregar propriedades para ter os dados atualizados do banco
+      await loadProperties();
+      
+      if (isMain) {
+        toast.success(`⭐ "${selectedProperty?.property_name}" definida como propriedade principal${selectedHotelName ? ` de ${selectedHotelName}` : ''}`);
+      } else {
+        toast.success(`"${selectedProperty?.property_name}" removida como propriedade principal`);
+      }
+      
+    } catch (error) {
+      console.error('Erro ao atualizar propriedade principal:', error);
+      toast.error('Erro ao atualizar propriedade principal');
+      // Recarregar propriedades para reverter mudanças
+      await loadProperties();
+    }
+  };
+
   const extractPropertyInfo = (url) => {
     try {
       const urlParts = url.split('/');
@@ -170,12 +237,22 @@ const PropertyManager = () => {
   const handleUrlChange = (url) => {
     setFormData({ ...formData, booking_url: url });
     
-    if (url && !formData.property_name) {
+    if (url && !formData.property_name && !formData.is_main_property) {
       const extractedName = extractPropertyInfo(url);
       if (extractedName) {
         setFormData(prev => ({ ...prev, property_name: extractedName }));
       }
     }
+  };
+
+  const handleMainPropertyToggle = (checked) => {
+    const selectedHotelName = getSelectedHotelName();
+    
+    setFormData(prev => ({
+      ...prev,
+      is_main_property: checked,
+      property_name: checked && selectedHotelName ? selectedHotelName : prev.property_name
+    }));
   };
 
   if (!selectedHotelUuid) {
@@ -270,11 +347,12 @@ const PropertyManager = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <div className="flex items-center">
             <div className="h-12 w-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <Globe className="h-6 w-6 text-yellow-600" />
+              <span className="text-yellow-600 text-lg">⭐</span>
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Booking.com</p>
-              <p className="text-2xl font-bold text-gray-900">{properties.filter(p => p.ota_name === 'Booking.com').length}</p>
+              <p className="text-sm font-medium text-gray-600">Principal</p>
+              <p className="text-2xl font-bold text-gray-900">{properties.filter(p => p.is_main_property).length}</p>
+              <p className="text-xs text-gray-500">Propriedade do hotel atual</p>
             </div>
           </div>
         </div>
@@ -284,6 +362,9 @@ const PropertyManager = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Propriedades Cadastradas</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Configure concorrentes para monitoramento. Use o switcher "Principal" para identificar a propriedade do hotel selecionado.
+          </p>
         </div>
         
         <div className="overflow-x-auto">
@@ -303,6 +384,9 @@ const PropertyManager = () => {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Principal
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Criado em
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -312,18 +396,30 @@ const PropertyManager = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {properties.map((property) => (
-                <tr key={property.id} className={`hover:bg-gray-50 ${!property.active ? 'opacity-60' : ''}`}>
+                <tr key={property.id} className={`hover:bg-gray-50 transition-colors ${
+                  !property.active ? 'opacity-60' : ''
+                } ${property.is_main_property ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center">
                       <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
                         <Building className="h-5 w-5 text-blue-600" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {property.property_name}
+                        <div className="flex items-center">
+                          <div className="text-sm font-medium text-gray-900">
+                            {property.property_name}
+                          </div>
+                          {property.is_main_property && (
+                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              ⭐ Principal
+                            </span>
+                          )}
                         </div>
                         <div className="text-sm text-gray-500">
                           {property.category} • {property.ota_name}
+                          {property.is_main_property && (
+                            <span className="text-blue-600 ml-1">• Hotel Selecionado</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -348,6 +444,32 @@ const PropertyManager = () => {
                     >
                       {property.active ? 'Ativa' : 'Inativa'}
                     </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMainProperty(property.id, !property.is_main_property)}
+                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          property.is_main_property ? 'bg-blue-600' : 'bg-gray-200'
+                        }`}
+                        role="switch"
+                        aria-checked={property.is_main_property}
+                        title={property.is_main_property ? 'Propriedade principal do hotel selecionado' : 'Definir como propriedade principal'}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            property.is_main_property ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                      {property.is_main_property && (
+                        <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Principal
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {property.created_at ? new Date(property.created_at).toLocaleDateString('pt-BR') : '-'}
@@ -414,7 +536,8 @@ const PropertyManager = () => {
                       booking_url: '',
                       location: '',
                       category: '',
-                      max_bundle_size: 7
+                      max_bundle_size: 7,
+                      is_main_property: false
                     });
                     setErrors({});
                   }}
@@ -445,6 +568,36 @@ const PropertyManager = () => {
                   )}
                 </div>
 
+                {/* Switcher para Propriedade Principal */}
+                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-blue-900 mb-1">
+                      Propriedade Principal
+                    </label>
+                    <p className="text-xs text-blue-700">
+                      Marque se esta é a propriedade do hotel selecionado ({getSelectedHotelName() || 'hotel atual'})
+                    </p>
+                  </div>
+                  <div className="ml-4">
+                    <button
+                      type="button"
+                      onClick={() => handleMainPropertyToggle(!formData.is_main_property)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        formData.is_main_property ? 'bg-blue-600' : 'bg-gray-200'
+                      }`}
+                      role="switch"
+                      aria-checked={formData.is_main_property}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          formData.is_main_property ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Nome da Propriedade *
@@ -452,14 +605,18 @@ const PropertyManager = () => {
                   <input
                     type="text"
                     value={formData.property_name}
-                    onChange={(e) => setFormData({ ...formData, property_name: e.target.value })}
+                    onChange={(e) => !formData.is_main_property && setFormData({ ...formData, property_name: e.target.value })}
+                    disabled={formData.is_main_property}
                     className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       errors.property_name ? 'border-red-300' : 'border-gray-300'
-                    }`}
-                    placeholder="Nome do hotel/pousada"
+                    } ${formData.is_main_property ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : ''}`}
+                    placeholder={formData.is_main_property ? "Preenchido automaticamente com o nome do hotel" : "Nome do hotel/pousada"}
                   />
                   {errors.property_name && (
                     <p className="mt-1 text-sm text-red-600">{errors.property_name}</p>
+                  )}
+                  {formData.is_main_property && !getSelectedHotelName() && (
+                    <p className="mt-1 text-sm text-amber-600">⚠️ Aguardando carregamento do nome do hotel selecionado</p>
                   )}
                 </div>
 
@@ -528,7 +685,8 @@ const PropertyManager = () => {
                       booking_url: '',
                       location: '',
                       category: '',
-                      max_bundle_size: 7
+                      max_bundle_size: 7,
+                      is_main_property: false
                     });
                     setErrors({});
                   }}

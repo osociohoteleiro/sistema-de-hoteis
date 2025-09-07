@@ -13,6 +13,7 @@ class RateShopperProperty {
     this.category = data.category;
     this.max_bundle_size = data.max_bundle_size || 7;
     this.active = data.active !== undefined ? data.active : true;
+    this.is_main_property = data.is_main_property !== undefined ? data.is_main_property : false;
     this.created_at = data.created_at;
     this.updated_at = data.updated_at;
   }
@@ -87,11 +88,11 @@ class RateShopperProperty {
       const result = await db.query(`
         UPDATE rate_shopper_properties SET 
         property_name = $1, booking_url = $2, competitor_type = $3, ota_name = $4,
-        location = $5, category = $6, max_bundle_size = $7, active = $8
-        WHERE id = $9
+        location = $5, category = $6, max_bundle_size = $7, active = $8, is_main_property = $9
+        WHERE id = $10
       `, [
         this.property_name, this.booking_url, this.competitor_type, this.ota_name,
-        this.location, this.category, this.max_bundle_size, this.active, this.id
+        this.location, this.category, this.max_bundle_size, this.active, this.is_main_property, this.id
       ]);
       return result;
     } else {
@@ -99,12 +100,12 @@ class RateShopperProperty {
       const result = await db.query(`
         INSERT INTO rate_shopper_properties (
           hotel_id, property_name, booking_url, competitor_type, ota_name,
-          location, category, max_bundle_size, active
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          location, category, max_bundle_size, active, is_main_property
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id, uuid
       `, [
         this.hotel_id, this.property_name, this.booking_url, this.competitor_type,
-        this.ota_name, this.location, this.category, this.max_bundle_size, this.active
+        this.ota_name, this.location, this.category, this.max_bundle_size, this.active, this.is_main_property
       ]);
       
       if (result && result.length > 0) {
@@ -269,6 +270,7 @@ class RateShopperProperty {
       category: this.category,
       max_bundle_size: this.max_bundle_size,
       active: this.active,
+      is_main_property: this.is_main_property,
       created_at: this.created_at,
       updated_at: this.updated_at
     };

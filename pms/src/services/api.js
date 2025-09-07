@@ -216,6 +216,13 @@ class ApiService {
     });
   }
 
+  async updateMainProperty(propertyId, isMain) {
+    return await this.request(`/rate-shopper/properties/${propertyId}/main-property`, {
+      method: 'PUT',
+      body: JSON.stringify({ is_main_property: isMain }),
+    });
+  }
+
   // Health check
   async healthCheck() {
     return await this.request('/health');

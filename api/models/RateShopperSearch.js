@@ -33,7 +33,7 @@ class RateShopperSearch {
 
   static async findByHotel(hotelId, filters = {}) {
     let query = `
-      SELECT rs.*, rsp.property_name
+      SELECT rs.*, rsp.property_name, rsp.is_main_property
       FROM rate_shopper_searches rs
       LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       WHERE rs.hotel_id = $1
@@ -70,6 +70,7 @@ class RateShopperSearch {
     return result.map(row => {
       const search = new RateShopperSearch(row);
       search.property_name = row.property_name;
+      search.is_main_property = row.is_main_property;
       return search;
     });
   }
