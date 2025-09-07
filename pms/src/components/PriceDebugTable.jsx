@@ -385,6 +385,54 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
               );
             })}
           </tbody>
+          <tfoot className="bg-blue-50 border-t-2 border-blue-200">
+            <tr className="border-t-2 border-blue-300">
+              {/* Coluna A - Título da linha de média */}
+              <td className="px-4 py-3 text-sm font-bold border-r border-gray-300 bg-blue-100 sticky left-0">
+                <div className="max-w-56">
+                  <div className="font-semibold text-blue-600">MÉDIA</div>
+                  <div className="text-blue-700 font-bold">
+                    Concorrentes
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">
+                    Média diária dos concorrentes (excl. hotel principal)
+                  </div>
+                </div>
+              </td>
+              {/* Colunas B, C, D, E... - Média dos concorrentes por dia */}
+              {sortedDates.map((date, colIndex) => {
+                const columnLetter = String.fromCharCode(66 + colIndex);
+                
+                // Calcular média dos concorrentes para esta data (excluindo hotel principal)
+                const competitorPrices = Object.entries(hotelRows)
+                  .filter(([hotelName]) => !isMainHotel(hotelName)) // Excluir hotel principal
+                  .map(([, dates]) => dates[date])
+                  .filter(price => price !== null && price !== undefined && typeof price === 'number' && price > 0);
+                
+                const averagePrice = competitorPrices.length > 0 
+                  ? competitorPrices.reduce((sum, price) => sum + price, 0) / competitorPrices.length
+                  : null;
+                
+                return (
+                  <td key={date} className="px-3 py-3 text-center border-r border-gray-300 bg-blue-50">
+                    <div className="text-xs text-blue-400 mb-1">{columnLetter}</div>
+                    {averagePrice ? (
+                      <div className="text-sm font-bold text-blue-700">
+                        R$ {averagePrice.toFixed(2)}
+                      </div>
+                    ) : (
+                      <div className="text-blue-300 text-xs">-</div>
+                    )}
+                    {competitorPrices.length > 0 && (
+                      <div className="text-xs text-blue-500 mt-1">
+                        ({competitorPrices.length} hotéi{competitorPrices.length !== 1 ? 's' : 's'})
+                      </div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          </tfoot>
         </table>
 
         {Object.keys(hotelRows).length === 0 && (

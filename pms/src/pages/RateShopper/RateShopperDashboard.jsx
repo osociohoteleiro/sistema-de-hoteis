@@ -124,14 +124,11 @@ const RateShopperDashboard = () => {
   const { selectedHotelUuid } = useApp();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedProperty, setSelectedProperty] = useState('all');
-  const [dateRange, setDateRange] = useState('30d');
   const [showNewSearchModal, setShowNewSearchModal] = useState(false);
   const [submittingSearch, setSubmittingSearch] = useState(false);
   const [notification, setNotification] = useState(null);
   const [searchesPolling, setSearchesPolling] = useState(false);
   const [extractionStatuses, setExtractionStatuses] = useState({});
-  const [debugModal, setDebugModal] = useState({ isOpen: false, content: '', title: '' });
   
   // Estados compartilhados para sincronizar gráfico e tabela (usar mesmos padrões do gráfico)
   const [chartStartDate, setChartStartDate] = useState(() => {
@@ -459,7 +456,7 @@ const RateShopperDashboard = () => {
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedProperty, dateRange, selectedHotelUuid]);
+  }, [selectedHotelUuid]);
 
   // Polling seletivo apenas para buscas (quando necessário)
   const startSearchesPolling = () => {
@@ -520,7 +517,7 @@ const RateShopperDashboard = () => {
   }, [notification]);
 
   const loadDashboardData = async () => {
-    console.log('🔄 loadDashboardData called with:', { selectedHotelUuid, selectedProperty, dateRange });
+    console.log('🔄 loadDashboardData called with:', { selectedHotelUuid });
     
     if (!selectedHotelUuid) {
       console.warn('❌ No hotel selected');
@@ -532,18 +529,8 @@ const RateShopperDashboard = () => {
       setLoading(true);
       
       console.log('📡 Making dashboard API call to:', `/api/rate-shopper/${selectedHotelUuid}/dashboard`);
-      console.log('📊 API params:', {
-        property_id: selectedProperty === 'all' ? undefined : selectedProperty,
-        days: dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 90
-      });
       
-      // Usar apiService em vez de axios direto
-      const queryString = new URLSearchParams({
-        property_id: selectedProperty === 'all' ? undefined : selectedProperty,
-        days: dateRange === '30d' ? 30 : dateRange === '7d' ? 7 : 90
-      }).toString();
-      
-      const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/dashboard?${queryString}`);
+      const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/dashboard`);
       
       console.log('📈 API response:', response);
       
@@ -1019,34 +1006,6 @@ const RateShopperDashboard = () => {
     }
   };
 
-  const cleanFailedSearches = async () => {
-    try {
-      const hotelId = 2; // Temporário - usando hotel existente (Pousada Bugaendrus)
-      
-      const response = await axios.delete(`/api/rate-shopper/${hotelId}/searches/failed`);
-      
-      if (response.data.success) {
-        // Mostrar notificação de sucesso
-        setNotification({
-          type: 'success',
-          title: 'Limpeza Concluída!',
-          message: `${response.data.deletedCount} busca(s) mal sucedida(s) foram excluídas.`
-        });
-        
-        // Recarregar os dados do dashboard
-        loadDashboardData();
-      }
-    } catch (error) {
-      console.error('Error cleaning failed searches:', error);
-      
-      // Mostrar notificação de erro
-      setNotification({
-        type: 'error',
-        title: 'Erro ao Limpar Buscas',
-        message: error.response?.data?.error || 'Ocorreu um erro ao excluir as buscas mal sucedidas. Tente novamente.'
-      });
-    }
-  };
 
   const handleSearchClick = (search) => {
     setSelectedSearch(search);
@@ -1082,66 +1041,9 @@ const RateShopperDashboard = () => {
 
   const { summary, recent_searches, properties, price_trends } = dashboardData;
 
-  // Modal de Debug
-  const DebugModal = () => {
-    if (!debugModal.isOpen) return null;
-    
-    return (
-      <div className="fixed inset-0 z-50 overflow-y-auto">
-        <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-          <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-            <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={() => setDebugModal({ isOpen: false, content: '', title: '' })}></div>
-          </div>
-          
-          <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-              <div className="flex items-start">
-                <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                    {debugModal.title}
-                  </h3>
-                  <div className="mt-2">
-                    <textarea
-                      className="w-full h-96 p-3 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50"
-                      value={debugModal.content}
-                      readOnly
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-              <button
-                type="button"
-                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
-                onClick={() => {
-                  navigator.clipboard.writeText(debugModal.content);
-                  setNotification({
-                    type: 'success',
-                    title: 'Copiado!',
-                    message: 'Conteúdo copiado para a área de transferência'
-                  });
-                }}
-              >
-                📋 Copiar
-              </button>
-              <button
-                type="button"
-                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                onClick={() => setDebugModal({ isOpen: false, content: '', title: '' })}
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <>
-      <DebugModal />
       
       {/* Notificação */}
       {notification && (
@@ -1188,159 +1090,13 @@ const RateShopperDashboard = () => {
             </p>
           </div>
           
-          <div className="flex gap-4">
-            <select 
-              value={selectedProperty} 
-              onChange={(e) => setSelectedProperty(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">Todas as propriedades</option>
-              {properties?.map((prop, index) => (
-                <option key={`${prop.id}-${index}`} value={prop.id}>{prop.property_name}</option>
-              ))}
-            </select>
-            
-            <select 
-              value={dateRange} 
-              onChange={(e) => setDateRange(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="7d">Últimos 7 dias</option>
-              <option value="30d">Últimos 30 dias</option>
-              <option value="90d">Últimos 90 dias</option>
-            </select>
-
-            <button
-              onClick={cleanFailedSearches}
-              className="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-50"
-              title="Excluir buscas mal sucedidas"
-            >
-              <X className="h-4 w-4 mr-2" />
-              Limpar Falhas
-            </button>
-
-            <button
-              onClick={async () => {
-                try {
-                  const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/debug-properties`);
-                  if (response.success) {
-                    const data = response.data;
-                    
-                    let debugInfo = `🔍 DEBUG DO BANCO DE DADOS\n\n`;
-                    debugInfo += `📊 RESUMO:\n`;
-                    debugInfo += `• Total de propriedades: ${data.properties_count}\n`;
-                    debugInfo += `• Propriedades principais: ${data.main_properties.length}\n`;
-                    debugInfo += `• Total de buscas: ${data.searches_count}\n\n`;
-                    
-                    debugInfo += `🏨 PROPRIEDADES PRINCIPAIS:\n`;
-                    data.main_properties.forEach(prop => {
-                      debugInfo += `• ID: ${prop.id} - Nome: ${prop.property_name}\n`;
-                    });
-                    
-                    debugInfo += `\n🌿 ECO ENCANTO:\n`;
-                    if (data.eco_encanto_property) {
-                      debugInfo += `• ID: ${data.eco_encanto_property.id}\n`;
-                      debugInfo += `• Nome: ${data.eco_encanto_property.property_name}\n`;
-                      debugInfo += `• É principal: ${data.eco_encanto_property.is_main_property ? 'SIM ✅' : 'NÃO ❌'}\n`;
-                    } else {
-                      debugInfo += `• Não encontrada no banco ❌\n`;
-                    }
-                    
-                    debugInfo += `\n🔍 BUSCAS DA ECO ENCANTO (${data.eco_encanto_searches.length}):\n`;
-                    data.eco_encanto_searches.slice(0, 5).forEach(search => {
-                      debugInfo += `• Busca #${search.search_id} - Principal: ${search.is_main_property ? 'SIM ✅' : 'NÃO ❌'}\n`;
-                    });
-                    
-                    if (data.eco_encanto_searches.length > 5) {
-                      debugInfo += `• ... e mais ${data.eco_encanto_searches.length - 5} buscas\n`;
-                    }
-                    
-                    // JSON completo para debug técnico
-                    debugInfo += `\n\n📋 JSON COMPLETO (para debug técnico):\n`;
-                    debugInfo += JSON.stringify(data, null, 2);
-                    
-                    setDebugModal({
-                      isOpen: true,
-                      title: '🔍 Debug do Banco de Dados',
-                      content: debugInfo
-                    });
-                  }
-                } catch (error) {
-                  setDebugModal({
-                    isOpen: true,
-                    title: '❌ Erro no Debug',
-                    content: `Erro ao executar debug: ${error.message}`
-                  });
-                }
-              }}
-              className="inline-flex items-center px-4 py-2 border border-yellow-300 rounded-lg text-sm font-medium text-yellow-700 bg-white hover:bg-yellow-50"
-              title="Debug: Verificar propriedades no banco"
-            >
-              🔍 Debug DB
-            </button>
-
-            <button
-              onClick={async () => {
-                try {
-                  const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/test-main-property-join`);
-                  
-                  if (response.success) {
-                    const data = response.data;
-                    let testInfo = `🔍 TESTE DO JOIN CORRETO\n\n`;
-                    testInfo += `📊 RESULTADO:\n`;
-                    testInfo += `• Total de buscas: ${data.searches_count}\n`;
-                    testInfo += `• Buscas principais: ${data.main_property_searches.length}\n\n`;
-                    
-                    testInfo += `✅ EXPLICAÇÃO:\n${data.explanation}\n\n`;
-                    
-                    testInfo += `🔍 BUSCAS COM JOIN:\n`;
-                    data.searches.forEach(search => {
-                      testInfo += `• Busca #${search.id} - ${search.property_name} - Principal: ${search.is_main_display}\n`;
-                    });
-                    
-                    // JSON completo para debug técnico
-                    testInfo += `\n\n📋 JSON COMPLETO (para debug técnico):\n`;
-                    testInfo += JSON.stringify(data, null, 2);
-                    
-                    setDebugModal({
-                      isOpen: true,
-                      title: '🧪 Teste do JOIN de Propriedades',
-                      content: testInfo
-                    });
-                    
-                    if (data.main_property_searches.length > 0) {
-                      setTimeout(() => {
-                        setNotification({
-                          type: 'success',
-                          title: 'JOIN Funcionando!',
-                          message: 'Recarregando dados para aplicar destaque na tabela...'
-                        });
-                        loadDashboardData();
-                      }, 2000);
-                    }
-                  }
-                } catch (error) {
-                  setDebugModal({
-                    isOpen: true,
-                    title: '❌ Erro no Teste JOIN',
-                    content: `Erro no teste: ${error.message}`
-                  });
-                }
-              }}
-              className="inline-flex items-center px-4 py-2 border border-green-300 rounded-lg text-sm font-medium text-green-700 bg-white hover:bg-green-50"
-              title="Testar JOIN das propriedades principais"
-            >
-              🧪 Test JOIN
-            </button>
-
-            <Link
-              to="/rate-shopper/properties"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Gerenciar Propriedades
-            </Link>
-          </div>
+          <Link
+            to="/rate-shopper/properties"
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Gerenciar Propriedades
+          </Link>
         </div>
       </div>
 

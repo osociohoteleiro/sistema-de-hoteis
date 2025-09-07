@@ -529,7 +529,7 @@ const ChartJsPriceChart = ({
             <div>
               <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                 <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
-                Tendência de Preços (Chart.js)
+                Tendência de Preços
               </h3>
               <p className="text-sm text-gray-600 mt-1">Análise temporal com controles avançados</p>
             </div>
@@ -580,7 +580,7 @@ const ChartJsPriceChart = ({
           <div>
             <h3 className="text-lg font-semibold text-gray-900 flex items-center">
               <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
-              Tendência de Preços (Chart.js)
+              Tendência de Preços
             </h3>
             <p className="text-sm text-gray-600 mt-1 flex items-center">
               <Calendar className="h-4 w-4 mr-1" />
