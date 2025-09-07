@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import apiService from '../services/api';
+import PriceHistoryTooltip from './PriceHistoryTooltip';
 
 const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, propertyNames }) => {
   const { selectedHotelUuid: contextHotelUuid } = useApp();
@@ -8,6 +9,7 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedHotelName, setSelectedHotelName] = useState(null);
+  const [priceHistory, setPriceHistory] = useState(null);
 
   // Função para buscar o nome do hotel selecionado
   const fetchSelectedHotelName = async () => {
@@ -38,10 +40,43 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
     }
   };
 
+  // Função para buscar histórico de preços
+  const fetchPriceHistory = async () => {
+    if (!selectedHotelUuid) return;
+
+    try {
+      console.log('🔍 Buscando histórico de preços:', { selectedHotelUuid, startDate, endDate });
+      
+      const params = {};
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+
+      const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/price-history`, {
+        params: params
+      });
+
+      if (response.success) {
+        console.log('📈 Histórico de preços carregado:', response.data);
+        setPriceHistory(response.data);
+      } else {
+        console.warn('⚠️ Falha ao carregar histórico de preços');
+        setPriceHistory(null);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao buscar histórico de preços:', error);
+      setPriceHistory(null);
+    }
+  };
+
   // Carregar nome do hotel selecionado quando contextHotelUuid mudar
   useEffect(() => {
     fetchSelectedHotelName();
   }, [contextHotelUuid]);
+
+  // Carregar histórico de preços quando parâmetros mudarem
+  useEffect(() => {
+    fetchPriceHistory();
+  }, [selectedHotelUuid, startDate, endDate]);
 
   // Função para verificar se um hotel é o principal (selecionado)
   const isMainHotel = (hotelName) => {
@@ -96,6 +131,67 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
       // Mais caro (até 10%) = AZUL
       return 'text-blue-600';
     }
+  };
+
+  // Função para obter indicador de tendência de preço para uma propriedade e data específica
+  const getPriceTrend = (propertyName, date) => {
+    console.log('🔍 getPriceTrend called:', { propertyName, date });
+    console.log('🔍 priceHistory available:', !!priceHistory);
+    console.log('🔍 priceHistory data:', priceHistory);
+    
+    if (!priceHistory || !priceHistory.price_history) {
+      console.log('🔍 No price history available');
+      return { indicator: '', color: '', hasChange: false };
+    }
+
+    // Normalizar formato de data para comparação (converter ISO date para YYYY-MM-DD)
+    const normalizeDate = (dateStr) => {
+      if (!dateStr) return '';
+      return dateStr.split('T')[0]; // Remove a parte de tempo da data ISO
+    };
+
+    // Buscar entradas do histórico para esta propriedade e data
+    const historyEntry = priceHistory.price_history.find(entry => {
+      const entryDate = normalizeDate(entry.check_in_date);
+      const targetDate = normalizeDate(date);
+      console.log('🔍 Comparing dates:', { entryDate, targetDate, entryProperty: entry.property_name, targetProperty: propertyName });
+      return entry.property_name === propertyName && entryDate === targetDate;
+    });
+
+    console.log('🔍 Found history entry:', historyEntry);
+
+    if (!historyEntry) {
+      console.log('🔍 No history entry found for:', { propertyName, date });
+      return { indicator: '', color: '', hasChange: false };
+    }
+
+    console.log('🔍 Returning trend:', {
+      indicator: historyEntry.trend_indicator,
+      color: historyEntry.trend_color,
+      hasChange: true
+    });
+
+    return {
+      indicator: historyEntry.trend_indicator || '',
+      color: historyEntry.trend_color || 'text-gray-500',
+      hasChange: true
+    };
+  };
+
+  // Função auxiliar para encontrar property_id pelo nome
+  const getPropertyIdByName = (propertyName) => {
+    if (!priceHistory?.price_history) {
+      console.log('🔍 getPropertyIdByName: No price history data available');
+      return null;
+    }
+    const entry = priceHistory.price_history.find(entry => entry.property_name === propertyName);
+    console.log('🔍 getPropertyIdByName:', { 
+      propertyName, 
+      availableProperties: priceHistory.price_history.map(p => p.property_name),
+      foundEntry: entry, 
+      propertyId: entry?.property_id 
+    });
+    return entry?.property_id || null;
   };
 
   const loadDebugData = async () => {
@@ -292,6 +388,7 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-2">
+      
       {/* Tabela formato Excel: Hotel na coluna A, datas nas colunas B, C, D... */}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
@@ -368,12 +465,31 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
                   // Determinar cor do preço baseada na comparação
                   const priceColor = price ? getPriceColor(price, mainPrice, isSelected) : 'text-gray-300';
                   
+                  // Obter indicador de tendência
+                  const priceTrend = getPriceTrend(hotelName, date);
+                  
                   return (
                     <td key={date} className="px-3 py-3 text-center border-r border-gray-300">
                       <div className="text-xs text-gray-400 mb-1">{cellRef}</div>
                       {price ? (
-                        <div className={`text-sm font-bold ${priceColor}`}>
-                          R$ {price.toFixed(2)}
+                        <div className="flex flex-col items-center">
+                          <div className={`text-sm font-bold ${priceColor} flex items-center gap-1`}>
+                            <span>R$ {price.toFixed(2)}</span>
+                            {priceTrend.hasChange && (
+                              <PriceHistoryTooltip
+                                propertyName={hotelName}
+                                propertyId={getPropertyIdByName(hotelName)}
+                                date={date}
+                                hotelUuid={selectedHotelUuid}
+                              >
+                                <span 
+                                  className={`text-xs font-bold ${priceTrend.color} cursor-help ml-1`}
+                                >
+                                  {priceTrend.indicator}
+                                </span>
+                              </PriceHistoryTooltip>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-gray-300 text-xs">-</div>

@@ -560,6 +560,208 @@ router.get('/:hotel_id/debug-prices', async (req, res) => {
   }
 });
 
+// GET /api/rate-shopper/:hotel_id/price-history
+router.get('/:hotel_id/price-history', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    const { start_date, end_date, property_id } = req.query;
+    
+    console.log('🔍 API price-history: Parâmetros recebidos:', { hotel_id, start_date, end_date, property_id });
+    
+    // Verificar se hotel_id é UUID e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
+    // Query para buscar preços com comparação direta da tabela rate_shopper_prices
+    let query = `
+      WITH price_comparisons AS (
+        SELECT 
+          rsp1.property_id,
+          rsp1.check_in_date,
+          rsp1.price as current_price,
+          rsp1.scraped_at as current_scraped_at,
+          rsp1.hotel_id,
+          p.property_name,
+          rsp2.price as previous_price,
+          rsp2.scraped_at as previous_scraped_at,
+          CASE 
+            WHEN rsp2.price IS NULL THEN 'NEW'
+            WHEN rsp1.price > rsp2.price AND ((rsp1.price - rsp2.price) / rsp2.price * 100) > 1 THEN 'UP'
+            WHEN rsp1.price < rsp2.price AND ((rsp2.price - rsp1.price) / rsp2.price * 100) > 1 THEN 'DOWN'
+            ELSE 'STABLE'
+          END as change_type,
+          CASE 
+            WHEN rsp2.price IS NULL THEN 0
+            ELSE rsp1.price - rsp2.price
+          END as price_change,
+          CASE 
+            WHEN rsp2.price IS NULL OR rsp2.price = 0 THEN 0
+            ELSE ROUND(((rsp1.price - rsp2.price) / rsp2.price * 100)::numeric, 2)
+          END as change_percentage
+        FROM rate_shopper_prices rsp1
+        JOIN rate_shopper_properties p ON rsp1.property_id = p.id
+        LEFT JOIN rate_shopper_prices rsp2 ON (
+          rsp1.property_id = rsp2.property_id 
+          AND rsp1.check_in_date = rsp2.check_in_date
+          AND rsp1.hotel_id = rsp2.hotel_id
+          AND rsp2.scraped_at < rsp1.scraped_at
+          AND rsp2.scraped_at = (
+            SELECT MAX(scraped_at) 
+            FROM rate_shopper_prices rsp3 
+            WHERE rsp3.property_id = rsp1.property_id 
+              AND rsp3.check_in_date = rsp1.check_in_date
+              AND rsp3.hotel_id = rsp1.hotel_id
+              AND rsp3.scraped_at < rsp1.scraped_at
+          )
+        )
+        WHERE rsp1.hotel_id = $1
+      )
+      SELECT 
+        *,
+        CASE 
+          WHEN change_type = 'UP' THEN '▲'
+          WHEN change_type = 'DOWN' THEN '▼'
+          WHEN change_type = 'STABLE' THEN '●'
+          ELSE '◆'
+        END as trend_indicator,
+        CASE 
+          WHEN change_type = 'UP' THEN 'text-green-600'
+          WHEN change_type = 'DOWN' THEN 'text-red-600'
+          WHEN change_type = 'STABLE' THEN 'text-gray-500'
+          ELSE 'text-blue-600'
+        END as trend_color
+      FROM price_comparisons
+      WHERE change_type IN ('UP', 'DOWN')
+    `;
+    
+    const queryParams = [hotelId];
+    
+    // Filtros opcionais
+    if (property_id) {
+      query += ` AND property_id = $${queryParams.length + 1}`;
+      queryParams.push(parseInt(property_id));
+    }
+    
+    if (start_date) {
+      query += ` AND check_in_date >= $${queryParams.length + 1}`;
+      queryParams.push(start_date);
+    }
+    
+    if (end_date) {
+      query += ` AND check_in_date <= $${queryParams.length + 1}`;
+      queryParams.push(end_date);
+    }
+    
+    query += ` ORDER BY current_scraped_at DESC, property_id, check_in_date LIMIT 500`;
+    
+    console.log('📊 API price-history: Query final:', query, queryParams);
+
+    // Buscar comparações de preços
+    const priceHistory = await db.query(query, queryParams);
+    
+    console.log('📈 API price-history: Encontrado', priceHistory.length, 'registros de mudanças de preço');
+
+    res.json({
+      success: true,
+      data: {
+        price_history: priceHistory,
+        total_records: priceHistory.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Price history error:', error);
+    res.status(500).json({ error: 'Failed to get price history: ' + error.message });
+  }
+});
+
+// GET /api/rate-shopper/:hotel_id/property-history/:property_id
+router.get('/:hotel_id/property-history/:property_id', async (req, res) => {
+  try {
+    const { hotel_id, property_id } = req.params;
+    const { date } = req.query;
+    
+    console.log('🔍 API property-history:', { hotel_id, property_id, date, dateType: typeof date });
+    
+    if (!date) {
+      return res.status(400).json({ error: 'Date parameter is required' });
+    }
+
+    // Verificar se hotel_id é UUID e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
+    // Buscar todos os preços da propriedade nesta data, ordenados por scraped_at
+    const query = `
+      SELECT 
+        rsp.price,
+        rsp.scraped_at,
+        rsp.room_type,
+        p.property_name,
+        rsp.check_in_date
+      FROM rate_shopper_prices rsp
+      JOIN rate_shopper_properties p ON rsp.property_id = p.id
+      WHERE rsp.hotel_id = $1 
+        AND rsp.property_id = $2 
+        AND rsp.check_in_date::date = $3::date
+      ORDER BY rsp.scraped_at ASC
+    `;
+
+    const priceHistory = await db.query(query, [hotelId, parseInt(property_id), date]);
+    
+    // Calcular variações
+    const historyWithChanges = priceHistory.map((entry, index) => {
+      let change = null;
+      let changePercent = null;
+      
+      if (index > 0) {
+        const previousPrice = parseFloat(priceHistory[index - 1].price);
+        const currentPrice = parseFloat(entry.price);
+        change = currentPrice - previousPrice;
+        changePercent = (change / previousPrice) * 100;
+      }
+
+      return {
+        ...entry,
+        price: parseFloat(entry.price),
+        scraped_at: entry.scraped_at,
+        change: change ? parseFloat(change.toFixed(2)) : null,
+        change_percent: changePercent ? parseFloat(changePercent.toFixed(2)) : null
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        property_name: priceHistory[0]?.property_name || 'Unknown',
+        date: date,
+        history: historyWithChanges,
+        total_extractions: priceHistory.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Property history error:', error);
+    res.status(500).json({ error: 'Failed to get property history: ' + error.message });
+  }
+});
+
 // ============================================
 // PROPERTIES MANAGEMENT
 // ============================================

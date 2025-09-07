@@ -28,13 +28,33 @@ class ApiService {
   }
 
   async request(endpoint, options = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
+    let url = `${API_BASE_URL}${endpoint}`;
+    
+    // Handle query parameters
+    if (options.params) {
+      const searchParams = new URLSearchParams();
+      Object.keys(options.params).forEach(key => {
+        if (options.params[key] != null) {
+          searchParams.append(key, options.params[key]);
+        }
+      });
+      
+      if (searchParams.toString()) {
+        url += (endpoint.includes('?') ? '&' : '?') + searchParams.toString();
+      }
+      
+      // Remove params from options to avoid passing to fetch
+      const { params, ...configOptions } = options;
+      options = configOptions;
+    }
+    
     const config = {
       headers: this.getHeaders(),
       ...options,
     };
 
     try {
+      console.log('🔍 API Service making request:', { url, config });
       const response = await fetch(url, config);
       const data = await response.json();
 
