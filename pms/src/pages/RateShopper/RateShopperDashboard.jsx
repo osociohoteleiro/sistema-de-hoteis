@@ -130,6 +130,9 @@ const RateShopperDashboard = () => {
   const [searchesPolling, setSearchesPolling] = useState(false);
   const [extractionStatuses, setExtractionStatuses] = useState({});
   
+  // Estado para controlar aba ativa
+  const [activeTab, setActiveTab] = useState('analytics');
+  
   // Estados compartilhados para sincronizar gráfico e tabela (usar mesmos padrões do gráfico)
   const [chartStartDate, setChartStartDate] = useState(() => {
     const today = startOfDay(new Date());
@@ -1162,57 +1165,88 @@ const RateShopperDashboard = () => {
         </div>
       </div>
 
+      {/* Sistema de Abas */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`py-4 px-6 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'analytics'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              📊 Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab('extractions')}
+              className={`py-4 px-6 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'extractions'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              🔄 Extrações
+            </button>
+          </nav>
+        </div>
 
-      {/* Chart.js Price Trends Chart */}
-      <div className="mb-8">
-        <ChartJsPriceChart 
-          selectedHotelUuid={selectedHotelUuid}
-          externalStartDate={chartStartDate}
-          externalPeriodDays={chartPeriodDays}
-          onStartDateChange={handleStartDateChange}
-          onPeriodDaysChange={handlePeriodDaysChange}
-          onDataChange={handleDataChange}
-        />
-      </div>
-
-      {/* Debug: Tabela de Preços Salvos */}
-      <div className="mb-8">
-        {tableDateRange.startDateStr && tableDateRange.endDateStr ? (
-          <>
-            {console.log('🎯 Dashboard: Renderizando tabela com datas:', tableDateRange)}
-            <PriceDebugTable 
-              selectedHotelUuid={selectedHotelUuid}
-              startDate={tableDateRange.startDateStr}
-              endDate={tableDateRange.endDateStr}
-              chartData={sharedChartData}
-              propertyNames={sharedPropertyNames}
-            />
-          </>
-        ) : (
-          <>
-            {console.log('⏳ Dashboard: Aguardando datas para tabela:', { chartStartDate, chartPeriodDays, tableDateRange })}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-2 p-6">
-              <p className="text-gray-600">Aguardando sincronização com o gráfico...</p>
+        {/* Conteúdo da Aba Analytics */}
+        {activeTab === 'analytics' && (
+          <div className="p-6">
+            {/* Chart.js Price Trends Chart */}
+            <div className="mb-8">
+              <ChartJsPriceChart 
+                selectedHotelUuid={selectedHotelUuid}
+                externalStartDate={chartStartDate}
+                externalPeriodDays={chartPeriodDays}
+                onStartDateChange={handleStartDateChange}
+                onPeriodDaysChange={handlePeriodDaysChange}
+                onDataChange={handleDataChange}
+              />
             </div>
-          </>
+
+            {/* Tabela de Preços Salvos */}
+            <div className="mb-8">
+              {tableDateRange.startDateStr && tableDateRange.endDateStr ? (
+                <>
+                  {console.log('🎯 Dashboard: Renderizando tabela com datas:', tableDateRange)}
+                  <PriceDebugTable 
+                    selectedHotelUuid={selectedHotelUuid}
+                    startDate={tableDateRange.startDateStr}
+                    endDate={tableDateRange.endDateStr}
+                    chartData={sharedChartData}
+                    propertyNames={sharedPropertyNames}
+                  />
+                </>
+              ) : (
+                <>
+                  {console.log('⏳ Dashboard: Aguardando datas para tabela:', { chartStartDate, chartPeriodDays, tableDateRange })}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-2 p-6">
+                    <p className="text-gray-600">Aguardando sincronização com o gráfico...</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         )}
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-8 mb-8">
-
-
-        {/* Recent Searches */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Extrações em Andamento</h3>
-                <p className="text-sm text-gray-600">
-                  Buscas ativas e concluídas recentemente (até 1 hora)
-                </p>
-              </div>
-              <div className="text-right flex flex-col items-end space-y-2">
-                <button
+        {/* Conteúdo da Aba Extrações */}
+        {activeTab === 'extractions' && (
+          <div className="p-6 space-y-8">
+            {/* Recent Searches */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Extrações em Andamento</h3>
+                    <p className="text-sm text-gray-600">
+                      Buscas ativas e concluídas recentemente (até 1 hora)
+                    </p>
+                  </div>
+                  <div className="text-right flex flex-col items-end space-y-2">
+                    <button
                   onClick={handleLazyMode}
                   disabled={!dashboardData?.recent_searches?.some(search => search.status === 'PENDING')}
                   className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1467,41 +1501,40 @@ const RateShopperDashboard = () => {
               </div>
             )}
           </div>
-        </div>
-      </div>
+            </div>
 
-      {/* Properties Overview */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Histórico Completo</h3>
-              <p className="text-sm text-gray-600">Todas as extrações realizadas - clique para ver os preços</p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => loadDashboardData()}
-                disabled={loading}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
-              >
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Atualizar
-              </button>
+            {/* Properties Overview - Histórico Completo */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Histórico Completo</h3>
+                    <p className="text-sm text-gray-600">Todas as extrações realizadas - clique para ver os preços</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => loadDashboardData()}
+                      disabled={loading}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                      Atualizar
+                    </button>
+                    
+                    <button 
+                      onClick={() => setShowNewSearchModal(true)}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                      disabled={submittingSearch}
+                    >
+                      <Search className="h-4 w-4 mr-2" />
+                      Nova Busca
+                    </button>
+                  </div>
+                </div>
+              </div>
               
-              <button 
-                onClick={() => setShowNewSearchModal(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                disabled={submittingSearch}
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Nova Busca
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1624,8 +1657,11 @@ const RateShopperDashboard = () => {
                   );
                 })}
             </tbody>
-          </table>
-        </div>
+              </table>
+            </div>
+          </div>
+          </div>
+        )}
       </div>
 
       {/* Modal de Nova Busca */}
