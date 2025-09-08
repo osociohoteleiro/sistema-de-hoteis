@@ -144,9 +144,21 @@ const LiveProgressTracker = ({ hotelId, onUpdateCounts }) => {
             {progressData.running_searches.map((search) => (
               <div key={search.id} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h5 className="font-medium text-gray-900">{search.property_name}</h5>
-                    <p className="text-sm text-gray-500">ID: {search.uuid}</p>
+                  <div className="flex items-start gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h5 className="font-medium text-gray-900">{search.property_name}</h5>
+                        {/* Badge da plataforma */}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          search.platform === 'artaxnet' 
+                            ? 'bg-purple-100 text-purple-800' 
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {search.platform === 'artaxnet' ? '🏛️ Artaxnet' : '🏨 Booking'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-500">ID: {search.uuid}</p>
+                    </div>
                   </div>
                   <div className="text-right text-sm text-gray-500">
                     <div>Tempo: {formatTime(search.elapsed_seconds)}</div>

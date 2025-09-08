@@ -1,5 +1,6 @@
 const DatabaseIntegration = require('./database-integration');
 const { extract_prices_from_booking } = require('./booking-extractor-optimized');
+const { extract_prices_from_artaxnet } = require('./artaxnet-extractor-optimized');
 const { logger } = require('./logger');
 const fs = require('fs').promises;
 const path = require('path');
@@ -91,18 +92,37 @@ class DatabaseProcessor {
       console.log(`🌐 Extraindo preços de: ${extractorSearch.url}`);
       console.log(`📅 Período: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()}`);
       
-      // Executar extração passando conexão do banco para salvar diretamente
-      await extract_prices_from_booking(
-        extractorSearch.url,
-        startDate,
-        endDate,
-        extractorSearch.max_bundle_size,
-        resultsFile,
-        this.db, // Passar instância da database integration
-        searchId, // ID da busca
-        propertyId, // ID da propriedade
-        dbSearch.hotel_id // ID do hotel para APIs
-      );
+      // Detectar plataforma baseada na URL
+      const platform = this.detectPlatform(extractorSearch.url);
+      console.log(`🏷️  Plataforma detectada: ${platform}`);
+      
+      // Executar extração com o extrator correto
+      if (platform === 'artaxnet') {
+        await extract_prices_from_artaxnet(
+          extractorSearch.url,
+          startDate,
+          endDate,
+          extractorSearch.max_bundle_size,
+          resultsFile,
+          this.db, // Passar instância da database integration
+          searchId, // ID da busca
+          propertyId, // ID da propriedade
+          dbSearch.hotel_id // ID do hotel para APIs
+        );
+      } else {
+        // Default para Booking (compatibilidade)
+        await extract_prices_from_booking(
+          extractorSearch.url,
+          startDate,
+          endDate,
+          extractorSearch.max_bundle_size,
+          resultsFile,
+          this.db, // Passar instância da database integration
+          searchId, // ID da busca
+          propertyId, // ID da propriedade
+          dbSearch.hotel_id // ID do hotel para APIs
+        );
+      }
 
       // Contar preços salvos diretamente no banco durante a extração
       const pricesCount = await this.db.getSearchPricesCount(searchId);
@@ -129,6 +149,31 @@ class DatabaseProcessor {
       });
 
       console.error(`❌ Erro ao processar ${dbSearch.property_name}:`, error.message);
+    }
+  }
+
+  /**
+   * Detecta a plataforma baseada na URL
+   * @param {string} url - URL da propriedade
+   * @returns {string} - 'booking', 'artaxnet', etc.
+   */
+  detectPlatform(url) {
+    try {
+      const urlLower = url.toLowerCase();
+      
+      if (urlLower.includes('artaxnet.com') || urlLower.includes('artax')) {
+        return 'artaxnet';
+      }
+      
+      if (urlLower.includes('booking.com')) {
+        return 'booking';
+      }
+      
+      // Default para booking (compatibilidade com dados existentes)
+      return 'booking';
+    } catch (error) {
+      console.warn('⚠️  Erro ao detectar plataforma da URL:', url, error.message);
+      return 'booking'; // Fallback seguro
     }
   }
 }

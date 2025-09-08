@@ -33,7 +33,7 @@ class RateShopperSearch {
 
   static async findByHotel(hotelId, filters = {}) {
     let query = `
-      SELECT rs.*, rsp.property_name, rsp.is_main_property
+      SELECT rs.*, rsp.property_name, rsp.is_main_property, rsp.platform
       FROM rate_shopper_searches rs
       LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       WHERE rs.hotel_id = $1
@@ -71,6 +71,7 @@ class RateShopperSearch {
       const search = new RateShopperSearch(row);
       search.property_name = row.property_name;
       search.is_main_property = row.is_main_property;
+      search.platform = row.platform;
       return search;
     });
   }
@@ -369,6 +370,11 @@ class RateShopperSearch {
     // Include hotel_name if available (from JOINs)
     if (this.hotel_name) {
       json.hotel_name = this.hotel_name;
+    }
+
+    // Include platform if available (from JOINs)
+    if (this.platform) {
+      json.platform = this.platform;
     }
 
     // Add estimated time remaining if running

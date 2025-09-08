@@ -9,6 +9,7 @@ class RateShopperProperty {
     this.booking_url = data.booking_url;
     this.competitor_type = data.competitor_type || 'OTA';
     this.ota_name = data.ota_name || 'Booking.com';
+    this.platform = data.platform || this.detectPlatformFromUrl(data.booking_url) || 'booking';
     this.location = data.location;
     this.category = data.category;
     this.max_bundle_size = data.max_bundle_size || 7;
@@ -87,11 +88,11 @@ class RateShopperProperty {
       // Update existing property - PostgreSQL style
       const result = await db.query(`
         UPDATE rate_shopper_properties SET 
-        property_name = $1, booking_url = $2, competitor_type = $3, ota_name = $4,
-        location = $5, category = $6, max_bundle_size = $7, active = $8, is_main_property = $9
-        WHERE id = $10
+        property_name = $1, booking_url = $2, competitor_type = $3, ota_name = $4, platform = $5,
+        location = $6, category = $7, max_bundle_size = $8, active = $9, is_main_property = $10
+        WHERE id = $11
       `, [
-        this.property_name, this.booking_url, this.competitor_type, this.ota_name,
+        this.property_name, this.booking_url, this.competitor_type, this.ota_name, this.platform,
         this.location, this.category, this.max_bundle_size, this.active, this.is_main_property, this.id
       ]);
       return result;
@@ -99,13 +100,13 @@ class RateShopperProperty {
       // Create new property - PostgreSQL style with RETURNING
       const result = await db.query(`
         INSERT INTO rate_shopper_properties (
-          hotel_id, property_name, booking_url, competitor_type, ota_name,
+          hotel_id, property_name, booking_url, competitor_type, ota_name, platform,
           location, category, max_bundle_size, active, is_main_property
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id, uuid
       `, [
         this.hotel_id, this.property_name, this.booking_url, this.competitor_type,
-        this.ota_name, this.location, this.category, this.max_bundle_size, this.active, this.is_main_property
+        this.ota_name, this.platform, this.location, this.category, this.max_bundle_size, this.active, this.is_main_property
       ]);
       
       if (result && result.length > 0) {
@@ -201,34 +202,82 @@ class RateShopperProperty {
     return await db.query(query, params);
   }
 
-  // Check if URL is valid Booking.com URL
-  static isValidBookingUrl(url) {
+  // Check if URL is valid (Booking.com or Artaxnet)
+  static isValidUrl(url) {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.includes('booking.com') && 
-             (url.includes('/hotel/') || url.includes('/property/'));
+      return (
+        // Booking.com URLs
+        (urlObj.hostname.includes('booking.com') && 
+         (url.includes('/hotel/') || url.includes('/property/'))) ||
+        // Artaxnet URLs
+        urlObj.hostname.includes('artaxnet.com')
+      );
     } catch {
       return false;
     }
   }
 
-  // Extract property info from Booking URL
+  // Check if URL is valid Booking.com URL (manter compatibilidade)
+  static isValidBookingUrl(url) {
+    return this.isValidUrl(url) && url.includes('booking.com');
+  }
+
+  // Detecta plataforma baseada na URL
+  detectPlatformFromUrl(url) {
+    if (!url) return 'booking';
+    
+    try {
+      const urlLower = url.toLowerCase();
+      
+      if (urlLower.includes('artaxnet.com') || urlLower.includes('artax')) {
+        return 'artaxnet';
+      }
+      
+      if (urlLower.includes('booking.com')) {
+        return 'booking';
+      }
+      
+      return 'booking'; // Default
+    } catch (error) {
+      return 'booking';
+    }
+  }
+
+  // Extract property info from URL (Booking or Artaxnet)
   static extractInfoFromUrl(url) {
     try {
-      const urlParts = url.split('/');
-      const hotelPart = urlParts.find(part => part.includes('hotel')) || '';
-      const propertyName = hotelPart.replace(/^hotel-/, '').replace(/\..*$/, '').replace(/-/g, ' ');
-      
-      return {
-        property_name: propertyName.toUpperCase(),
-        ota_name: 'Booking.com',
-        competitor_type: 'OTA'
-      };
+      if (url.toLowerCase().includes('artaxnet.com')) {
+        // Para Artaxnet, extrair do subdomínio
+        const urlObj = new URL(url);
+        const subdomain = urlObj.hostname.split('.')[0];
+        const propertyName = subdomain.replace(/-/g, ' ').replace(/_/g, ' ');
+        
+        return {
+          property_name: propertyName.toUpperCase(),
+          ota_name: 'Artaxnet',
+          competitor_type: 'OTA',
+          platform: 'artaxnet'
+        };
+      } else {
+        // Para Booking.com
+        const urlParts = url.split('/');
+        const hotelPart = urlParts.find(part => part.includes('hotel')) || '';
+        const propertyName = hotelPart.replace(/^hotel-/, '').replace(/\..*$/, '').replace(/-/g, ' ');
+        
+        return {
+          property_name: propertyName.toUpperCase(),
+          ota_name: 'Booking.com',
+          competitor_type: 'OTA',
+          platform: 'booking'
+        };
+      }
     } catch {
       return {
         property_name: 'Unknown Property',
         ota_name: 'Booking.com',
-        competitor_type: 'OTA'
+        competitor_type: 'OTA',
+        platform: 'booking'
       };
     }
   }
@@ -241,8 +290,8 @@ class RateShopperProperty {
       errors.push('Property name is required');
     }
 
-    if (!this.booking_url || !RateShopperProperty.isValidBookingUrl(this.booking_url)) {
-      errors.push('Valid Booking.com URL is required');
+    if (!this.booking_url || !RateShopperProperty.isValidUrl(this.booking_url)) {
+      errors.push('Valid URL is required (Booking.com or Artaxnet)');
     }
 
     if (!this.hotel_id) {
@@ -266,6 +315,7 @@ class RateShopperProperty {
       booking_url: this.booking_url,
       competitor_type: this.competitor_type,
       ota_name: this.ota_name,
+      platform: this.platform,
       location: this.location,
       category: this.category,
       max_bundle_size: this.max_bundle_size,

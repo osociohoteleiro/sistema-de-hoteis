@@ -1383,13 +1383,23 @@ const RateShopperDashboard = () => {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="font-medium text-gray-900">
-                            {search.property_name}
-                            {search.is_main_property && <span className="text-blue-600 font-bold"> 🏆 HOTEL PRINCIPAL 🏆</span>}
-                          </p>
-                          <span className="text-xs text-gray-500">
-                            #{search.id}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">
+                              {search.property_name}
+                              {search.is_main_property && <span className="text-blue-600 font-bold"> 🏆 HOTEL PRINCIPAL 🏆</span>}
+                            </p>
+                            {/* Badge da plataforma */}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                              search.platform === 'artaxnet' 
+                                ? 'bg-purple-100 text-purple-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {search.platform === 'artaxnet' ? '🏛️ Artaxnet' : '🏨 Booking'}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              #{search.id}
+                            </span>
+                          </div>
                         </div>
                         <div className="text-sm text-gray-600 space-y-1">
                           <div>📅 {formatDate(search.start_date)} → {formatDate(search.end_date)}</div>
@@ -1637,13 +1647,21 @@ const RateShopperDashboard = () => {
                         )}
                       </div>
                       <div className="ml-4">
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-2">
                           <div className="text-sm font-medium text-gray-900">
                             {search.property_name}
                             {search.is_main_property && <span className="text-blue-600 font-bold"> 🏆 HOTEL PRINCIPAL 🏆</span>}
                           </div>
+                          {/* Badge da plataforma */}
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                            search.platform === 'artaxnet' 
+                              ? 'bg-purple-100 text-purple-800' 
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {search.platform === 'artaxnet' ? '🏛️ Artaxnet' : '🏨 Booking'}
+                          </span>
                           {search.is_main_property && (
-                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               ⭐ Principal
                             </span>
                           )}

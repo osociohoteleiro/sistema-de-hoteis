@@ -108,6 +108,20 @@ const ChartJsPriceChart = ({
       point: '#84CC16'
     }  // Lime
   ];
+  
+  // Cores especiais para propriedades principais (mais destacadas)
+  const mainPropertyColors = [
+    { 
+      border: '#DC2626', 
+      background: 'rgba(220, 38, 38, 0.2)',
+      point: '#DC2626'
+    }, // Vermelho forte
+    { 
+      border: '#0D9488', 
+      background: 'rgba(13, 148, 136, 0.2)',
+      point: '#0D9488'
+    } // Verde forte
+  ];
 
   // Configurações do Chart.js
   const chartOptions = {
@@ -160,9 +174,11 @@ const ChartJsPriceChart = ({
             
             const dataIndex = context.dataIndex;
             const rawData = chartData?.processedData?.[dataIndex];
-            const propertyName = context.dataset.label;
+            const propertyName = context.dataset.label.replace('🏆 ', ''); // Remover ícone para acessar dados
             
-            let label = `${propertyName}: R$ ${value.toFixed(2)}`;
+            // Usar o label original (com ícone) no tooltip, mas usar nome limpo para acessar dados
+            const displayLabel = context.dataset.label; // Com ícone para exibição
+            let label = `${displayLabel}: R$ ${value.toFixed(2)}`;
             
             // Adicionar informações de bundle se disponível
             if (rawData) {
@@ -295,7 +311,8 @@ const ChartJsPriceChart = ({
       
       if (response.success && response.data.chart_data) {
         console.log('✅ Usando DADOS REAIS da API');
-        processRealData(response.data.chart_data, currentStartDate, endDate);
+        console.log('🏆 Propriedades principais:', response.data.main_properties);
+        processRealData(response.data.chart_data, currentStartDate, endDate, response.data.main_properties);
       } else {
         console.log('⚠️ Usando DADOS MOCKADOS');
         processMockData(currentStartDate, endDate);
@@ -308,7 +325,7 @@ const ChartJsPriceChart = ({
     }
   };
 
-  const processRealData = (apiData, startDate, endDate) => {
+  const processRealData = (apiData, startDate, endDate, mainProperties = []) => {
     // Log inicial para debug
     console.log('📊 API Data recebida:', apiData.length, 'registros');
     console.log('📊 Primeiros 3 registros:', apiData.slice(0, 3));
@@ -337,6 +354,8 @@ const ChartJsPriceChart = ({
             !trimmedKey.includes('_avg_bundle_size') &&
             !trimmedKey.includes('_max_bundle_size') &&
             !trimmedKey.includes('_is_mostly_bundle') &&
+            !trimmedKey.includes('_platform') &&
+            !trimmedKey.includes('_is_main_property') &&
             !trimmedKey.includes('created_at') &&
             !trimmedKey.includes('updated_at')) {
           propertiesSet.add(trimmedKey);
@@ -408,7 +427,7 @@ const ChartJsPriceChart = ({
     console.log('📈 Propriedades encontradas:', propertiesList.length, ':', propertiesList);
     console.log('📈 Primeiros 3 dias processados:', processedData.slice(0, 3));
 
-    createChartData(processedData, propertiesList);
+    createChartData(processedData, propertiesList, mainProperties);
   };
 
   const processMockData = (startDate, endDate) => {
@@ -443,7 +462,7 @@ const ChartJsPriceChart = ({
     createChartData(processedData, mockProperties);
   };
 
-  const createChartData = (processedData, propertiesList) => {
+  const createChartData = (processedData, propertiesList, mainProperties = []) => {
     // Garantir que não há duplicação de labels (datas)
     const labels = processedData.map(item => item.dateFormatted);
     
@@ -451,9 +470,22 @@ const ChartJsPriceChart = ({
     const uniqueProperties = [...new Set(propertiesList)].filter(prop => prop && prop.trim() !== '');
     
     console.log('📊 Criando chart com', labels.length, 'labels e', uniqueProperties.length, 'propriedades únicas');
+    console.log('🏆 Propriedades principais recebidas:', mainProperties);
     
     const datasets = uniqueProperties.map((propertyName, index) => {
-      const colors = colorPalette[index % colorPalette.length];
+      // Verificar se é propriedade principal
+      const isMainProperty = mainProperties && mainProperties.includes(propertyName);
+      console.log(`🎨 ${propertyName} é principal:`, isMainProperty);
+      
+      // Usar cores especiais para propriedades principais
+      let colors;
+      if (isMainProperty) {
+        const mainIndex = mainProperties.indexOf(propertyName);
+        colors = mainPropertyColors[mainIndex % mainPropertyColors.length];
+      } else {
+        colors = colorPalette[index % colorPalette.length];
+      }
+      
       const data = processedData.map(item => {
         const value = item[propertyName];
         // Retornar null em vez de undefined para que Chart.js trate corretamente os gaps
@@ -471,12 +503,16 @@ const ChartJsPriceChart = ({
         return null;
       }
       
+      // Adicionar ícone especial na legenda para propriedades principais
+      const displayLabel = isMainProperty ? `🏆 ${propertyName.trim()}` : propertyName.trim();
+      
       return {
-        label: propertyName.trim(),
+        label: displayLabel,
         data: data,
         borderColor: colors.border,
         backgroundColor: colors.background,
         pointBackgroundColor: colors.point,
+        borderWidth: isMainProperty ? 4 : 2, // Linha mais grossa para propriedades principais
         pointBorderColor: (context) => {
           // Borda dourada para pontos de bundles
           const dataIndex = context?.dataIndex;
@@ -515,24 +551,26 @@ const ChartJsPriceChart = ({
           // Mostrar pontos apenas onde há dados (não para valores null)
           if (context.parsed.y === null) return 0;
           
+          // Limpar ícone da legenda para obter nome real da propriedade
+          const cleanPropertyName = context.dataset.label.replace('🏆 ', '');
+          
           // Destacar pontos de bundles com tamanho maior
           const dataIndex = context.dataIndex;
           const rawData = context.chart.data.processedData?.[dataIndex];
-          const propertyName = context.dataset.label;
           
           if (rawData) {
-            const bundleCount = rawData[`${propertyName}_bundle_count`];
-            const isMostlyBundle = rawData[`${propertyName}_is_mostly_bundle`];
+            const bundleCount = rawData[`${cleanPropertyName}_bundle_count`];
+            const isMostlyBundle = rawData[`${cleanPropertyName}_is_mostly_bundle`];
             
             // Pontos maiores para bundles
             if (bundleCount > 0 && isMostlyBundle) {
-              return 6; // Ponto maior para bundles
+              return isMainProperty ? 8 : 6; // Ainda maior para propriedades principais
             } else if (bundleCount > 0) {
-              return 5; // Ponto médio para misto
+              return isMainProperty ? 7 : 5; // Ponto médio para misto
             }
           }
           
-          return 4; // Tamanho padrão
+          return isMainProperty ? 6 : 4; // Tamanho maior para propriedades principais
         },
         pointHoverRadius: 6,
         fill: false,

@@ -75,6 +75,16 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
 
     // Recent searches  
     const recentSearches = await RateShopperSearch.findByHotel(hotelId, { limit: 10 });
+    
+    // DEBUG: Log detalhado para verificar platform
+    console.log('🔍 DEBUG: Recent searches com platform:', 
+      recentSearches.slice(0, 3).map(s => ({
+        id: s.id,
+        property_id: s.property_id,
+        property_name: s.property_name,
+        platform: s.platform,
+        status: s.status
+      })));
 
     // Determinar período para price trends
     let dateCondition;
@@ -279,6 +289,8 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
       SELECT 
         latest.date,
         rsp_prop.property_name,
+        rsp_prop.platform,
+        rsp_prop.is_main_property,
         rsp.price as avg_price,
         rsp.price as min_price,
         rsp.price as max_price,
@@ -296,7 +308,7 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
         AND DATE(rsp.check_in_date) = latest.date 
         AND rsp.scraped_at = latest.latest_scraped_at
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
-      ORDER BY latest.date ASC, rsp_prop.property_name
+      ORDER BY latest.date ASC, rsp_prop.is_main_property DESC, rsp_prop.property_name
     `, dateParams);
 
     // DEBUG: Log dos dados históricos retornados (removido para produção)
@@ -306,10 +318,21 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
     // Converter para formato do gráfico
     const chartData = {};
     const properties = new Set();
+    const mainProperties = new Set(); // Para rastrear propriedades principais
     
     historicalData.forEach(row => {
       const date = row.date.toISOString().split('T')[0];
-      properties.add(row.property_name);
+      
+      // Criar nome único com plataforma para diferenciar Booking de Artaxnet
+      const platformSuffix = row.platform === 'artaxnet' ? ' (Artaxnet)' : ' (Booking)';
+      const propertyDisplayName = `${row.property_name}${platformSuffix}`;
+      
+      properties.add(propertyDisplayName);
+      
+      // Marcar se é propriedade principal
+      if (row.is_main_property) {
+        mainProperties.add(propertyDisplayName);
+      }
       
       if (!chartData[date]) {
         chartData[date] = { 
@@ -318,17 +341,19 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
         };
       }
       
-      chartData[date][row.property_name] = parseFloat(row.avg_price);
-      chartData[date][`${row.property_name}_min`] = parseFloat(row.min_price);
-      chartData[date][`${row.property_name}_max`] = parseFloat(row.max_price);
-      chartData[date][`${row.property_name}_count`] = parseInt(row.price_count);
+      chartData[date][propertyDisplayName] = parseFloat(row.avg_price);
+      chartData[date][`${propertyDisplayName}_min`] = parseFloat(row.min_price);
+      chartData[date][`${propertyDisplayName}_max`] = parseFloat(row.max_price);
+      chartData[date][`${propertyDisplayName}_count`] = parseInt(row.price_count);
+      chartData[date][`${propertyDisplayName}_platform`] = row.platform;
+      chartData[date][`${propertyDisplayName}_is_main_property`] = row.is_main_property;
       
       // Adicionar informações de bundle para o gráfico
-      chartData[date][`${row.property_name}_bundle_count`] = parseInt(row.bundle_count);
-      chartData[date][`${row.property_name}_regular_count`] = parseInt(row.regular_count);
-      chartData[date][`${row.property_name}_avg_bundle_size`] = parseFloat(row.avg_bundle_size);
-      chartData[date][`${row.property_name}_max_bundle_size`] = parseInt(row.max_bundle_size);
-      chartData[date][`${row.property_name}_is_mostly_bundle`] = row.is_mostly_bundle;
+      chartData[date][`${propertyDisplayName}_bundle_count`] = parseInt(row.bundle_count);
+      chartData[date][`${propertyDisplayName}_regular_count`] = parseInt(row.regular_count);
+      chartData[date][`${propertyDisplayName}_avg_bundle_size`] = parseFloat(row.avg_bundle_size);
+      chartData[date][`${propertyDisplayName}_max_bundle_size`] = parseInt(row.max_bundle_size);
+      chartData[date][`${propertyDisplayName}_is_mostly_bundle`] = row.is_mostly_bundle;
     });
 
     // TEMPORARIAMENTE DESABILITADO: Se há poucos dados históricos, adicionar alguns dados simulados para demonstração
@@ -394,6 +419,7 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
       data: {
         chart_data: chartArray,
         properties: Array.from(properties),
+        main_properties: Array.from(mainProperties), // Lista das propriedades principais
         date_range: {
           start: startDateObj.toISOString().split('T')[0],
           end: endDateObj.toISOString().split('T')[0],
@@ -861,9 +887,9 @@ router.post('/:hotel_id/properties', async (req, res) => {
     
     const { property_name, booking_url, location, category, max_bundle_size, is_main_property } = req.body;
 
-    // Validate URL
-    if (!RateShopperProperty.isValidBookingUrl(booking_url)) {
-      return res.status(400).json({ error: 'Invalid Booking.com URL' });
+    // Validate URL (supports both Booking.com and Artaxnet)
+    if (!RateShopperProperty.isValidUrl(booking_url)) {
+      return res.status(400).json({ error: 'Invalid URL (must be Booking.com or Artaxnet)' });
     }
 
     // Extract info from URL if not provided
@@ -912,13 +938,13 @@ router.put('/properties/:property_id/main-property', async (req, res) => {
       return res.status(404).json({ error: 'Property not found' });
     }
 
-    // Se está definindo como principal, remover outras propriedades principais do mesmo hotel
+    // Se está definindo como principal, remover outras propriedades principais da mesma plataforma no mesmo hotel
     if (is_main_property) {
       await db.query(`
         UPDATE rate_shopper_properties 
         SET is_main_property = false 
-        WHERE hotel_id = $1 AND id != $2 AND is_main_property = true
-      `, [property.hotel_id, propertyId]);
+        WHERE hotel_id = $1 AND id != $2 AND platform = $3 AND is_main_property = true
+      `, [property.hotel_id, propertyId, property.platform]);
     }
 
     // Atualizar a propriedade atual

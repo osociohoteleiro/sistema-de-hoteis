@@ -91,9 +91,9 @@ const PropertyManager = () => {
     }
 
     if (!formData.booking_url.trim()) {
-      newErrors.booking_url = 'URL do Booking é obrigatória';
-    } else if (!formData.booking_url.includes('booking.com')) {
-      newErrors.booking_url = 'URL deve ser do Booking.com';
+      newErrors.booking_url = 'URL da propriedade é obrigatória';
+    } else if (!formData.booking_url.includes('booking.com') && !formData.booking_url.includes('artaxnet.com')) {
+      newErrors.booking_url = 'URL deve ser do Booking.com ou Artaxnet.com';
     }
 
     if (formData.max_bundle_size < 1 || formData.max_bundle_size > 30) {
@@ -184,21 +184,29 @@ const PropertyManager = () => {
   const handleToggleMainProperty = async (propertyId, isMain) => {
     try {
       const selectedProperty = properties.find(p => p.id === propertyId);
-      const currentMainProperty = properties.find(p => p.is_main_property);
       const selectedHotelName = getSelectedHotelName();
       
-      // Se estiver definindo como principal e já existe uma propriedade principal
-      if (isMain && currentMainProperty && currentMainProperty.id !== propertyId) {
+      // Encontrar propriedades principais da mesma plataforma
+      const samePlatformMainProperty = properties.find(p => 
+        p.is_main_property && 
+        p.platform === selectedProperty?.platform && 
+        p.id !== propertyId
+      );
+      
+      // Se estiver definindo como principal e já existe uma propriedade principal da mesma plataforma
+      if (isMain && samePlatformMainProperty) {
+        const platformName = selectedProperty?.platform === 'artaxnet' ? 'Artaxnet' : 'Booking';
         const confirmed = window.confirm(
-          `"${currentMainProperty.property_name}" atualmente é a propriedade principal.\n\nDeseja substituí-la por "${selectedProperty?.property_name}"?`
+          `"${samePlatformMainProperty.property_name}" atualmente é a propriedade principal para ${platformName}.\n\nDeseja substituí-la por "${selectedProperty?.property_name}"?`
         );
         if (!confirmed) return;
       }
       
       // Se estiver removendo uma propriedade principal, confirmar
       if (!isMain && selectedProperty?.is_main_property) {
+        const platformName = selectedProperty?.platform === 'artaxnet' ? 'Artaxnet' : 'Booking';
         const confirmed = window.confirm(
-          `Tem certeza que deseja remover "${selectedProperty.property_name}" como propriedade principal${selectedHotelName ? ` de ${selectedHotelName}` : ''}?`
+          `Tem certeza que deseja remover "${selectedProperty.property_name}" como propriedade principal para ${platformName}${selectedHotelName ? ` de ${selectedHotelName}` : ''}?`
         );
         if (!confirmed) return;
       }
@@ -210,9 +218,11 @@ const PropertyManager = () => {
       await loadProperties();
       
       if (isMain) {
-        toast.success(`⭐ "${selectedProperty?.property_name}" definida como propriedade principal${selectedHotelName ? ` de ${selectedHotelName}` : ''}`);
+        const platformName = selectedProperty?.platform === 'artaxnet' ? 'Artaxnet' : 'Booking';
+        toast.success(`⭐ "${selectedProperty?.property_name}" definida como propriedade principal para ${platformName}${selectedHotelName ? ` de ${selectedHotelName}` : ''}`);
       } else {
-        toast.success(`"${selectedProperty?.property_name}" removida como propriedade principal`);
+        const platformName = selectedProperty?.platform === 'artaxnet' ? 'Artaxnet' : 'Booking';
+        toast.success(`"${selectedProperty?.property_name}" removida como propriedade principal para ${platformName}`);
       }
       
     } catch (error) {
@@ -351,8 +361,14 @@ const PropertyManager = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Principal</p>
-              <p className="text-2xl font-bold text-gray-900">{properties.filter(p => p.is_main_property).length}</p>
-              <p className="text-xs text-gray-500">Propriedade do hotel atual</p>
+              <div className="flex items-center space-x-2">
+                <p className="text-2xl font-bold text-gray-900">{properties.filter(p => p.is_main_property).length}</p>
+                <div className="text-xs text-gray-500">
+                  <div>Booking: {properties.filter(p => p.is_main_property && p.platform === 'booking').length}</div>
+                  <div>Artaxnet: {properties.filter(p => p.is_main_property && p.platform === 'artaxnet').length}</div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Propriedades por plataforma</p>
             </div>
           </div>
         </div>
@@ -417,8 +433,15 @@ const PropertyManager = () => {
                         </div>
                         <div className="text-sm text-gray-500">
                           {property.category} • {property.ota_name}
+                          <span className={`ml-1 px-2 py-1 rounded text-xs font-medium ${
+                            property.platform === 'artaxnet' 
+                              ? 'bg-purple-100 text-purple-800' 
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {property.platform === 'artaxnet' ? 'Artaxnet' : 'Booking'}
+                          </span>
                           {property.is_main_property && (
-                            <span className="text-blue-600 ml-1">• Hotel Selecionado</span>
+                            <span className="text-blue-600 ml-1">• Principal</span>
                           )}
                         </div>
                       </div>
@@ -552,7 +575,7 @@ const PropertyManager = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    URL do Booking.com *
+                    URL da Propriedade (Booking.com ou Artaxnet.com) *
                   </label>
                   <input
                     type="url"
@@ -561,7 +584,7 @@ const PropertyManager = () => {
                     className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                       errors.booking_url ? 'border-red-300' : 'border-gray-300'
                     }`}
-                    placeholder="https://www.booking.com/hotel/..."
+                    placeholder="https://www.booking.com/hotel/... ou https://eco-encanto-pousada.artaxnet.com/..."
                   />
                   {errors.booking_url && (
                     <p className="mt-1 text-sm text-red-600">{errors.booking_url}</p>

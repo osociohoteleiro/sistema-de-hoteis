@@ -306,6 +306,14 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
                             <div className="text-sm font-medium text-gray-900">
                               {competitor.property_name}
                             </div>
+                            {/* Badge da plataforma */}
+                            <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                              competitor.platform === 'artaxnet' 
+                                ? 'bg-purple-100 text-purple-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {competitor.platform === 'artaxnet' ? '🏛️ Artaxnet' : '🏨 Booking'}
+                            </span>
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
                             {competitor.category} • {competitor.location}

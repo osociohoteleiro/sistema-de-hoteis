@@ -78,13 +78,64 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
     fetchPriceHistory();
   }, [selectedHotelUuid, startDate, endDate]);
 
-  // Função para verificar se um hotel é o principal (selecionado)
+  // Função para verificar se um hotel é o principal (considerando ambas plataformas)
   const isMainHotel = (hotelName) => {
     if (!selectedHotelName || !hotelName) return false;
     
     // Comparação case-insensitive e removendo espaços extras
     const normalizeString = (str) => str?.trim().toLowerCase();
-    return normalizeString(hotelName) === normalizeString(selectedHotelName);
+    
+    // Remover sufixos de plataforma para comparação
+    const cleanHotelName = hotelName.replace(/ \((Booking|Artaxnet)\)$/, '').trim();
+    
+    return normalizeString(cleanHotelName) === normalizeString(selectedHotelName);
+  };
+  
+  // Função para verificar se um nome contém o hotel principal
+  const containsMainHotel = (hotelName) => {
+    if (!selectedHotelName || !hotelName) return false;
+    
+    const normalizeString = (str) => str?.trim().toLowerCase();
+    const cleanHotelName = hotelName.replace(/ \((Booking|Artaxnet)\)$/, '').trim();
+    const cleanSelectedName = selectedHotelName.trim();
+    
+    return normalizeString(cleanHotelName).includes(normalizeString(cleanSelectedName)) ||
+           normalizeString(cleanSelectedName).includes(normalizeString(cleanHotelName));
+  };
+
+  // Função para comparar preços entre plataformas e detectar alertas
+  const getPlatformComparison = (hotelName, date, hotelRows) => {
+    // Extrair nome base do hotel (sem plataforma)
+    const baseName = hotelName.replace(/ \((Booking|Artaxnet)\)$/, '').trim();
+    
+    // Encontrar preços nas duas plataformas
+    const bookingName = `${baseName} (Booking)`;
+    const artaxnetName = `${baseName} (Artaxnet)`;
+    
+    const bookingPrice = hotelRows[bookingName]?.[date];
+    const artaxnetPrice = hotelRows[artaxnetName]?.[date];
+    
+    // Se ambos os preços existem, comparar
+    if (bookingPrice && artaxnetPrice) {
+      const difference = artaxnetPrice - bookingPrice;
+      const percentDiff = (difference / bookingPrice) * 100;
+      
+      return {
+        hasComparison: true,
+        bookingPrice,
+        artaxnetPrice,
+        difference,
+        percentDiff,
+        isArtaxnetHigher: artaxnetPrice > bookingPrice,
+        isSignificantDiff: Math.abs(percentDiff) > 5 // Diferença significativa > 5%
+      };
+    }
+    
+    return {
+      hasComparison: false,
+      bookingPrice,
+      artaxnetPrice
+    };
   };
 
   // Função para obter o preço do hotel principal em uma data específica
@@ -427,14 +478,24 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
           <tbody className="bg-white divide-y divide-gray-200">
             {Object.entries(hotelRows)
               .sort(([hotelNameA], [hotelNameB]) => {
-                // Hotel selecionado sempre primeiro
-                const isASelected = isMainHotel(hotelNameA);
-                const isBSelected = isMainHotel(hotelNameB);
+                // Verificar se são hotéis principais
+                const isAMain = isMainHotel(hotelNameA);
+                const isBMain = isMainHotel(hotelNameB);
                 
-                if (isASelected && !isBSelected) return -1; // A vai primeiro
-                if (!isASelected && isBSelected) return 1;  // B vai primeiro
+                // Hotéis principais sempre no topo
+                if (isAMain && !isBMain) return -1;
+                if (!isAMain && isBMain) return 1;
                 
-                // Se nenhum é selecionado ou ambos são, ordenar alfabeticamente
+                // Se ambos são principais, priorizar Booking depois Artaxnet
+                if (isAMain && isBMain) {
+                  const aIsBooking = hotelNameA.includes('(Booking)');
+                  const bIsBooking = hotelNameB.includes('(Booking)');
+                  
+                  if (aIsBooking && !bIsBooking) return -1; // Booking primeiro
+                  if (!aIsBooking && bIsBooking) return 1;  // Booking primeiro
+                }
+                
+                // Se nenhum é principal, ordenar alfabeticamente
                 return hotelNameA.localeCompare(hotelNameB);
               })
               .map(([hotelName, dates], rowIndex) => {
@@ -480,6 +541,9 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
                   // Obter indicador de tendência
                   const priceTrend = getPriceTrend(hotelName, date);
                   
+                  // Obter comparação entre plataformas
+                  const platformComparison = getPlatformComparison(hotelName, date, hotelRows);
+                  
                   return (
                     <td key={date} className="px-3 py-3 text-center border-r border-gray-300">
                       <div className="text-xs text-gray-400 mb-1">{cellRef}</div>
@@ -502,6 +566,30 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
                               </PriceHistoryTooltip>
                             )}
                           </div>
+                          
+                          {/* Alerta quando Artaxnet > Booking */}
+                          {platformComparison.hasComparison && platformComparison.isArtaxnetHigher && hotelName.includes('(Artaxnet)') && (
+                            <div className="mt-1">
+                              <span 
+                                className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-bold flex items-center gap-1"
+                                title={`Artaxnet R$ ${platformComparison.artaxnetPrice.toFixed(2)} > Booking R$ ${platformComparison.bookingPrice.toFixed(2)} (+${platformComparison.percentDiff.toFixed(1)}%)`}
+                              >
+                                🚨 +{platformComparison.percentDiff.toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Mostrar diferença também no Booking quando Artaxnet for maior */}
+                          {platformComparison.hasComparison && platformComparison.isArtaxnetHigher && hotelName.includes('(Booking)') && (
+                            <div className="mt-1">
+                              <span 
+                                className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium"
+                                title={`Booking R$ ${platformComparison.bookingPrice.toFixed(2)} < Artaxnet R$ ${platformComparison.artaxnetPrice.toFixed(2)} (-${Math.abs(platformComparison.percentDiff).toFixed(1)}%)`}
+                              >
+                                ⚡ -{Math.abs(platformComparison.percentDiff).toFixed(1)}%
+                              </span>
+                            </div>
+                          )}
                           {/* Indicadores de Bundle */}
                           {(() => {
                             // Buscar informações de bundle nos dados originais
@@ -607,27 +695,50 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
         )}
       </div>
 
-      {/* Legenda dos indicadores de bundle */}
+      {/* Legenda dos indicadores */}
       <div className="p-3 bg-yellow-50 border-t border-yellow-200">
         <h4 className="text-sm font-semibold text-yellow-800 mb-2">🔍 Legenda dos Indicadores</h4>
-        <div className="flex flex-wrap gap-4 text-xs">
-          <div className="flex items-center gap-1">
-            <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded font-medium">📦 3n</span>
-            <span className="text-gray-600">Pacote especial (ex: 3 noites)</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded font-medium">📦 Mín</span>
-            <span className="text-gray-600">Mínimo de noites exigido</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">📦/💰</span>
-            <span className="text-gray-600">Preços mistos (bundle + diária)</span>
+        
+        {/* Indicadores de Bundle */}
+        <div className="mb-3">
+          <h5 className="text-xs font-medium text-gray-700 mb-1">Pacotes e Bundles:</h5>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex items-center gap-1">
+              <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded font-medium">📦 3n</span>
+              <span className="text-gray-600">Pacote especial (ex: 3 noites)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded font-medium">📦 Mín</span>
+              <span className="text-gray-600">Mínimo de noites exigido</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">📦/💰</span>
+              <span className="text-gray-600">Preços mistos (bundle + diária)</span>
+            </div>
           </div>
         </div>
+
+        {/* Indicadores de Comparação de Plataformas */}
+        <div>
+          <h5 className="text-xs font-medium text-gray-700 mb-1">Comparação entre Plataformas:</h5>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex items-center gap-1">
+              <span className="bg-red-100 text-red-800 px-2 py-1 rounded font-bold">🚨 +15%</span>
+              <span className="text-gray-600">Artaxnet mais caro que Booking (ALERTA)</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-medium">⚡ -15%</span>
+              <span className="text-gray-600">Booking mais barato (referência)</span>
+            </div>
+          </div>
+        </div>
+
         <p className="text-xs text-gray-500 mt-2">
           • Preços de pacotes já foram divididos pelo número de noites para comparação
           <br/>
           • Pontos maiores no gráfico indicam preços oriundos de bundles/pacotes
+          <br/>
+          • Alertas aparecem quando há diferença significativa entre Booking e Artaxnet
         </p>
       </div>
 
