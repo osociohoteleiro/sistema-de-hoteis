@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Extension Icons</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .icon-container { display: inline-block; margin: 10px; text-align: center; }
+        canvas { border: 1px solid #ccc; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h2>OSH Booking Extension Icons Generator</h2>
+    <p>Use este arquivo para gerar os ícones da extensão. Clique com botão direito em cada canvas e "Salvar imagem como..."</p>
+    
+    <div class="icon-container">
+        <h3>16x16</h3>
+        <canvas id="icon16" width="16" height="16"></canvas>
+    </div>
+    
+    <div class="icon-container">
+        <h3>32x32</h3>
+        <canvas id="icon32" width="32" height="32"></canvas>
+    </div>
+    
+    <div class="icon-container">
+        <h3>48x48</h3>
+        <canvas id="icon48" width="48" height="48"></canvas>
+    </div>
+    
+    <div class="icon-container">
+        <h3>128x128</h3>
+        <canvas id="icon128" width="128" height="128"></canvas>
+    </div>
+
+    <script>
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#1976d2');
+            gradient.addColorStop(1, '#42a5f5');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Hotel icon (simple house shape)
+            ctx.fillStyle = 'white';
+            const scale = size / 48;
+            
+            // House base
+            ctx.fillRect(8 * scale, 24 * scale, 32 * scale, 16 * scale);
+            
+            // Roof
+            ctx.beginPath();
+            ctx.moveTo(24 * scale, 8 * scale);
+            ctx.lineTo(8 * scale, 24 * scale);
+            ctx.lineTo(40 * scale, 24 * scale);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Door
+            ctx.fillStyle = '#1976d2';
+            ctx.fillRect(20 * scale, 28 * scale, 8 * scale, 12 * scale);
+            
+            // Windows
+            ctx.fillRect(12 * scale, 28 * scale, 4 * scale, 4 * scale);
+            ctx.fillRect(32 * scale, 28 * scale, 4 * scale, 4 * scale);
+            
+            // Letter "B" for Booking
+            if (size >= 32) {
+                ctx.fillStyle = 'white';
+                ctx.font = `${Math.floor(size / 4)}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('B', size / 2, size * 0.75);
+            }
+        }
+
+        // Generate all icons
+        drawIcon(document.getElementById('icon16'), 16);
+        drawIcon(document.getElementById('icon32'), 32);
+        drawIcon(document.getElementById('icon48'), 48);
+        drawIcon(document.getElementById('icon128'), 128);
+        
+        // Convert to downloadable files
+        function downloadCanvasAsImage(canvas, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // Add download buttons
+        document.body.innerHTML += '<br><br><h3>Download Icons:</h3>';
+        ['16', '32', '48', '128'].forEach(size => {
+            const btn = document.createElement('button');
+            btn.textContent = `Download icon-${size}.png`;
+            btn.onclick = () => downloadCanvasAsImage(document.getElementById(`icon${size}`), `icon-${size}.png`);
+            btn.style.margin = '5px';
+            btn.style.padding = '8px';
+            document.body.appendChild(btn);
+        });
+    </script>
+</body>
+</html>

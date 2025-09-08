@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSH Booking Sync</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <img src="../../icons/icon-48.png" alt="OSH" class="logo-img">
+                <div class="header-text">
+                    <h1>OSH Booking</h1>
+                    <span class="subtitle">Extranet Sync</span>
+                </div>
+            </div>
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="status-text" id="statusText">Verificando...</span>
+            </div>
+        </div>
+
+        <!-- Configuration Section -->
+        <div class="section" id="configSection">
+            <h2>🔧 Configuração</h2>
+            <p class="help-text">Configure sua conexão com o PMS OSH</p>
+            
+            <div class="input-group">
+                <label for="hotelId">ID do Hotel:</label>
+                <input type="text" id="hotelId" placeholder="Digite o ID do seu hotel">
+                <small class="help">Encontre no PMS em Configurações > Hotel</small>
+            </div>
+            
+            <div class="input-group">
+                <label for="authToken">Token de Autenticação:</label>
+                <input type="password" id="authToken" placeholder="Cole o token do PMS">
+                <small class="help">Gere no PMS em Configurações > API</small>
+            </div>
+            
+            <button class="btn btn-primary" id="saveConfig">
+                <span class="btn-icon">💾</span>
+                Salvar Configuração
+            </button>
+        </div>
+
+        <!-- Status Section -->
+        <div class="section" id="statusSection" style="display: none;">
+            <h2>📊 Status da Sincronização</h2>
+            
+            <div class="status-card">
+                <div class="status-item">
+                    <span class="label">Hotel:</span>
+                    <span class="value" id="hotelIdDisplay">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">Última Sync:</span>
+                    <span class="value" id="lastSyncDisplay">Nunca</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">Status API:</span>
+                    <span class="value" id="apiStatusDisplay">-</span>
+                </div>
+            </div>
+
+            <div class="sync-controls">
+                <button class="btn btn-secondary" id="forceSyncBtn">
+                    <span class="btn-icon">🔄</span>
+                    Sincronizar Agora
+                </button>
+                <button class="btn btn-outline" id="testConnectionBtn">
+                    <span class="btn-icon">🔗</span>
+                    Testar Conexão
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="section" id="settingsSection" style="display: none;">
+            <h2>⚙️ Configurações</h2>
+            
+            <div class="setting-item">
+                <label class="switch-label">
+                    <input type="checkbox" id="autoSyncToggle">
+                    <span class="switch"></span>
+                    Sincronização Automática
+                </label>
+                <small class="help">Sincronizar dados automaticamente ao navegar</small>
+            </div>
+            
+            <div class="setting-item">
+                <label class="switch-label">
+                    <input type="checkbox" id="notificationsToggle">
+                    <span class="switch"></span>
+                    Notificações
+                </label>
+                <small class="help">Mostrar notificações de sincronização</small>
+            </div>
+            
+            <div class="setting-item">
+                <label class="switch-label">
+                    <input type="checkbox" id="debugModeToggle">
+                    <span class="switch"></span>
+                    Modo Debug
+                </label>
+                <small class="help">Logs detalhados no console</small>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="nav-tabs">
+                <button class="tab-btn active" data-tab="status">Status</button>
+                <button class="tab-btn" data-tab="settings">Config</button>
+                <button class="tab-btn" data-tab="help">Ajuda</button>
+            </div>
+            
+            <div class="footer-links">
+                <button class="link-btn" id="clearDataBtn">Limpar Dados</button>
+                <span class="separator">•</span>
+                <button class="link-btn" id="openPmsBtn">Abrir PMS</button>
+            </div>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Processando...</p>
+        </div>
+
+        <!-- Help Section -->
+        <div class="section" id="helpSection" style="display: none;">
+            <h2>❓ Como usar</h2>
+            
+            <div class="help-steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Configure a conexão</h3>
+                        <p>Digite o ID do hotel e token de autenticação do PMS</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Navegue na extranet</h3>
+                        <p>Acesse normalmente as páginas da extranet Booking.com</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Dados sincronizados automaticamente</h3>
+                        <p>Os dados aparecerão no Rate Shopper do PMS em tempo real</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="help-links">
+                <a href="#" class="help-link" id="documentationLink">📖 Documentação</a>
+                <a href="#" class="help-link" id="supportLink">🆘 Suporte</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

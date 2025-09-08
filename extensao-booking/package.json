@@ -1,0 +1,38 @@
+{
+  "name": "osh-booking-extranet-sync",
+  "version": "1.0.0",
+  "description": "Extensão Chrome para sincronizar dados da extranet Booking.com com o PMS OSH",
+  "main": "src/background/service-worker.js",
+  "scripts": {
+    "build": "echo 'Building extension...' && npm run copy-files",
+    "copy-files": "echo 'Extension files ready in src/'",
+    "package": "echo 'Creating extension package...' && npm run zip",
+    "zip": "powershell Compress-Archive -Path src/* -DestinationPath dist/osh-booking-extension.zip -Force",
+    "install-chrome": "echo 'Load unpacked extension from src/ folder in Chrome'",
+    "test": "echo 'Manual testing required - load extension in Chrome'"
+  },
+  "keywords": [
+    "chrome-extension",
+    "booking",
+    "extranet",
+    "hotel",
+    "pms",
+    "sync"
+  ],
+  "author": "OSH - Onscreen Hotels",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.246"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "private"
+  },
+  "homepage": "http://localhost:5175",
+  "bugs": {
+    "url": "mailto:suporte@osh.com.br"
+  }
+}

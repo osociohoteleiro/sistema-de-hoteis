@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "OSH Booking Extranet Sync",
+  "version": "1.0.0",
+  "description": "Sincroniza dados da extranet Booking.com com o sistema PMS OSH",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://admin.booking.com/*",
+    "https://secure.booking.com/*",
+    "http://localhost:3001/*",
+    "https://*.yourdomain.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/*"
+      ],
+      "js": [
+        "utils/constants.js",
+        "utils/storage.js",
+        "utils/api-client.js",
+        "content/extranet-detector.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/test-popup.html",
+    "default_title": "OSH Booking Sync"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "styles/content.css"
+      ],
+      "matches": [
+        "https://admin.booking.com/*"
+      ]
+    }
+  ]
+}

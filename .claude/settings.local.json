@@ -162,7 +162,8 @@
       "Bash(npm uninstall:*)",
       "Bash(tasklist)",
       "Bash(netstat:*)",
-      "WebFetch(domain:www.chartjs.org)"
+      "WebFetch(domain:www.chartjs.org)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []
