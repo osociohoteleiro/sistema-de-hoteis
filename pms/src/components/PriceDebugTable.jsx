@@ -245,12 +245,24 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
       propertyNames.forEach(propertyName => {
         const price = dayData[propertyName];
         if (price !== null && price !== undefined && typeof price === 'number' && price > 0) {
+          // Obter informações de bundle do dayData se disponíveis
+          const bundleCount = dayData[`${propertyName}_bundle_count`] || 0;
+          const regularCount = dayData[`${propertyName}_regular_count`] || 0;
+          const avgBundleSize = dayData[`${propertyName}_avg_bundle_size`] || 0;
+          const isMostlyBundle = dayData[`${propertyName}_is_mostly_bundle`] || false;
+          
           prices.push({
             check_in_date: dayData.date, // Formato YYYY-MM-DD
             property_name: propertyName,
             price: price.toString(),
             room_type: 'Standard', // Valor padrão
-            scraped_at: new Date().toISOString()
+            scraped_at: new Date().toISOString(),
+            // Adicionar informações de bundle
+            bundle_count: bundleCount,
+            regular_count: regularCount,
+            avg_bundle_size: avgBundleSize,
+            is_mostly_bundle: isMostlyBundle,
+            has_bundles: bundleCount > 0
           });
         }
       });
@@ -490,6 +502,40 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
                               </PriceHistoryTooltip>
                             )}
                           </div>
+                          {/* Indicadores de Bundle */}
+                          {(() => {
+                            // Buscar informações de bundle nos dados originais
+                            const dayData = chartData?.processedData?.find(day => day.date === date);
+                            if (dayData) {
+                              const bundleCount = dayData[`${hotelName}_bundle_count`] || 0;
+                              const regularCount = dayData[`${hotelName}_regular_count`] || 0;
+                              const avgBundleSize = dayData[`${hotelName}_avg_bundle_size`] || 0;
+                              const isMostlyBundle = dayData[`${hotelName}_is_mostly_bundle`] || false;
+                              
+                              if (bundleCount > 0) {
+                                return (
+                                  <div className="text-xs mt-1 flex flex-wrap justify-center gap-1">
+                                    {isMostlyBundle && avgBundleSize > 1 && (
+                                      <span className="bg-amber-100 text-amber-700 px-1 py-0.5 rounded text-xs font-medium">
+                                        📦 {avgBundleSize.toFixed(0)}n
+                                      </span>
+                                    )}
+                                    {bundleCount > regularCount && !isMostlyBundle && (
+                                      <span className="bg-purple-100 text-purple-700 px-1 py-0.5 rounded text-xs font-medium">
+                                        📦 Mín
+                                      </span>
+                                    )}
+                                    {bundleCount > 0 && regularCount > 0 && bundleCount <= regularCount && (
+                                      <span className="bg-blue-100 text-blue-700 px-1 py-0.5 rounded text-xs font-medium">
+                                        📦/💰
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            }
+                            return null;
+                          })()}
                         </div>
                       ) : (
                         <div className="text-gray-300 text-xs">-</div>
@@ -559,6 +605,30 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
             </p>
           </div>
         )}
+      </div>
+
+      {/* Legenda dos indicadores de bundle */}
+      <div className="p-3 bg-yellow-50 border-t border-yellow-200">
+        <h4 className="text-sm font-semibold text-yellow-800 mb-2">🔍 Legenda dos Indicadores</h4>
+        <div className="flex flex-wrap gap-4 text-xs">
+          <div className="flex items-center gap-1">
+            <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded font-medium">📦 3n</span>
+            <span className="text-gray-600">Pacote especial (ex: 3 noites)</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded font-medium">📦 Mín</span>
+            <span className="text-gray-600">Mínimo de noites exigido</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">📦/💰</span>
+            <span className="text-gray-600">Preços mistos (bundle + diária)</span>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          • Preços de pacotes já foram divididos pelo número de noites para comparação
+          <br/>
+          • Pontos maiores no gráfico indicam preços oriundos de bundles/pacotes
+        </p>
       </div>
 
       {/* Footer com informações */}

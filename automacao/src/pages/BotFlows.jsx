@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import FlowEditor from '../components/FlowEditor/FlowEditor';
+import BotFieldsModal from '../components/Modals/BotFieldsModal';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -19,6 +20,7 @@ const BotFlows = () => {
   const [viewMode, setViewMode] = useState('folders'); // folders ou list
   const [selectedFlow, setSelectedFlow] = useState(null); // Flow selecionado para editar
   const [showNewFlowModal, setShowNewFlowModal] = useState(false);
+  const [showBotFieldsModal, setShowBotFieldsModal] = useState(false);
 
   useEffect(() => {
     loadBotData();
@@ -397,6 +399,14 @@ const BotFlows = () => {
 
   return (
     <div className="space-y-6">
+      <style>{`
+        .shadow-emerald-glow {
+          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.15);
+        }
+        .shadow-purple-glow {
+          box-shadow: 0 4px 14px rgba(147, 51, 234, 0.15);
+        }
+      `}</style>
       {/* Header */}
       <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-6 shadow-blue-elegant">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -442,13 +452,50 @@ const BotFlows = () => {
             <span className="text-sm font-medium text-steel-700">
               {filteredFlows.length} fluxo{filteredFlows.length !== 1 ? 's' : ''}
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Configurações do Bot */}
+      <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-6 shadow-blue-elegant">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-midnight-950 mb-2">
+              ⚙️ Configurações do Bot
+            </h2>
+            <p className="text-steel-600 text-sm">
+              Gerencie fluxos, campos personalizados e configurações avançadas
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setShowNewFlowModal(true)}
               className="bg-gradient-sapphire hover:bg-sapphire-600 text-white px-4 py-2 rounded-lg font-medium text-sm 
                 transition-all duration-200 shadow-sapphire-glow hover:shadow-lg hover:scale-105 
                 focus:outline-none focus:ring-2 focus:ring-sapphire-400/50 flex items-center gap-2"
             >
-              ✨ Novo
+              ✨ Novo Fluxo
+            </button>
+            <button
+              onClick={() => {
+                // TODO: Implementar modal de campos do usuário
+                console.log('Abrir modal de Campos do Usuário');
+              }}
+              className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 
+                text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 
+                shadow-emerald-glow hover:shadow-lg hover:scale-105 focus:outline-none 
+                focus:ring-2 focus:ring-emerald-400/50 flex items-center gap-2"
+            >
+              👤 Campos do Usuário
+            </button>
+            <button
+              onClick={() => setShowBotFieldsModal(true)}
+              className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 
+                text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 
+                shadow-purple-glow hover:shadow-lg hover:scale-105 focus:outline-none 
+                focus:ring-2 focus:ring-purple-400/50 flex items-center gap-2"
+            >
+              🤖 Campos do Bot
             </button>
           </div>
         </div>
@@ -646,6 +693,13 @@ const BotFlows = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Campos do Bot */}
+      <BotFieldsModal
+        isVisible={showBotFieldsModal}
+        onClose={() => setShowBotFieldsModal(false)}
+        bot={bot}
+      />
     </div>
   );
 };

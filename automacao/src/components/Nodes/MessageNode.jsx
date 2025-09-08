@@ -56,6 +56,19 @@ const MessageNode = ({ data, isConnectable, id, selected, onNodeClick }) => {
           font-weight: 500;
           line-height: 1.3;
         }
+        
+        .message-type {
+          font-size: 11px;
+          font-weight: 600;
+          margin-bottom: 4px;
+          opacity: 0.9;
+        }
+        
+        .message-preview {
+          font-size: 13px;
+          opacity: 0.95;
+          line-height: 1.2;
+        }
       `}</style>
       
       <div className="message-node-header">
@@ -63,7 +76,23 @@ const MessageNode = ({ data, isConnectable, id, selected, onNodeClick }) => {
       </div>
       
       <div className="message-node-content">
-        Clique para configurar
+        {data?.config?.type === 'text' ? (
+          <div>
+            <div className="message-type">📝 Texto</div>
+            <div className="message-preview">
+              {data.config.content ? data.config.content.substring(0, 50) + '...' : 'Clique para configurar'}
+            </div>
+          </div>
+        ) : data?.config?.type === 'template' ? (
+          <div>
+            <div className="message-type">📋 Template</div>
+            <div className="message-preview">
+              {data.config.label || 'Clique para configurar'}
+            </div>
+          </div>
+        ) : (
+          'Clique para configurar'
+        )}
       </div>
       
       <Handle

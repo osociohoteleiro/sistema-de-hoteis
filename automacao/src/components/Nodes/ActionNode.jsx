@@ -10,6 +10,29 @@ const ActionNode = ({ data, isConnectable, id, selected, onNodeClick }) => {
     }
   };
 
+  // Determinar o conteúdo baseado na configuração
+  const getActionContent = () => {
+    if (!data?.config?.type) {
+      return 'Clique para configurar';
+    }
+
+    const config = data.config;
+    switch (config.type) {
+      case 'set_field':
+        return `Definir ${config.fieldName || 'campo'}`;
+      case 'clear_field':
+        return `Limpar ${config.fieldName || 'campo'}`;
+      case 'webhook':
+        return 'Webhook configurado';
+      case 'sequence':
+        return `Seq: ${config.sequenceName || 'nome'}`;
+      case 'http_request':
+        return `HTTP ${config.method || 'GET'}`;
+      default:
+        return 'Ação configurada';
+    }
+  };
+
   return (
     <div 
       className={`action-node ${selected ? 'selected' : ''}`}
@@ -63,7 +86,7 @@ const ActionNode = ({ data, isConnectable, id, selected, onNodeClick }) => {
       </div>
       
       <div className="action-node-content">
-        Clique para configurar
+        {getActionContent()}
       </div>
       
       <Handle

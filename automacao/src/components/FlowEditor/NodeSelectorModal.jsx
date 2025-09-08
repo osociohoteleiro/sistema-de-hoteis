@@ -90,8 +90,9 @@ const NodeSelectorModal = ({
     const selectedNode = nodeTypes.find(node => node.type === nodeType);
     const nodeLabel = selectedNode ? selectedNode.label : nodeType;
     
+    // Só chamar onNodeSelect - deixar o FlowEditor gerenciar o fechamento do modal
     onNodeSelect(nodeType, nodeLabel);
-    handleClose();
+    // NÃO chamar handleClose() aqui - o FlowEditor já fecha o modal
   };
 
   const handleClose = () => {

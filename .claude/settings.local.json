@@ -163,7 +163,10 @@
       "Bash(tasklist)",
       "Bash(netstat:*)",
       "WebFetch(domain:www.chartjs.org)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(start http://localhost:5176/bot/b3758442-9e14-4ff6-9644-294e0d159aaf/flows)",
+      "Bash(psql:*)",
+      "WebFetch(domain:eco-encanto-pousada.artaxnet.com)"
     ],
     "deny": [],
     "ask": []

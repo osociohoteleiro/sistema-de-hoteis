@@ -93,21 +93,31 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       dateCondition = `AND rsp.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'`;
     }
 
-    // Price trends com período customizável
+    // Price trends com período customizável - apenas dados da última extração por data
     const priceTrends = await db.query(`
+      WITH latest_extraction_per_date AS (
+        SELECT 
+          DATE(rsp.check_in_date) as date,
+          rsp.property_id,
+          MAX(rsp.scraped_at) as latest_scraped_at
+        FROM rate_shopper_prices rsp
+        JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+        WHERE rs.hotel_id = $1
+          ${dateCondition.replace('rsp.scraped_at', 'rsp.scraped_at')}
+          AND rs.status = 'COMPLETED'
+        GROUP BY DATE(rsp.check_in_date), rsp.property_id
+      )
       SELECT 
-        DATE(rsp.scraped_at) as date,
+        latest.date,
         rsp_prop.property_name,
-        COALESCE(AVG(rsp.price), 0) as avg_price,
-        COUNT(rsp.id) as price_count
-      FROM rate_shopper_prices rsp
-      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+        rsp.price as avg_price,
+        1 as price_count
+      FROM latest_extraction_per_date latest
+      JOIN rate_shopper_prices rsp ON rsp.property_id = latest.property_id 
+        AND DATE(rsp.check_in_date) = latest.date 
+        AND rsp.scraped_at = latest.latest_scraped_at
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
-      WHERE rs.hotel_id = $1
-        ${dateCondition}
-        AND rs.status = 'COMPLETED'
-      GROUP BY DATE(rsp.scraped_at), rsp.property_id, rsp_prop.property_name
-      ORDER BY date ASC, rsp_prop.property_name
+      ORDER BY latest.date ASC, rsp_prop.property_name
     `, dateParams);
 
     // Properties with latest prices
@@ -252,24 +262,41 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
       dateParams.push(startDateObj.toISOString().split('T')[0], endDateObj.toISOString().split('T')[0]);
     }
 
-    // Buscar dados históricos
+    // Buscar dados históricos - apenas da última extração por data
     const historicalData = await db.query(`
+      WITH latest_extraction_per_date AS (
+        SELECT 
+          DATE(rsp.check_in_date) as date,
+          rsp.property_id,
+          MAX(rsp.scraped_at) as latest_scraped_at
+        FROM rate_shopper_prices rsp
+        JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+        WHERE rs.hotel_id = $1
+          ${dateCondition}
+          AND rs.status IN ('COMPLETED', 'CANCELLED')
+        GROUP BY DATE(rsp.check_in_date), rsp.property_id
+      )
       SELECT 
-        DATE(rsp.check_in_date) as date,
+        latest.date,
         rsp_prop.property_name,
-        COALESCE(AVG(rsp.price), 0) as avg_price,
-        COALESCE(MIN(rsp.price), 0) as min_price,
-        COALESCE(MAX(rsp.price), 0) as max_price,
-        COUNT(rsp.id) as price_count,
-        CASE WHEN DATE(rsp.check_in_date) > CURRENT_DATE THEN true ELSE false END as is_future
-      FROM rate_shopper_prices rsp
-      JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
+        rsp.price as avg_price,
+        rsp.price as min_price,
+        rsp.price as max_price,
+        1 as price_count,
+        CASE WHEN latest.date > CURRENT_DATE THEN true ELSE false END as is_future,
+        -- Informações sobre bundles
+        CASE WHEN rsp.is_bundle = true THEN 1 ELSE 0 END as bundle_count,
+        CASE WHEN rsp.is_bundle = false THEN 1 ELSE 0 END as regular_count,
+        COALESCE(CASE WHEN rsp.is_bundle = true THEN rsp.bundle_size ELSE NULL END, 0) as avg_bundle_size,
+        COALESCE(CASE WHEN rsp.is_bundle = true THEN rsp.bundle_size ELSE NULL END, 0) as max_bundle_size,
+        -- Indicador se o preço vem de bundle
+        rsp.is_bundle as is_mostly_bundle
+      FROM latest_extraction_per_date latest
+      JOIN rate_shopper_prices rsp ON rsp.property_id = latest.property_id 
+        AND DATE(rsp.check_in_date) = latest.date 
+        AND rsp.scraped_at = latest.latest_scraped_at
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
-      WHERE rs.hotel_id = $1
-        ${dateCondition}
-        AND rs.status IN ('COMPLETED', 'CANCELLED')
-      GROUP BY DATE(rsp.check_in_date), rsp_prop.property_name
-      ORDER BY date ASC, rsp_prop.property_name
+      ORDER BY latest.date ASC, rsp_prop.property_name
     `, dateParams);
 
     // DEBUG: Log dos dados históricos retornados (removido para produção)
@@ -295,6 +322,13 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
       chartData[date][`${row.property_name}_min`] = parseFloat(row.min_price);
       chartData[date][`${row.property_name}_max`] = parseFloat(row.max_price);
       chartData[date][`${row.property_name}_count`] = parseInt(row.price_count);
+      
+      // Adicionar informações de bundle para o gráfico
+      chartData[date][`${row.property_name}_bundle_count`] = parseInt(row.bundle_count);
+      chartData[date][`${row.property_name}_regular_count`] = parseInt(row.regular_count);
+      chartData[date][`${row.property_name}_avg_bundle_size`] = parseFloat(row.avg_bundle_size);
+      chartData[date][`${row.property_name}_max_bundle_size`] = parseInt(row.max_bundle_size);
+      chartData[date][`${row.property_name}_is_mostly_bundle`] = row.is_mostly_bundle;
     });
 
     // TEMPORARIAMENTE DESABILITADO: Se há poucos dados históricos, adicionar alguns dados simulados para demonstração
@@ -486,7 +520,11 @@ router.get('/:hotel_id/debug-prices', async (req, res) => {
         rs.status as search_status,
         rs.start_date as search_start,
         rs.end_date as search_end,
-        rs.completed_at as search_completed
+        rs.completed_at as search_completed,
+        -- Adicionar informações de bundle
+        rsp.is_bundle,
+        rsp.bundle_size,
+        rsp.original_price
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id

@@ -152,12 +152,60 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
  * POST /api/rate-shopper/:hotel_id/stop-extraction
  */
 router.post('/:hotel_id/stop-extraction', async (req, res) => {
-  const hotelId = req.params.hotel_id;
+  const hotel_id = req.params.hotel_id;
 
   try {
+    const Hotel = require('../models/Hotel');
+    
+    // Converter UUID para ID se necessário (igual ao start-extraction)
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Hotel not found' 
+        });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
     const extraction = activeExtractions.get(hotelId);
     
     if (!extraction) {
+      console.log(`⚠️ Extração não encontrada no Map para hotel ${hotelId}. Verificando se é extração órfã...`);
+      
+      // Verificar se é uma extração órfã no banco de dados
+      try {
+        const RateShopperSearch = require('../models/RateShopperSearch');
+        const runningSearches = await RateShopperSearch.findByHotel(hotelId, { status: 'RUNNING' });
+        
+        if (runningSearches.length > 0) {
+          console.log(`🧹 Encontradas ${runningSearches.length} extrações órfãs para hotel ${hotelId}. Limpando automaticamente...`);
+          
+          for (const staleSearch of runningSearches) {
+            await staleSearch.updateStatus('CANCELLED', {
+              error_log: 'Extração órfã detectada durante tentativa de pausa - limpeza automática'
+            });
+            console.log(`✅ Search ID ${staleSearch.id} marcada como CANCELLED automaticamente`);
+          }
+          
+          return res.json({
+            success: true,
+            message: 'Extrações órfãs foram detectadas e limpas automaticamente. A página será recarregada.',
+            data: {
+              hotelId: hotelId,
+              status: 'CLEANED',
+              stale_extractions_cleaned: runningSearches.length
+            }
+          });
+        }
+      } catch (cleanupError) {
+        console.error('Erro durante limpeza automática:', cleanupError);
+      }
+      
       return res.status(404).json({
         success: false,
         error: 'Nenhuma extração ativa encontrada para este hotel'
@@ -261,10 +309,28 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
  * GET /api/rate-shopper/:hotel_id/extraction-status
  */
 router.get('/:hotel_id/extraction-status', async (req, res) => {
-  const hotelId = req.params.hotel_id;
+  const hotel_id = req.params.hotel_id;
 
   try {
+    const Hotel = require('../models/Hotel');
+    
+    // Converter UUID para ID se necessário (igual aos outros endpoints)
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Hotel not found' 
+        });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
     const extraction = activeExtractions.get(hotelId);
+
 
     if (!extraction) {
       return res.json({
@@ -392,6 +458,72 @@ router.post('/emergency-stop-all', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Erro na parada de emergência'
+    });
+  }
+});
+
+/**
+ * Limpa extrações com status RUNNING que não estão realmente ativas
+ * POST /api/rate-shopper-extraction/cleanup-stale-extractions
+ */
+router.post('/cleanup-stale-extractions', async (req, res) => {
+  try {
+    console.log('🧹 Iniciando limpeza de extrações órfãs...');
+    
+    const RateShopperSearch = require('../models/RateShopperSearch');
+    
+    // Buscar todas as extrações com status RUNNING no banco
+    const runningSearches = await RateShopperSearch.findRunning();
+    console.log(`🔍 Encontradas ${runningSearches.length} extrações marcadas como RUNNING no banco`);
+    
+    // Verificar quais estão realmente ativas no Map
+    const staleSearches = [];
+    const activeExtractionIds = Array.from(activeExtractions.keys());
+    
+    console.log(`🔍 Extrações ativas no Map: [${activeExtractionIds.join(', ')}]`);
+    
+    for (const search of runningSearches) {
+      const isActuallyActive = activeExtractions.has(search.hotel_id);
+      console.log(`🔍 Search ID ${search.id} (hotel_id: ${search.hotel_id}) - Ativa no Map: ${isActuallyActive}`);
+      
+      if (!isActuallyActive) {
+        staleSearches.push(search);
+      }
+    }
+    
+    console.log(`🧹 Encontradas ${staleSearches.length} extrações órfãs para limpar`);
+    
+    // Marcar extrações órfãs como CANCELLED
+    let cleanedCount = 0;
+    for (const staleSearch of staleSearches) {
+      try {
+        await staleSearch.updateStatus('CANCELLED', {
+          error_log: 'Extração órfã - processo não encontrado (limpeza automática)'
+        });
+        cleanedCount++;
+        console.log(`✅ Search ID ${staleSearch.id} marcada como CANCELLED`);
+      } catch (error) {
+        console.error(`❌ Erro ao limpar search ID ${staleSearch.id}:`, error.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Limpeza concluída: ${cleanedCount} extrações órfãs foram marcadas como CANCELLED`,
+      data: {
+        total_running_in_db: runningSearches.length,
+        total_active_in_map: activeExtractionIds.length,
+        stale_extractions_found: staleSearches.length,
+        extractions_cleaned: cleanedCount,
+        cleaned_search_ids: staleSearches.map(s => s.id)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Cleanup stale extractions error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao limpar extrações órfãs'
     });
   }
 });

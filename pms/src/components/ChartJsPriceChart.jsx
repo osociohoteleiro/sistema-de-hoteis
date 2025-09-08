@@ -157,7 +157,32 @@ const ChartJsPriceChart = ({
           label: function(context) {
             const value = context.parsed.y;
             if (value === null || value === undefined) return null;
-            return `${context.dataset.label}: R$ ${value.toFixed(2)}`;
+            
+            const dataIndex = context.dataIndex;
+            const rawData = chartData?.processedData?.[dataIndex];
+            const propertyName = context.dataset.label;
+            
+            let label = `${propertyName}: R$ ${value.toFixed(2)}`;
+            
+            // Adicionar informações de bundle se disponível
+            if (rawData) {
+              const bundleCount = rawData[`${propertyName}_bundle_count`];
+              const regularCount = rawData[`${propertyName}_regular_count`];
+              const isMostlyBundle = rawData[`${propertyName}_is_mostly_bundle`];
+              const avgBundleSize = rawData[`${propertyName}_avg_bundle_size`];
+              
+              if (bundleCount > 0) {
+                if (isMostlyBundle && avgBundleSize > 1) {
+                  label += ` 📦 (Pacote ${avgBundleSize.toFixed(0)} noites)`;
+                } else if (bundleCount > regularCount) {
+                  label += ` 📦 (Mín. noites)`;
+                } else if (bundleCount > 0 && regularCount > 0) {
+                  label += ` 📦/💰 (Misto)`;
+                }
+              }
+            }
+            
+            return label;
           },
           afterBody: function(context) {
             const dataIndex = context[0].dataIndex;
@@ -298,7 +323,7 @@ const ChartJsPriceChart = ({
     apiData.forEach(record => {
       Object.keys(record).forEach(key => {
         const trimmedKey = key.trim();
-        // Filtrar apenas nomes de propriedades válidos (excluir campos meta)
+        // Filtrar apenas nomes de propriedades válidos (excluir campos meta e bundle)
         if (trimmedKey !== 'date' && 
             trimmedKey !== '' &&
             trimmedKey !== 'isFuture' &&
@@ -307,6 +332,11 @@ const ChartJsPriceChart = ({
             !trimmedKey.includes('_min') &&
             !trimmedKey.includes('_max') &&
             !trimmedKey.includes('_count') &&
+            !trimmedKey.includes('_bundle_count') &&
+            !trimmedKey.includes('_regular_count') &&
+            !trimmedKey.includes('_avg_bundle_size') &&
+            !trimmedKey.includes('_max_bundle_size') &&
+            !trimmedKey.includes('_is_mostly_bundle') &&
             !trimmedKey.includes('created_at') &&
             !trimmedKey.includes('updated_at')) {
           propertiesSet.add(trimmedKey);
@@ -447,11 +477,62 @@ const ChartJsPriceChart = ({
         borderColor: colors.border,
         backgroundColor: colors.background,
         pointBackgroundColor: colors.point,
-        pointBorderColor: '#ffffff',
-        pointBorderWidth: 2,
+        pointBorderColor: (context) => {
+          // Borda dourada para pontos de bundles
+          const dataIndex = context?.dataIndex;
+          const rawData = context?.chart?.data?.processedData?.[dataIndex];
+          const propertyName = context?.dataset?.label;
+          
+          if (rawData && propertyName) {
+            const bundleCount = rawData[`${propertyName}_bundle_count`];
+            const isMostlyBundle = rawData[`${propertyName}_is_mostly_bundle`];
+            
+            if (bundleCount > 0 && isMostlyBundle) {
+              return '#F59E0B'; // Cor dourada para pacotes
+            } else if (bundleCount > 0) {
+              return '#8B5CF6'; // Cor roxa para misto
+            }
+          }
+          
+          return '#ffffff'; // Branco padrão
+        },
+        pointBorderWidth: (context) => {
+          // Borda mais espessa para bundles
+          const dataIndex = context?.dataIndex;
+          const rawData = context?.chart?.data?.processedData?.[dataIndex];
+          const propertyName = context?.dataset?.label;
+          
+          if (rawData && propertyName) {
+            const bundleCount = rawData[`${propertyName}_bundle_count`];
+            if (bundleCount > 0) {
+              return 3; // Borda mais espessa para bundles
+            }
+          }
+          
+          return 2; // Espessura padrão
+        },
         pointRadius: (context) => {
           // Mostrar pontos apenas onde há dados (não para valores null)
-          return context.parsed.y !== null ? 4 : 0;
+          if (context.parsed.y === null) return 0;
+          
+          // Destacar pontos de bundles com tamanho maior
+          const dataIndex = context.dataIndex;
+          const rawData = context.chart.data.processedData?.[dataIndex];
+          const propertyName = context.dataset.label;
+          
+          if (rawData) {
+            const bundleCount = rawData[`${propertyName}_bundle_count`];
+            const isMostlyBundle = rawData[`${propertyName}_is_mostly_bundle`];
+            
+            // Pontos maiores para bundles
+            if (bundleCount > 0 && isMostlyBundle) {
+              return 6; // Ponto maior para bundles
+            } else if (bundleCount > 0) {
+              return 5; // Ponto médio para misto
+            }
+          }
+          
+          return 4; // Tamanho padrão
         },
         pointHoverRadius: 6,
         fill: false,

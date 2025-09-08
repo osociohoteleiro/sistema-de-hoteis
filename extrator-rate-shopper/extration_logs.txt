@@ -1,0 +1,6 @@
+
+> booking-prices-scrapper@1.0.0 process-database:headless
+> HEADLESS=true node src/database-processor.js
+
+'HEADLESS' n∆o Ç reconhecido como um comando interno
+ou externo, um programa oper†vel ou um arquivo em lotes.

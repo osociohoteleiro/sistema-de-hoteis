@@ -653,38 +653,74 @@ const RateShopperDashboard = () => {
   };
 
   const handleStopExtraction = async (search) => {
-    try {
-      const hotelId = 2;
-      const response = await axios.post(`/api/rate-shopper-extraction/${hotelId}/stop-extraction`);
+    const confirmed = await new Promise((resolve) => {
+      setConfirmModal({
+        isOpen: true,
+        type: 'warning',
+        title: 'Pausar Extração',
+        message: `Deseja pausar a extração de "${search.property_name}"? Os preços já coletados (${search.total_prices_found || 0}) serão preservados e a extração poderá ser retomada a partir de onde parou.`,
+        confirmText: 'Pausar Extração',
+        cancelText: 'Continuar Extração',
+        onConfirm: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
 
-      if (response.data.success) {
-        setNotification({
-          type: 'success',
-          title: 'Extração Pausada!',
-          message: `Extração de ${search.property_name} pausada com sucesso`
-        });
-        
-        // FORÇAR ATUALIZAÇÃO IMEDIATA do status local
-        setDashboardData(prevData => ({
-          ...prevData,
-          recent_searches: prevData.recent_searches.map(s => 
-            s.id === search.id 
-              ? { ...s, status: 'CANCELLED' }
-              : s
-          )
-        }));
-        
-        // Recarregar dados do servidor para confirmar
-        setTimeout(() => {
-          loadDashboardData();
-        }, 500);
+    if (!confirmed) return;
+
+    try {
+      const response = await apiService.request(`/rate-shopper-extraction/${selectedHotelUuid}/stop-extraction`, {
+        method: 'POST'
+      });
+
+      if (response.success) {
+        // Verificar se foi uma limpeza automática de extrações órfãs
+        if (response.data?.status === 'CLEANED') {
+          setNotification({
+            type: 'info',
+            title: 'Extrações Órfãs Limpas',
+            message: `${response.data.stale_extractions_cleaned} extrações órfãs foram detectadas e limpas automaticamente. A página será recarregada.`
+          });
+          
+          // Recarregar imediatamente para mostrar o estado limpo
+          setTimeout(() => {
+            loadDashboardData();
+          }, 1000);
+        } else {
+          setNotification({
+            type: 'success',
+            title: 'Extração Pausada!',
+            message: `Extração de ${search.property_name} pausada. ${search.total_prices_found || 0} preços coletados foram preservados. Você pode retomar a extração a partir de onde parou.`
+          });
+          
+          // FORÇAR ATUALIZAÇÃO IMEDIATA do status local
+          setDashboardData(prevData => ({
+            ...prevData,
+            recent_searches: prevData.recent_searches.map(s => 
+              s.id === search.id 
+                ? { ...s, status: 'CANCELLED' }
+                : s
+            )
+          }));
+          
+          // Recarregar dados do servidor para confirmar
+          setTimeout(() => {
+            loadDashboardData();
+          }, 500);
+        }
       }
     } catch (error) {
       console.error('Error stopping extraction:', error);
       setNotification({
         type: 'error',
         title: 'Erro ao Pausar Extração',
-        message: error.response?.data?.error || 'Ocorreu um erro inesperado'
+        message: error.response?.data?.error || error.error || 'Ocorreu um erro inesperado'
       });
     }
   };
@@ -1364,6 +1400,8 @@ const RateShopperDashboard = () => {
                               ? `✅ Finalizada: ${search.total_prices_found || 0} preços encontrados`
                               : search.status === 'FAILED'
                               ? `❌ Erro na execução`
+                              : search.status === 'CANCELLED'
+                              ? `⏸️ Pausada: ${search.total_prices_found || 0} preços salvos • Pode retomar de onde parou`
                               : `⏳ Aguardando processamento (${search.total_dates} datas)`
                             }
                           </div>
@@ -1382,11 +1420,14 @@ const RateShopperDashboard = () => {
                           ? 'bg-green-100 text-green-800'
                           : search.status === 'FAILED'
                           ? 'bg-red-100 text-red-800'
+                          : search.status === 'CANCELLED'
+                          ? 'bg-orange-100 text-orange-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
                         {search.status === 'RUNNING' ? '🔄 Executando' : 
                          search.status === 'COMPLETED' ? '✅ Concluída' :
                          search.status === 'FAILED' ? '❌ Erro' :
+                         search.status === 'CANCELLED' ? '⏸️ Pausada' :
                          '⏳ Pendente'}
                       </span>
                       
@@ -1427,16 +1468,20 @@ const RateShopperDashboard = () => {
                             onClick={() => handleStartExtraction(search)}
                             disabled={startingExtractions.has(search.id)}
                             className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            title={search.status === 'CANCELLED' 
+                              ? `Retomar extração a partir de onde parou (${search.total_prices_found || 0} preços já coletados)`
+                              : 'Tentar novamente a extração completa'
+                            }
                           >
                             {startingExtractions.has(search.id) ? (
                               <>
                                 <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                                {search.status === 'CANCELLED' ? 'Reiniciando...' : 'Reiniciando...'}
+                                {search.status === 'CANCELLED' ? 'Retomando...' : 'Reiniciando...'}
                               </>
                             ) : (
                               <>
                                 <Play className="h-3 w-3 mr-1" />
-                                {search.status === 'CANCELLED' ? 'Retomar' : 'Tentar Novamente'}
+                                {search.status === 'CANCELLED' ? 'Retomar de onde parou' : 'Tentar Novamente'}
                               </>
                             )}
                           </button>
@@ -1625,11 +1670,14 @@ const RateShopperDashboard = () => {
                         ? 'bg-green-100 text-green-800'
                         : search.status === 'FAILED'
                         ? 'bg-red-100 text-red-800'
+                        : search.status === 'CANCELLED'
+                        ? 'bg-orange-100 text-orange-800'
                         : 'bg-gray-100 text-gray-800'
                     }`}>
                       {search.status === 'RUNNING' ? '🔄 Executando' : 
                        search.status === 'COMPLETED' ? '✅ Concluída' :
                        search.status === 'FAILED' ? '❌ Erro' :
+                       search.status === 'CANCELLED' ? '⏸️ Pausada' :
                        '⏳ Pendente'}
                     </span>
                   </td>
@@ -1644,7 +1692,9 @@ const RateShopperDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
+                        console.log('🗑️ Delete button clicked for search:', search.id);
                         handleDeleteSearch(search);
                       }}
                       className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"

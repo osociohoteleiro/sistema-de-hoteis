@@ -1465,18 +1465,15 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
   let current_url = url
 
   let i = 1
-  let ammount_of_dates_to_jump_after_bundle_found = null
+  const processedDates = new Set()
+  
   for (const date of dates) {
     const current_execution = i
     i++
 
-    if (ammount_of_dates_to_jump_after_bundle_found <= 0) {
-      ammount_of_dates_to_jump_after_bundle_found = null
-    }
-
-    if (ammount_of_dates_to_jump_after_bundle_found) {
-      ammount_of_dates_to_jump_after_bundle_found--
-      console.log(`Price ${current_execution} of ${dates.length} extracted`)
+    const dateKey = date.toISOString().split('T')[0]
+    if (processedDates.has(dateKey)) {
+      console.log(`Price ${current_execution} of ${dates.length} extracted (already processed)`)
       continue
     }
 
@@ -1543,17 +1540,13 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
         const selected_block_price_string_parsed_to_brazil_locale =
           selected_block_price_string.split('.').join(',')
 
-        if (bundle_size > 1) {
-          ammount_of_dates_to_jump_after_bundle_found = bundle_size - 1
-        }
-
         for (let save_result_execution = 1; save_result_execution <= bundle_size; save_result_execution++) {
           console.log({ current_execution, save_result_execution, bundle_size })
           const bundle_part_date = dates[(current_execution - 1) + (save_result_execution - 1)]
 
           if (!bundle_part_date) break
 
-          let next_bundle_day_date = new Date(date.getTime())
+          let next_bundle_day_date = new Date(bundle_part_date.getTime())
           next_bundle_day_date.setUTCDate(next_bundle_day_date.getUTCDate() + 1)
 
           const final_result_current_date = generate_final_result_date(bundle_part_date)
@@ -1562,6 +1555,10 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
           // TODO: Tirar último item do CSV depois
           const value = `${final_result_current_date};${final_result_next_day_date};${selected_block_price_string_parsed_to_brazil_locale};${bundle_size > 1 ? "BUNDLE " + bundle_size : ""}`
           await write_to_file(results_filepath, value)
+          
+          // Marcar esta data como processada
+          const bundleDateKey = bundle_part_date.toISOString().split('T')[0]
+          processedDates.add(bundleDateKey)
         }
 
         break

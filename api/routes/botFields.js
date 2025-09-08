@@ -1,14 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const mysql = require('mysql2/promise');
-
-// Configuração do banco de dados
-const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'osh_hoteis'
-};
+const pgDb = require('../config/postgres');
 
 /**
  * GET /api/bot-fields/:hotel_uuid
@@ -20,10 +12,8 @@ router.get('/:hotel_uuid', async (req, res) => {
         
         console.log(`📋 Endpoint: Buscando campos do bot para hotel ${hotel_uuid}...`);
         
-        const connection = await mysql.createConnection(dbConfig);
-        
         // Buscar campos do OneNode para o hotel usando a estrutura real da tabela
-        const [onenodeFields] = await connection.execute(`
+        const onenodeFields = await pgDb.query(`
             SELECT 
                 obf.id,
                 obf.name,
@@ -34,12 +24,12 @@ router.get('/:hotel_uuid', async (req, res) => {
                 obf.hotel_uuid,
                 'onenode' as source
             FROM onenode_bot_fields obf
-            WHERE obf.hotel_uuid = ?
+            WHERE obf.hotel_uuid = $1
             ORDER BY obf.name
         `, [hotel_uuid]);
         
         // Buscar campos gerais do bot (tabela bot_fields existente)
-        const [generalFields] = await connection.execute(`
+        const generalFields = await pgDb.query(`
             SELECT 
                 bf.id,
                 bf.field_key,
@@ -52,11 +42,9 @@ router.get('/:hotel_uuid', async (req, res) => {
                 'general' as source
             FROM bot_fields bf
             JOIN hotels h ON h.id = bf.hotel_id
-            WHERE h.hotel_uuid = ? AND bf.active = 1
+            WHERE h.hotel_uuid = $1 AND bf.active = true
             ORDER BY bf.category, bf.field_key
         `, [hotel_uuid]);
-        
-        await connection.end();
         
         // Combinar os campos
         const allFields = [
@@ -117,31 +105,30 @@ router.post('/update', async (req, res) => {
         
         console.log(`🔄 Endpoint: Atualizando campo "${var_ns}" (${name}) para hotel ${hotel_uuid}...`);
         
-        const connection = await mysql.createConnection(dbConfig);
-        
         if (source === 'onenode') {
-            // Atualizar na tabela onenode_bot_fields usando INSERT ON DUPLICATE KEY UPDATE com var_ns
-            const [result] = await connection.execute(`
+            // Atualizar na tabela onenode_bot_fields usando INSERT ON CONFLICT (UPSERT)
+            const result = await pgDb.query(`
                 INSERT INTO onenode_bot_fields 
                 (hotel_uuid, name, var_ns, var_type, description, value) 
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
-                name = VALUES(name),
-                var_type = VALUES(var_type),
-                description = VALUES(description),
-                value = VALUES(value)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (hotel_uuid, var_ns) 
+                DO UPDATE SET 
+                name = EXCLUDED.name,
+                var_type = EXCLUDED.var_type,
+                description = EXCLUDED.description,
+                value = EXCLUDED.value
+                RETURNING id
             `, [hotel_uuid, name, var_ns, var_type, description, value]);
             
-            console.log(`✅ Campo OneNode "${var_ns}" (${name}) atualizado. Affected rows: ${result.affectedRows}`);
+            console.log(`✅ Campo OneNode "${var_ns}" (${name}) atualizado. Result: ${result.length > 0 ? 'Success' : 'Failed'}`);
         } else {
             // Atualizar na tabela bot_fields (requer hotel_id)
-            const [hotelRows] = await connection.execute(
-                'SELECT id FROM hotels WHERE hotel_uuid = ?',
+            const hotelRows = await pgDb.query(
+                'SELECT id FROM hotels WHERE hotel_uuid = $1',
                 [hotel_uuid]
             );
             
             if (hotelRows.length === 0) {
-                await connection.end();
                 return res.status(404).json({
                     success: false,
                     error: 'Hotel não encontrado',
@@ -151,22 +138,22 @@ router.post('/update', async (req, res) => {
             
             const hotel_id = hotelRows[0].id;
             
-            const [result] = await connection.execute(`
+            const result = await pgDb.query(`
                 INSERT INTO bot_fields 
                 (hotel_id, field_key, field_value, field_type, category, description, active) 
-                VALUES (?, ?, ?, ?, ?, ?, 1)
-                ON DUPLICATE KEY UPDATE 
-                field_value = VALUES(field_value),
-                field_type = VALUES(field_type),
-                category = VALUES(category),
-                description = VALUES(description),
+                VALUES ($1, $2, $3, $4, $5, $6, true)
+                ON CONFLICT (hotel_id, field_key) 
+                DO UPDATE SET 
+                field_value = EXCLUDED.field_value,
+                field_type = EXCLUDED.field_type,
+                category = EXCLUDED.category,
+                description = EXCLUDED.description,
                 updated_at = CURRENT_TIMESTAMP
-            `, [hotel_id, field_key, field_value, field_type, category, description]);
+                RETURNING id
+            `, [hotel_id, var_ns, value, var_type, 'General', description]);
             
-            console.log(`✅ Campo geral "${field_key}" atualizado. Affected rows: ${result.affectedRows}`);
+            console.log(`✅ Campo geral "${var_ns}" atualizado. Result: ${result.length > 0 ? 'Success' : 'Failed'}`);
         }
-        
-        await connection.end();
         
         res.json({
             success: true,
@@ -205,15 +192,10 @@ router.post('/update-all', async (req, res) => {
         
         console.log(`🔄 Endpoint: Atualizando ${fields.length} campos para hotel ${hotel_uuid}...`);
         
-        const connection = await mysql.createConnection(dbConfig);
-        
-        // Iniciar transação
-        await connection.beginTransaction();
-        
-        let updatedCount = 0;
-        let errors = [];
-        
-        try {
+        const result = await pgDb.transaction(async (client) => {
+            let updatedCount = 0;
+            let errors = [];
+            
             for (const field of fields) {
                 const { var_ns, name, value, var_type = 'STRING', description, source = 'onenode' } = field;
                 
@@ -222,75 +204,76 @@ router.post('/update-all', async (req, res) => {
                     continue;
                 }
                 
-                if (source === 'onenode') {
-                    // Atualizar na tabela onenode_bot_fields usando INSERT ON DUPLICATE KEY UPDATE com var_ns
-                    const [result] = await connection.execute(`
-                        INSERT INTO onenode_bot_fields 
-                        (hotel_uuid, name, var_ns, var_type, description, value) 
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE 
-                        name = VALUES(name),
-                        var_type = VALUES(var_type),
-                        description = VALUES(description),
-                        value = VALUES(value)
-                    `, [hotel_uuid, name, var_ns, var_type, description, value]);
-                    
-                    if (result.affectedRows > 0) {
-                        updatedCount++;
+                try {
+                    if (source === 'onenode') {
+                        // Atualizar na tabela onenode_bot_fields usando INSERT ON CONFLICT (UPSERT)
+                        const result = await client.query(`
+                            INSERT INTO onenode_bot_fields 
+                            (hotel_uuid, name, var_ns, var_type, description, value) 
+                            VALUES ($1, $2, $3, $4, $5, $6)
+                            ON CONFLICT (hotel_uuid, var_ns) 
+                            DO UPDATE SET 
+                            name = EXCLUDED.name,
+                            var_type = EXCLUDED.var_type,
+                            description = EXCLUDED.description,
+                            value = EXCLUDED.value
+                            RETURNING id
+                        `, [hotel_uuid, name, var_ns, var_type, description, value]);
+                        
+                        if (result.rows.length > 0) {
+                            updatedCount++;
+                        }
+                    } else {
+                        // Atualizar na tabela bot_fields (requer hotel_id)
+                        const hotelRows = await client.query(
+                            'SELECT id FROM hotels WHERE hotel_uuid = $1',
+                            [hotel_uuid]
+                        );
+                        
+                        if (hotelRows.rows.length === 0) {
+                            errors.push(`Hotel não encontrado para UUID: ${hotel_uuid}`);
+                            continue;
+                        }
+                        
+                        const hotel_id = hotelRows.rows[0].id;
+                        
+                        const result = await client.query(`
+                            INSERT INTO bot_fields 
+                            (hotel_id, field_key, field_value, field_type, category, description, active) 
+                            VALUES ($1, $2, $3, $4, $5, $6, true)
+                            ON CONFLICT (hotel_id, field_key) 
+                            DO UPDATE SET 
+                            field_value = EXCLUDED.field_value,
+                            field_type = EXCLUDED.field_type,
+                            category = EXCLUDED.category,
+                            description = EXCLUDED.description,
+                            updated_at = CURRENT_TIMESTAMP
+                            RETURNING id
+                        `, [hotel_id, var_ns, value, var_type, 'General', description]);
+                        
+                        if (result.rows.length > 0) {
+                            updatedCount++;
+                        }
                     }
-                } else {
-                    // Atualizar na tabela bot_fields (requer hotel_id)
-                    const [hotelRows] = await connection.execute(
-                        'SELECT id FROM hotels WHERE hotel_uuid = ?',
-                        [hotel_uuid]
-                    );
-                    
-                    if (hotelRows.length === 0) {
-                        errors.push(`Hotel não encontrado para UUID: ${hotel_uuid}`);
-                        continue;
-                    }
-                    
-                    const hotel_id = hotelRows[0].id;
-                    
-                    const [result] = await connection.execute(`
-                        INSERT INTO bot_fields 
-                        (hotel_id, field_key, field_value, field_type, category, description, active) 
-                        VALUES (?, ?, ?, ?, ?, ?, 1)
-                        ON DUPLICATE KEY UPDATE 
-                        field_value = VALUES(field_value),
-                        field_type = VALUES(field_type),
-                        category = VALUES(category),
-                        description = VALUES(description),
-                        updated_at = CURRENT_TIMESTAMP
-                    `, [hotel_id, field_key, field_value, field_type, category, description]);
-                    
-                    if (result.affectedRows > 0) {
-                        updatedCount++;
-                    }
+                } catch (fieldError) {
+                    errors.push(`Erro no campo ${var_ns}: ${fieldError.message}`);
                 }
             }
-            
-            // Commit da transação
-            await connection.commit();
             
             console.log(`✅ ${updatedCount} campos atualizados para hotel ${hotel_uuid}`);
             if (errors.length > 0) {
                 console.warn(`⚠️ ${errors.length} erros durante atualização:`, errors);
             }
             
-        } catch (transactionError) {
-            await connection.rollback();
-            throw transactionError;
-        }
-        
-        await connection.end();
+            return { updatedCount, errors };
+        });
         
         res.json({
             success: true,
-            message: `${updatedCount} campos atualizados com sucesso`,
-            updated_count: updatedCount,
+            message: `${result.updatedCount} campos atualizados com sucesso`,
+            updated_count: result.updatedCount,
             total_fields: fields.length,
-            errors: errors.length > 0 ? errors : undefined,
+            errors: result.errors.length > 0 ? result.errors : undefined,
             hotel_uuid: hotel_uuid
         });
         
@@ -322,17 +305,14 @@ router.post('/sync-from-onenode', async (req, res) => {
         
         console.log(`🔄 Sincronizando campos do OneNode para hotel ${hotel_uuid}, workspace ${workspace_id}...`);
         
-        const connection = await mysql.createConnection(dbConfig);
-        
         // Buscar credenciais do OneNode na tabela Integracoes
-        const [integrationRows] = await connection.execute(`
+        const integrationRows = await pgDb.query(`
             SELECT apikey, url_api, instancia_name 
             FROM Integracoes 
-            WHERE hotel_uuid = ? AND integration_name = 'onenode'
+            WHERE hotel_uuid = $1 AND integration_name = 'onenode'
         `, [hotel_uuid]);
         
         if (integrationRows.length === 0) {
-            await connection.end();
             return res.status(404).json({
                 success: false,
                 error: 'Integração OneNode não encontrada',
@@ -344,13 +324,12 @@ router.post('/sync-from-onenode', async (req, res) => {
         console.log(`🔑 Credenciais OneNode encontradas: ${integration.instancia_name}`);
         
         // Buscar dados do workspace (para validação)
-        const [workspaceRows] = await connection.execute(
-            'SELECT * FROM onenode_workspaces WHERE id = ? AND hotel_uuid = ? AND active = 1',
+        const workspaceRows = await pgDb.query(
+            'SELECT * FROM onenode_workspaces WHERE id = $1 AND hotel_uuid = $2 AND active = true',
             [workspace_id, hotel_uuid]
         );
         
         if (workspaceRows.length === 0) {
-            await connection.end();
             return res.status(404).json({
                 success: false,
                 error: 'Workspace não encontrado',
@@ -439,7 +418,6 @@ router.post('/sync-from-onenode', async (req, res) => {
         if (apiFields.length === 0) {
             console.log('❌ Nenhum campo retornado da API Uchat - não inserindo dados fictícios');
             
-            await connection.end();
             return res.status(400).json({
                 success: false,
                 error: 'API Uchat não retornou campos válidos',
@@ -510,16 +488,17 @@ router.post('/sync-from-onenode', async (req, res) => {
             }
             
             try {
-                // Usar INSERT ON DUPLICATE KEY UPDATE baseado na chave única var_ns
-                await connection.execute(`
+                // Usar INSERT ON CONFLICT (UPSERT)
+                await pgDb.query(`
                     INSERT INTO onenode_bot_fields 
                     (hotel_uuid, name, var_ns, var_type, description, value) 
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE 
-                    name = VALUES(name),
-                    var_type = VALUES(var_type),
-                    description = VALUES(description),
-                    value = VALUES(value)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (hotel_uuid, var_ns) 
+                    DO UPDATE SET 
+                    name = EXCLUDED.name,
+                    var_type = EXCLUDED.var_type,
+                    description = EXCLUDED.description,
+                    value = EXCLUDED.value
                 `, [hotel_uuid, field.name, field.var_ns, field.var_type, field.description, field.value]);
                 
                 insertedCount++;
@@ -528,8 +507,6 @@ router.post('/sync-from-onenode', async (req, res) => {
                 console.warn(`⚠️ Erro ao inserir campo ${field.var_ns}:`, fieldError.message);
             }
         }
-        
-        await connection.end();
         
         console.log(`✅ ${insertedCount} campos sincronizados do OneNode para hotel ${hotel_uuid}`);
         
@@ -548,6 +525,88 @@ router.post('/sync-from-onenode', async (req, res) => {
             success: false,
             error: error.message,
             message: 'Erro ao sincronizar campos do OneNode'
+        });
+    }
+});
+
+/**
+ * DELETE /api/bot-fields/:hotel_uuid/:field_id
+ * Deletar campo do bot
+ */
+router.delete('/:hotel_uuid/:field_id', async (req, res) => {
+    try {
+        const { hotel_uuid, field_id } = req.params;
+        
+        if (!hotel_uuid || !field_id) {
+            return res.status(400).json({
+                success: false,
+                error: 'Parâmetros obrigatórios: hotel_uuid, field_id',
+                message: 'Dados incompletos'
+            });
+        }
+        
+        console.log(`🗑️ Endpoint: Deletando campo ${field_id} do hotel ${hotel_uuid}...`);
+        
+        // Tentar deletar da tabela onenode_bot_fields primeiro
+        const onenodeResult = await pgDb.query(
+            'DELETE FROM onenode_bot_fields WHERE id = $1 AND hotel_uuid = $2 RETURNING id',
+            [field_id, hotel_uuid]
+        );
+        
+        let deletedFrom = null;
+        let affectedRows = onenodeResult.length;
+        
+        if (affectedRows > 0) {
+            deletedFrom = 'onenode_bot_fields';
+            console.log(`✅ Campo deletado da tabela onenode_bot_fields`);
+        } else {
+            // Se não encontrou em onenode_bot_fields, tentar na bot_fields
+            const hotelRows = await pgDb.query(
+                'SELECT id FROM hotels WHERE hotel_uuid = $1',
+                [hotel_uuid]
+            );
+            
+            if (hotelRows.length > 0) {
+                const hotel_id = hotelRows[0].id;
+                
+                const generalResult = await pgDb.query(
+                    'DELETE FROM bot_fields WHERE id = $1 AND hotel_id = $2 RETURNING id',
+                    [field_id, hotel_id]
+                );
+                
+                affectedRows = generalResult.length;
+                if (affectedRows > 0) {
+                    deletedFrom = 'bot_fields';
+                    console.log(`✅ Campo deletado da tabela bot_fields`);
+                }
+            }
+        }
+        
+        if (affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Campo não encontrado',
+                message: 'Campo não existe ou não pertence a este hotel'
+            });
+        }
+        
+        console.log(`✅ Campo ${field_id} deletado com sucesso da tabela ${deletedFrom}`);
+        
+        res.json({
+            success: true,
+            message: `Campo deletado com sucesso`,
+            field_id: field_id,
+            hotel_uuid: hotel_uuid,
+            deleted_from: deletedFrom,
+            affected_rows: affectedRows
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro ao deletar campo do bot:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            message: 'Erro ao deletar campo do bot'
         });
     }
 });

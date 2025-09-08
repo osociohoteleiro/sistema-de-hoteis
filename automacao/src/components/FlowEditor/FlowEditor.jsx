@@ -112,6 +112,7 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
   );
 
   const onConnectStart = useCallback((_, { nodeId, handleId, handleType }) => {
+    console.log('🚀 onConnectStart - Definindo pendingConnection:', { nodeId, handleId, handleType });
     setPendingConnection({ nodeId, handleId, handleType });
   }, []);
 
@@ -140,11 +141,16 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
         console.log('📍 Posição no flow:', flowPosition);
         console.log('📍 Posição ajustada modal:', adjustedPosition);
         console.log('🎯 ReactFlow instance:', reactFlowInstance);
+        console.log('🔗 Mantendo pendingConnection para o modal:', pendingConnection);
         
         setModalPosition(adjustedPosition);
         setShowModal(true);
+        // NÃO limpar pendingConnection aqui - precisamos dela para criar o nó
+        return;
       }
     }
+    // Só limpar pendingConnection se não mostrarmos o modal
+    console.log('🧹 onConnectEnd - Limpando pendingConnection (conexão não usada)');
     setPendingConnection(null);
   }, [readOnly, pendingConnection, reactFlowInstance]);
 
@@ -209,7 +215,7 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
       startNode: { message: 'Bem-vindo!' },
       messageNode: { messages: [''] },
       questionNode: { question: '', variable: '', validation: 'none' },
-      actionNode: { actionType: 'set_variable', variable: '', value: '' },
+      actionNode: { type: 'set_field', fieldName: '', fieldValue: '' },
       conditionNode: { condition: '', variable: '', operator: 'equals', value: '' },
       emailNode: { to: '', subject: '', body: '' },
       goToNode: { targetFlow: '', targetNode: '' },
@@ -233,7 +239,7 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
     
     // Fechar o modal
     setShowModal(false);
-    setPendingConnection(null);
+    // NÃO limpar pendingConnection aqui - precisamos dela para criar o nó depois
     
     // Abrir a sidebar com as informações do componente selecionado
     setSelectedNodeId(null); // Não há nó criado ainda
@@ -246,6 +252,7 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
   };
 
   const handleModalClose = () => {
+    console.log('❌ handleModalClose - Limpando pendingConnection (modal fechado)');
     setShowModal(false);
     setPendingConnection(null);
   };
@@ -272,11 +279,101 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
   }, []);
 
   const handleSidebarClose = useCallback(() => {
+    console.log('🚪 handleSidebarClose - Limpando pendingConnection (sidebar fechada/cancelada)');
     setShowSidebar(false);
     setSelectedNodeId(null);
     setSelectedNodeType(null);
     setSelectedNodeData(null);
+    // Limpar pendingConnection quando fechar sidebar (cancelar)
+    setPendingConnection(null);
   }, []);
+
+  const handleNodeConfigSave = useCallback((nodeId, configData) => {
+    console.log('💾 Salvando configurações:', { nodeId, configData });
+    console.log('📍 Posição do modal:', modalPosition);
+    console.log('🔗 Conexão pendente:', pendingConnection);
+    
+    if (nodeId) {
+      // Atualizando nó existente
+      setNodes((nodes) =>
+        nodes.map((node) => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                label: configData.label || node.data.label,
+                config: {
+                  ...node.data.config,
+                  ...configData
+                }
+              }
+            };
+          }
+          return node;
+        })
+      );
+    } else {
+      // Criando novo nó (quando vem do modal de seleção)
+      console.log('🆕 Criando novo nó...', { pendingConnection, reactFlowInstance, modalPosition });
+      
+      if (pendingConnection && reactFlowInstance) {
+        // Determinar o tipo do nó baseado no nodeType da sidebar
+        let nodeType = 'messageNode';
+        let nodeId = `messageNode_${Date.now()}`;
+        
+        if (selectedNodeType === 'Ação') {
+          nodeType = 'actionNode';
+          nodeId = `actionNode_${Date.now()}`;
+        }
+        
+        // Posição onde o modal estava
+        const newNode = {
+          id: nodeId,
+          type: nodeType,
+          position: modalPosition,
+          data: {
+            label: configData.label || selectedNodeType || 'Nó',
+            config: configData,
+            onDelete: handleNodeDelete,
+            onNodeClick: handleNodeClick
+          },
+        };
+
+        console.log('🎨 Criando nó:', newNode);
+        setNodes((nds) => nds.concat(newNode));
+
+        // Criar conexão se havia uma pendente
+        if (pendingConnection && pendingConnection.nodeId) {
+          const newEdge = {
+            id: `edge_${pendingConnection.nodeId}_${newNode.id}`,
+            source: pendingConnection.nodeId,
+            target: newNode.id,
+            sourceHandle: pendingConnection.handleId,
+            targetHandle: 'input',
+            type: 'custom-edge',
+            data: { onEdgeDelete: handleEdgeDelete }
+          };
+          setEdges((eds) => eds.concat(newEdge));
+        }
+        
+        // Limpar pendingConnection após criar o nó
+        console.log('✅ handleNodeConfigSave - Limpando pendingConnection (nó criado com sucesso)');
+        setPendingConnection(null);
+      } else {
+        console.log('❌ Condições não atendidas para criar nó:', { 
+          pendingConnection: !!pendingConnection, 
+          reactFlowInstance: !!reactFlowInstance 
+        });
+      }
+    }
+    
+    // Fechar sidebar
+    setShowSidebar(false);
+    setSelectedNodeId(null);
+    setSelectedNodeType(null);
+    setSelectedNodeData(null);
+  }, [pendingConnection, modalPosition, reactFlowInstance, handleNodeDelete, handleNodeClick, handleEdgeDelete, setNodes, setEdges]);
 
   const onNodeDragStart = (event, node) => {
     event.dataTransfer.setData('application/reactflow', node.type);
@@ -422,9 +519,7 @@ const FlowEditor = ({ flowData, onSave, readOnly = false }) => {
         nodeData={selectedNodeData}
         onClose={handleSidebarClose}
         onSave={(nodeId, newData) => {
-          // TODO: Implementar salvamento das configurações do nó
-          console.log('💾 Salvando configurações:', { nodeId, newData });
-          handleSidebarClose();
+          handleNodeConfigSave(nodeId, newData);
         }}
       />
     </div>
