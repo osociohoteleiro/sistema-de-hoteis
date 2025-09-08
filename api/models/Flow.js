@@ -31,18 +31,18 @@ class Flow {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM flows WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM flows WHERE id = $1', [id]);
     return result.length > 0 ? new Flow(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM flows WHERE flow_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM flows WHERE flow_uuid = $1', [uuid]);
     return result.length > 0 ? new Flow(result[0]) : null;
   }
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT f.*, b.name as bot_name, h.hotel_nome, fo.name as folder_name, fo.color as folder_color
+      SELECT f.*, b.name as bot_name, h.name as hotel_nome, fo.name as folder_name, fo.color as folder_color
       FROM flows f 
       LEFT JOIN bots b ON f.bot_id = b.id 
       LEFT JOIN hotels h ON f.hotel_id = h.id 
@@ -52,22 +52,22 @@ class Flow {
     const params = [];
 
     if (filters.active !== undefined) {
-      query += ' AND f.active = ?';
+      query += ' AND f.active = $' + (params.length + 1);
       params.push(filters.active);
     }
 
     if (filters.bot_id) {
-      query += ' AND f.bot_id = ?';
+      query += ' AND f.bot_id = $' + (params.length + 1);
       params.push(filters.bot_id);
     }
 
     if (filters.bot_uuid) {
-      query += ' AND f.bot_uuid = ?';
+      query += ' AND f.bot_uuid = $' + (params.length + 1);
       params.push(filters.bot_uuid);
     }
 
     if (filters.workspace_id) {
-      query += ' AND f.workspace_id = ?';
+      query += ' AND f.workspace_id = $' + (params.length + 1);
       params.push(filters.workspace_id);
     }
 
@@ -75,35 +75,35 @@ class Flow {
       if (filters.folder_id === null) {
         query += ' AND f.folder_id IS NULL';
       } else {
-        query += ' AND f.folder_id = ?';
+        query += ' AND f.folder_id = $' + (params.length + 1);
         params.push(filters.folder_id);
       }
     }
 
     if (filters.flow_type) {
-      query += ' AND f.flow_type = ?';
+      query += ' AND f.flow_type = $' + (params.length + 1);
       params.push(filters.flow_type);
     }
 
     if (filters.status) {
-      query += ' AND f.status = ?';
+      query += ' AND f.status = $' + (params.length + 1);
       params.push(filters.status);
     }
 
     if (filters.is_default !== undefined) {
-      query += ' AND f.is_default = ?';
+      query += ' AND f.is_default = $' + (params.length + 1);
       params.push(filters.is_default);
     }
 
     if (filters.search) {
-      query += ' AND (f.name LIKE ? OR f.description LIKE ?)';
+      query += ' AND (f.name ILIKE $' + (params.length + 1) + ' OR f.description ILIKE $' + (params.length + 2) + ')';
       params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY f.priority DESC, f.sort_order, f.name';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      query += ' LIMIT $' + (params.length + 1);
       params.push(parseInt(filters.limit));
     }
 
@@ -120,17 +120,17 @@ class Flow {
 
   static async findByBot(botId, filters = {}) {
     let query = `
-      SELECT f.*, b.name as bot_name, h.hotel_nome, fo.name as folder_name, fo.color as folder_color
+      SELECT f.*, b.name as bot_name, h.name as hotel_nome, fo.name as folder_name, fo.color as folder_color
       FROM flows f 
       LEFT JOIN bots b ON f.bot_id = b.id 
       LEFT JOIN hotels h ON f.hotel_id = h.id 
       LEFT JOIN folders fo ON f.folder_id = fo.id
-      WHERE f.bot_id = ?
+      WHERE f.bot_id = $1
     `;
     const params = [botId];
 
     if (filters.active !== undefined) {
-      query += ' AND f.active = ?';
+      query += ' AND f.active = $' + (params.length + 1);
       params.push(filters.active);
     }
 
@@ -138,18 +138,18 @@ class Flow {
       if (filters.folder_id === null) {
         query += ' AND f.folder_id IS NULL';
       } else {
-        query += ' AND f.folder_id = ?';
+        query += ' AND f.folder_id = $' + (params.length + 1);
         params.push(filters.folder_id);
       }
     }
 
     if (filters.flow_type) {
-      query += ' AND f.flow_type = ?';
+      query += ' AND f.flow_type = $' + (params.length + 1);
       params.push(filters.flow_type);
     }
 
     if (filters.status) {
-      query += ' AND f.status = ?';
+      query += ' AND f.status = $' + (params.length + 1);
       params.push(filters.status);
     }
 
@@ -168,17 +168,17 @@ class Flow {
 
   static async findByBotUuid(botUuid, filters = {}) {
     let query = `
-      SELECT f.*, b.name as bot_name, h.hotel_nome, fo.name as folder_name, fo.color as folder_color
+      SELECT f.*, b.name as bot_name, h.name as hotel_nome, fo.name as folder_name, fo.color as folder_color
       FROM flows f 
       LEFT JOIN bots b ON f.bot_id = b.id 
       LEFT JOIN hotels h ON f.hotel_id = h.id 
       LEFT JOIN folders fo ON f.folder_id = fo.id
-      WHERE f.bot_uuid = ?
+      WHERE f.bot_uuid = $1
     `;
     const params = [botUuid];
 
     if (filters.active !== undefined) {
-      query += ' AND f.active = ?';
+      query += ' AND f.active = $' + (params.length + 1);
       params.push(filters.active);
     }
 
@@ -186,19 +186,24 @@ class Flow {
       if (filters.folder_id === null) {
         query += ' AND f.folder_id IS NULL';
       } else {
-        query += ' AND f.folder_id = ?';
+        query += ' AND f.folder_id = $' + (params.length + 1);
         params.push(filters.folder_id);
       }
     }
 
     if (filters.flow_type) {
-      query += ' AND f.flow_type = ?';
+      query += ' AND f.flow_type = $' + (params.length + 1);
       params.push(filters.flow_type);
     }
 
     if (filters.status) {
-      query += ' AND f.status = ?';
+      query += ' AND f.status = $' + (params.length + 1);
       params.push(filters.status);
+    }
+
+    if (filters.search) {
+      query += ' AND (f.name ILIKE $' + (params.length + 1) + ' OR f.description ILIKE $' + (params.length + 2) + ')';
+      params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY f.priority DESC, f.sort_order, f.name';
@@ -216,27 +221,27 @@ class Flow {
 
   static async findByFolder(folderId, filters = {}) {
     let query = `
-      SELECT f.*, b.name as bot_name, h.hotel_nome, fo.name as folder_name, fo.color as folder_color
+      SELECT f.*, b.name as bot_name, h.name as hotel_nome, fo.name as folder_name, fo.color as folder_color
       FROM flows f 
       LEFT JOIN bots b ON f.bot_id = b.id 
       LEFT JOIN hotels h ON f.hotel_id = h.id 
       LEFT JOIN folders fo ON f.folder_id = fo.id
-      WHERE f.folder_id = ?
+      WHERE f.folder_id = $1
     `;
     const params = [folderId];
 
     if (filters.active !== undefined) {
-      query += ' AND f.active = ?';
+      query += ' AND f.active = $' + (params.length + 1);
       params.push(filters.active);
     }
 
     if (filters.flow_type) {
-      query += ' AND f.flow_type = ?';
+      query += ' AND f.flow_type = $' + (params.length + 1);
       params.push(filters.flow_type);
     }
 
     if (filters.status) {
-      query += ' AND f.status = ?';
+      query += ' AND f.status = $' + (params.length + 1);
       params.push(filters.status);
     }
 
@@ -258,10 +263,11 @@ class Flow {
       // Update existing flow
       const result = await db.query(`
         UPDATE flows SET 
-        name = ?, description = ?, flow_type = ?, status = ?, version = ?,
-        flow_data = ?, variables = ?, settings = ?, triggers = ?, priority = ?,
-        is_default = ?, sort_order = ?, active = ?, folder_id = ?
-        WHERE id = ?
+        name = $1, description = $2, flow_type = $3, status = $4, version = $5,
+        flow_data = $6, variables = $7, settings = $8, triggers = $9, priority = $10,
+        is_default = $11, sort_order = $12, active = $13, folder_id = $14
+        WHERE id = $15
+        RETURNING *
       `, [
         this.name,
         this.description,
@@ -279,6 +285,10 @@ class Flow {
         this.folder_id,
         this.id
       ]);
+      
+      if (result.length > 0) {
+        this.flow_uuid = result[0].flow_uuid;
+      }
       return result;
     } else {
       // Create new flow
@@ -286,7 +296,8 @@ class Flow {
         INSERT INTO flows (bot_id, bot_uuid, workspace_id, workspace_uuid, hotel_id, hotel_uuid, 
                           folder_id, name, description, flow_type, status, version, flow_data, 
                           variables, settings, triggers, priority, is_default, sort_order, active) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        RETURNING *
       `, [
         this.bot_id,
         this.bot_uuid,
@@ -310,11 +321,10 @@ class Flow {
         this.active
       ]);
       
-      this.id = result.insertId;
-      
-      // Get the generated UUID
-      const newFlow = await Flow.findById(this.id);
-      this.flow_uuid = newFlow.flow_uuid;
+      if (result.length > 0) {
+        this.id = result[0].id;
+        this.flow_uuid = result[0].flow_uuid;
+      }
       
       return result;
     }
@@ -324,7 +334,7 @@ class Flow {
     if (!this.id) {
       throw new Error('Cannot delete flow without ID');
     }
-    return await db.query('DELETE FROM flows WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM flows WHERE id = $1', [this.id]);
   }
 
   async softDelete() {
@@ -366,7 +376,7 @@ class Flow {
     }
     
     // Remove default from other flows of the same bot
-    await db.query('UPDATE flows SET is_default = FALSE WHERE bot_id = ? AND id != ?', [this.bot_id, this.id]);
+    await db.query('UPDATE flows SET is_default = FALSE WHERE bot_id = $1 AND id != $2', [this.bot_id, this.id]);
     
     this.is_default = true;
     return await this.save();
@@ -379,7 +389,7 @@ class Flow {
     this.last_executed_at = new Date();
     
     await db.query(
-      'UPDATE flows SET execution_count = ?, last_executed_at = ? WHERE id = ?',
+      'UPDATE flows SET execution_count = $1, last_executed_at = $2 WHERE id = $3',
       [this.execution_count, this.last_executed_at, this.id]
     );
   }
@@ -442,7 +452,7 @@ class Flow {
   // Count flows by bot
   static async countByBot(botId) {
     const result = await db.query(
-      'SELECT COUNT(*) as count FROM flows WHERE bot_id = ? AND active = true',
+      'SELECT COUNT(*) as count FROM flows WHERE bot_id = $1 AND active = true',
       [botId]
     );
     return result[0].count;
@@ -451,7 +461,7 @@ class Flow {
   // Count flows by folder
   static async countByFolder(folderId) {
     const result = await db.query(
-      'SELECT COUNT(*) as count FROM flows WHERE folder_id = ? AND active = true',
+      'SELECT COUNT(*) as count FROM flows WHERE folder_id = $1 AND active = true',
       [folderId]
     );
     return result[0].count;

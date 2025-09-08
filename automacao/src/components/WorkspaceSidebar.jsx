@@ -6,20 +6,27 @@ const API_BASE_URL = 'http://localhost:3001/api';
 
 const WorkspaceSidebar = () => {
   const location = useLocation();
-  const { workspaceUuid } = useParams();
+  const params = useParams();
+  const workspaceUuid = params.workspaceUuid || params.workspaceId;
+  const botUuid = params.botUuid;
   const [workspace, setWorkspace] = useState(null);
   const [bots, setBots] = useState([]);
   const [expandedMenus, setExpandedMenus] = useState({
-    bots: false,
+    bots: location.pathname.includes('/bot/'), // Abrir automaticamente se estamos numa rota de bot
     whatsapp: false
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Se temos workspaceUuid, carregar por workspace
     if (workspaceUuid) {
       loadWorkspaceData();
+    } 
+    // Se temos botUuid mas não workspaceUuid, carregar por bot
+    else if (botUuid) {
+      loadDataFromBot();
     }
-  }, [workspaceUuid]);
+  }, [workspaceUuid, botUuid]);
 
   const loadWorkspaceData = async () => {
     try {
@@ -32,13 +39,55 @@ const WorkspaceSidebar = () => {
       }
 
       // Carregar bots da workspace
-      const response = await axios.get(`${API_BASE_URL}/bots/workspace/uuid/${workspaceUuid}?active=true`);
+      // Verificar se é um UUID (contém hífens) ou um ID numérico
+      const isUUID = workspaceUuid && workspaceUuid.includes('-');
+      const endpoint = isUUID 
+        ? `${API_BASE_URL}/bots/workspace/uuid/${workspaceUuid}?active=true`
+        : `${API_BASE_URL}/bots/workspace/${workspaceUuid}?active=true`;
+      
+      console.log('Carregando bots do workspace:', workspaceUuid, 'endpoint:', endpoint);
+      const response = await axios.get(endpoint);
       
       if (response.data.success) {
         setBots(response.data.data || []);
       }
     } catch (error) {
       console.error('Erro ao carregar workspace:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDataFromBot = async () => {
+    try {
+      setLoading(true);
+      
+      // Carregar bot selecionado do localStorage
+      const savedBot = localStorage.getItem('selectedBot');
+      if (savedBot) {
+        const bot = JSON.parse(savedBot);
+        
+        // Se o bot tem workspace_id, usar para carregar todos os bots
+        if (bot.workspace_id) {
+          console.log('Carregando workspace a partir do bot:', bot.workspace_id);
+          const response = await axios.get(`${API_BASE_URL}/bots/workspace/${bot.workspace_id}?active=true`);
+          
+          if (response.data.success) {
+            setBots(response.data.data || []);
+            
+            // Construir objeto workspace a partir dos dados do bot
+            setWorkspace({
+              id: bot.workspace_id,
+              workspace_uuid: bot.workspace_uuid,
+              name: bot.workspace_name,
+              hotel_nome: bot.hotel_nome,
+              hotel_id: bot.hotel_id
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados a partir do bot:', error);
     } finally {
       setLoading(false);
     }
@@ -72,7 +121,7 @@ const WorkspaceSidebar = () => {
     }
   };
 
-  if (!workspaceUuid) return null;
+  if (!workspaceUuid && !botUuid) return null;
 
   return (
     <div className="w-64 bg-gradient-card-blue backdrop-blur-sm min-h-screen fixed left-64 top-0 z-30 border-r border-sapphire-200/30 shadow-blue-elegant">
@@ -82,7 +131,7 @@ const WorkspaceSidebar = () => {
           <div>
             <p className="text-sapphire-600 text-xs font-medium uppercase tracking-wider">Workspace</p>
             <h2 className="text-midnight-950 font-semibold text-base mt-1">
-              {workspace?.workspace_name || 'Carregando...'}
+              {workspace?.name || workspace?.workspace_name || 'Carregando...'}
             </h2>
           </div>
           <div className="w-8 h-8 bg-gradient-sapphire rounded-lg flex items-center justify-center shadow-sapphire-glow">
@@ -129,10 +178,10 @@ const WorkspaceSidebar = () => {
                 ) : (
                   bots.map((bot) => (
                     <Link
-                      key={bot.uuid}
-                      to={`/bot/${bot.uuid}/flows`}
+                      key={bot.bot_uuid || bot.uuid}
+                      to={`/bot/${bot.bot_uuid || bot.uuid}/flows`}
                       className={`flex items-center space-x-2 px-4 py-2 rounded-md text-xs transition-minimal ${
-                        isActive(`/bot/${bot.uuid}/flows`)
+                        isActive(`/bot/${bot.bot_uuid || bot.uuid}/flows`)
                           ? 'bg-gradient-sapphire text-white shadow-blue-soft'
                           : 'text-steel-600 hover:bg-sapphire-50/30 hover:text-sapphire-700'
                       }`}
@@ -150,61 +199,69 @@ const WorkspaceSidebar = () => {
           <div className="my-3 border-t border-sapphire-200/20"></div>
 
           {/* WhatsApp Cloud */}
-          <Link
-            to={`/workspace/${workspaceUuid}/whatsapp-cloud`}
-            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
-              isActive(`/workspace/${workspaceUuid}/whatsapp-cloud`)
-                ? 'bg-gradient-sapphire text-white shadow-blue-soft'
-                : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
-            }`}
-          >
-            <span className="text-lg">☁️</span>
-            <span className="text-sm font-medium">WhatsApp Cloud</span>
-            <span className="ml-auto bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full font-semibold">Novo</span>
-          </Link>
+          {workspace?.workspace_uuid && (
+            <Link
+              to={`/workspace/${workspace.workspace_uuid}/whatsapp-cloud`}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+                isActive(`/workspace/${workspace.workspace_uuid}/whatsapp-cloud`)
+                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
+              }`}
+            >
+              <span className="text-lg">☁️</span>
+              <span className="text-sm font-medium">WhatsApp Cloud</span>
+              <span className="ml-auto bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full font-semibold">Novo</span>
+            </Link>
+          )}
 
           {/* WhatsApp App */}
-          <Link
-            to={`/workspace/${workspaceUuid}/whatsapp-app`}
-            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
-              isActive(`/workspace/${workspaceUuid}/whatsapp-app`)
-                ? 'bg-gradient-sapphire text-white shadow-blue-soft'
-                : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
-            }`}
-          >
-            <span className="text-lg">📱</span>
-            <span className="text-sm font-medium">WhatsApp App</span>
-            <span className="ml-auto bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-semibold">Evolution</span>
-          </Link>
+          {workspace?.workspace_uuid && (
+            <Link
+              to={`/workspace/${workspace.workspace_uuid}/whatsapp-app`}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+                isActive(`/workspace/${workspace.workspace_uuid}/whatsapp-app`)
+                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
+              }`}
+            >
+              <span className="text-lg">📱</span>
+              <span className="text-sm font-medium">WhatsApp App</span>
+              <span className="ml-auto bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-semibold">Evolution</span>
+            </Link>
+          )}
 
           {/* Divisor */}
           <div className="my-3 border-t border-sapphire-200/20"></div>
 
           {/* Configurações da Workspace */}
-          <Link
-            to={`/workspace/${workspaceUuid}/settings`}
-            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
-              isActive(`/workspace/${workspaceUuid}/settings`)
-                ? 'bg-gradient-sapphire text-white shadow-blue-soft'
-                : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
-            }`}
-          >
-            <span className="text-lg">⚙️</span>
-            <span className="text-sm font-medium">Configurações</span>
-          </Link>
+          {workspace?.workspace_uuid && (
+            <Link
+              to={`/workspace/${workspace.workspace_uuid}/settings`}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+                isActive(`/workspace/${workspace.workspace_uuid}/settings`)
+                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
+              }`}
+            >
+              <span className="text-lg">⚙️</span>
+              <span className="text-sm font-medium">Configurações</span>
+            </Link>
+          )}
 
           {/* Analytics */}
-          <Link
-            to={`/workspace/${workspaceUuid}/analytics`}
-            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
-              isActive(`/workspace/${workspaceUuid}/analytics`)
-                ? 'bg-gradient-sapphire text-white shadow-blue-soft'
-                : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
-            }`}
-          >
-            <span className="text-lg">📊</span>
-            <span className="text-sm font-medium">Analytics</span>
-          </Link>
+          {workspace?.workspace_uuid && (
+            <Link
+              to={`/workspace/${workspace.workspace_uuid}/analytics`}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+                isActive(`/workspace/${workspace.workspace_uuid}/analytics`)
+                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
+              }`}
+            >
+              <span className="text-lg">📊</span>
+              <span className="text-sm font-medium">Analytics</span>
+            </Link>
+          )}
 
         </div>
       </nav>

@@ -22,18 +22,18 @@ class Folder {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM folders WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM folders WHERE id = $1', [id]);
     return result.length > 0 ? new Folder(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM folders WHERE folder_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM folders WHERE folder_uuid = $1', [uuid]);
     return result.length > 0 ? new Folder(result[0]) : null;
   }
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT f.*, b.name as bot_name, h.hotel_nome 
+      SELECT f.*, b.name as bot_name, h.name as hotel_nome 
       FROM folders f 
       LEFT JOIN bots b ON f.bot_id = b.id 
       LEFT JOIN hotels h ON f.hotel_id = h.id 
@@ -42,32 +42,32 @@ class Folder {
     const params = [];
 
     if (filters.active !== undefined) {
-      query += ' AND f.active = ?';
+      query += ' AND f.active = $' + (params.length + 1);
       params.push(filters.active);
     }
 
     if (filters.bot_id) {
-      query += ' AND f.bot_id = ?';
+      query += ' AND f.bot_id = $' + (params.length + 1);
       params.push(filters.bot_id);
     }
 
     if (filters.bot_uuid) {
-      query += ' AND f.bot_uuid = ?';
+      query += ' AND f.bot_uuid = $' + (params.length + 1);
       params.push(filters.bot_uuid);
     }
 
     if (filters.workspace_id) {
-      query += ' AND f.workspace_id = ?';
+      query += ' AND f.workspace_id = $' + (params.length + 1);
       params.push(filters.workspace_id);
     }
 
     if (filters.workspace_uuid) {
-      query += ' AND f.workspace_uuid = ?';
+      query += ' AND f.workspace_uuid = $' + (params.length + 1);
       params.push(filters.workspace_uuid);
     }
 
     if (filters.hotel_id) {
-      query += ' AND f.hotel_id = ?';
+      query += ' AND f.hotel_id = $' + (params.length + 1);
       params.push(filters.hotel_id);
     }
 
@@ -75,20 +75,20 @@ class Folder {
       if (filters.parent_folder_id === null) {
         query += ' AND f.parent_folder_id IS NULL';
       } else {
-        query += ' AND f.parent_folder_id = ?';
+        query += ' AND f.parent_folder_id = $' + (params.length + 1);
         params.push(filters.parent_folder_id);
       }
     }
 
     if (filters.search) {
-      query += ' AND (f.name LIKE ? OR f.description LIKE ?)';
+      query += ' AND (f.name ILIKE $' + (params.length + 1) + ' OR f.description ILIKE $' + (params.length + 2) + ')';
       params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY f.sort_order, f.name';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      query += ' LIMIT $' + (params.length + 1);
       params.push(parseInt(filters.limit));
     }
 
@@ -103,16 +103,16 @@ class Folder {
 
   static async findByBot(botId, filters = {}) {
     let query = `
-      SELECT f.*, b.name as bot_name, h.hotel_nome 
+      SELECT f.*, b.name as bot_name, h.name as hotel_nome 
       FROM folders f 
       LEFT JOIN bots b ON f.bot_id = b.id 
       LEFT JOIN hotels h ON f.hotel_id = h.id 
-      WHERE f.bot_id = ?
+      WHERE f.bot_id = $1
     `;
     const params = [botId];
 
     if (filters.active !== undefined) {
-      query += ' AND f.active = ?';
+      query += ' AND f.active = $' + (params.length + 1);
       params.push(filters.active);
     }
 
@@ -120,13 +120,13 @@ class Folder {
       if (filters.parent_folder_id === null) {
         query += ' AND f.parent_folder_id IS NULL';
       } else {
-        query += ' AND f.parent_folder_id = ?';
+        query += ' AND f.parent_folder_id = $' + (params.length + 1);
         params.push(filters.parent_folder_id);
       }
     }
 
     if (filters.search) {
-      query += ' AND (f.name LIKE ? OR f.description LIKE ?)';
+      query += ' AND (f.name ILIKE $' + (params.length + 1) + ' OR f.description ILIKE $' + (params.length + 2) + ')';
       params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
@@ -143,16 +143,16 @@ class Folder {
 
   static async findByBotUuid(botUuid, filters = {}) {
     let query = `
-      SELECT f.*, b.name as bot_name, h.hotel_nome 
+      SELECT f.*, b.name as bot_name, h.name as hotel_nome 
       FROM folders f 
       LEFT JOIN bots b ON f.bot_id = b.id 
       LEFT JOIN hotels h ON f.hotel_id = h.id 
-      WHERE f.bot_uuid = ?
+      WHERE f.bot_uuid = $1
     `;
     const params = [botUuid];
 
     if (filters.active !== undefined) {
-      query += ' AND f.active = ?';
+      query += ' AND f.active = $' + (params.length + 1);
       params.push(filters.active);
     }
 
@@ -160,9 +160,14 @@ class Folder {
       if (filters.parent_folder_id === null) {
         query += ' AND f.parent_folder_id IS NULL';
       } else {
-        query += ' AND f.parent_folder_id = ?';
+        query += ' AND f.parent_folder_id = $' + (params.length + 1);
         params.push(filters.parent_folder_id);
       }
+    }
+
+    if (filters.search) {
+      query += ' AND (f.name ILIKE $' + (params.length + 1) + ' OR f.description ILIKE $' + (params.length + 2) + ')';
+      params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY f.sort_order, f.name';
@@ -181,9 +186,10 @@ class Folder {
       // Update existing folder
       const result = await db.query(`
         UPDATE folders SET 
-        name = ?, description = ?, color = ?, icon = ?, 
-        parent_folder_id = ?, sort_order = ?, active = ?
-        WHERE id = ?
+        name = $1, description = $2, color = $3, icon = $4, 
+        parent_folder_id = $5, sort_order = $6, active = $7
+        WHERE id = $8
+        RETURNING *
       `, [
         this.name,
         this.description,
@@ -194,13 +200,18 @@ class Folder {
         this.active,
         this.id
       ]);
+      
+      if (result.length > 0) {
+        this.folder_uuid = result[0].folder_uuid;
+      }
       return result;
     } else {
       // Create new folder
       const result = await db.query(`
         INSERT INTO folders (bot_id, bot_uuid, workspace_id, workspace_uuid, hotel_id, hotel_uuid, 
                            name, description, color, icon, parent_folder_id, sort_order, active) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING *
       `, [
         this.bot_id,
         this.bot_uuid,
@@ -217,11 +228,10 @@ class Folder {
         this.active
       ]);
       
-      this.id = result.insertId;
-      
-      // Get the generated UUID
-      const newFolder = await Folder.findById(this.id);
-      this.folder_uuid = newFolder.folder_uuid;
+      if (result.length > 0) {
+        this.id = result[0].id;
+        this.folder_uuid = result[0].folder_uuid;
+      }
       
       return result;
     }
@@ -233,8 +243,8 @@ class Folder {
     }
     
     // Check if folder has children or flows
-    const children = await db.query('SELECT COUNT(*) as count FROM folders WHERE parent_folder_id = ?', [this.id]);
-    const flows = await db.query('SELECT COUNT(*) as count FROM flows WHERE folder_id = ?', [this.id]);
+    const children = await db.query('SELECT COUNT(*) as count FROM folders WHERE parent_folder_id = $1', [this.id]);
+    const flows = await db.query('SELECT COUNT(*) as count FROM flows WHERE folder_id = $1', [this.id]);
     
     if (children[0].count > 0) {
       throw new Error('Cannot delete folder with subfolders');
@@ -244,7 +254,7 @@ class Folder {
       throw new Error('Cannot delete folder with flows');
     }
     
-    return await db.query('DELETE FROM folders WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM folders WHERE id = $1', [this.id]);
   }
 
   async softDelete() {
@@ -289,7 +299,7 @@ class Folder {
   // Count flows in this folder
   async countFlows() {
     const result = await db.query(
-      'SELECT COUNT(*) as count FROM flows WHERE folder_id = ? AND active = true',
+      'SELECT COUNT(*) as count FROM flows WHERE folder_id = $1 AND active = true',
       [this.id]
     );
     return result[0].count;
@@ -340,7 +350,7 @@ class Folder {
   // Count folders by bot
   static async countByBot(botId) {
     const result = await db.query(
-      'SELECT COUNT(*) as count FROM folders WHERE bot_id = ? AND active = true',
+      'SELECT COUNT(*) as count FROM folders WHERE bot_id = $1 AND active = true',
       [botId]
     );
     return result[0].count;

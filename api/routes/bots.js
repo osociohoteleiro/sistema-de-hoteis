@@ -96,6 +96,19 @@ router.get('/statuses', async (req, res) => {
 router.get('/workspace/:workspaceId', async (req, res) => {
   try {
     const { workspaceId } = req.params;
+    
+    // Validar se workspaceId é um número válido
+    if (!workspaceId || isNaN(parseInt(workspaceId))) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID do workspace deve ser um número válido',
+        error: `workspaceId recebido: ${workspaceId}`
+      });
+    }
+    
+    const workspaceIdNum = parseInt(workspaceId);
+    console.log('Buscando bots para workspace ID:', workspaceIdNum);
+    
     const filters = {
       active: req.query.active !== undefined ? req.query.active === 'true' : undefined,
       bot_type: req.query.bot_type,
@@ -103,20 +116,33 @@ router.get('/workspace/:workspaceId', async (req, res) => {
       search: req.query.search
     };
 
-    const bots = await Bot.findByWorkspace(parseInt(workspaceId), filters);
+    const bots = await Bot.findByWorkspace(workspaceIdNum, filters);
+    
+    console.log(`Encontrados ${bots.length} bots para workspace ${workspaceIdNum}`);
     
     res.json({
       success: true,
       data: bots.map(b => b.toJSON()),
-      count: bots.length
+      count: bots.length,
+      workspace_id: workspaceIdNum
     });
   } catch (error) {
     console.error('Erro ao listar bots do workspace:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno do servidor',
-      error: error.message
-    });
+    
+    // Verificar se é erro de workspace não encontrado
+    if (error.message && error.message.includes('não encontrado')) {
+      res.status(404).json({
+        success: false,
+        message: `Workspace com ID ${req.params.workspaceId} não foi encontrado`,
+        error: error.message
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor',
+        error: error.message
+      });
+    }
   }
 });
 

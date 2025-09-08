@@ -3,7 +3,7 @@ const db = require('../config/database');
 class Workspace {
   constructor(data = {}) {
     this.id = data.id;
-    this.workspace_uuid = data.workspace_uuid;
+    this.workspace_uuid = data.uuid || data.workspace_uuid;
     this.hotel_id = data.hotel_id;
     this.hotel_uuid = data.hotel_uuid;
     this.name = data.name;
@@ -20,13 +20,13 @@ class Workspace {
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM workspaces WHERE workspace_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM workspaces WHERE uuid = ?', [uuid]);
     return result.length > 0 ? new Workspace(result[0]) : null;
   }
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT w.*, h.hotel_nome, h.city, h.state 
+      SELECT w.*, h.name as hotel_nome 
       FROM workspaces w 
       LEFT JOIN hotels h ON w.hotel_id = h.id 
       WHERE 1=1
@@ -49,7 +49,7 @@ class Workspace {
     }
 
     if (filters.search) {
-      query += ' AND (w.name LIKE ? OR w.description LIKE ? OR h.hotel_nome LIKE ?)';
+      query += ' AND (w.name LIKE ? OR w.description LIKE ? OR h.name LIKE ?)';
       params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
@@ -64,15 +64,13 @@ class Workspace {
     return result.map(row => {
       const workspace = new Workspace(row);
       workspace.hotel_nome = row.hotel_nome;
-      workspace.hotel_city = row.city;
-      workspace.hotel_state = row.state;
       return workspace;
     });
   }
 
   static async findByHotel(hotelId, filters = {}) {
     let query = `
-      SELECT w.*, h.hotel_nome, h.city, h.state 
+      SELECT w.*, h.name as hotel_nome 
       FROM workspaces w 
       LEFT JOIN hotels h ON w.hotel_id = h.id 
       WHERE w.hotel_id = ?
@@ -95,15 +93,13 @@ class Workspace {
     return result.map(row => {
       const workspace = new Workspace(row);
       workspace.hotel_nome = row.hotel_nome;
-      workspace.hotel_city = row.city;
-      workspace.hotel_state = row.state;
       return workspace;
     });
   }
 
   static async findByHotelUuid(hotelUuid, filters = {}) {
     let query = `
-      SELECT w.*, h.hotel_nome, h.city, h.state 
+      SELECT w.*, h.name as hotel_nome 
       FROM workspaces w 
       LEFT JOIN hotels h ON w.hotel_id = h.id 
       WHERE w.hotel_uuid = ?
@@ -126,8 +122,6 @@ class Workspace {
     return result.map(row => {
       const workspace = new Workspace(row);
       workspace.hotel_nome = row.hotel_nome;
-      workspace.hotel_city = row.city;
-      workspace.hotel_state = row.state;
       return workspace;
     });
   }
@@ -329,9 +323,7 @@ class Workspace {
       active: this.active,
       created_at: this.created_at,
       updated_at: this.updated_at,
-      hotel_nome: this.hotel_nome,
-      hotel_city: this.hotel_city,
-      hotel_state: this.hotel_state
+      hotel_nome: this.hotel_nome
     };
   }
 }

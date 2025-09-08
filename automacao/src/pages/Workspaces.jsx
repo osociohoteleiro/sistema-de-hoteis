@@ -47,13 +47,30 @@ const Workspaces = () => {
       return;
     }
 
+    // Validar se o workspace tem um ID válido
+    if (!workspace.id) {
+      toast.error('Workspace não possui ID válido');
+      console.error('Workspace sem ID:', workspace);
+      return;
+    }
+
     // Armazenar workspace no localStorage para usar na próxima página
-    localStorage.setItem('selectedWorkspace', JSON.stringify(workspace));
+    try {
+      localStorage.setItem('selectedWorkspace', JSON.stringify(workspace));
+      console.log('Workspace salvo no localStorage:', workspace);
+    } catch (error) {
+      console.error('Erro ao salvar workspace no localStorage:', error);
+      toast.error('Erro ao salvar dados do workspace');
+      return;
+    }
     
     toast.success(`Entrando no workspace: ${workspace.name}`);
     
     // Redirecionar para página de bots do workspace
-    window.location.href = `/workspace/${workspace.workspace_uuid}/bots`;
+    // Usar ID numérico que é garantido
+    const workspaceId = workspace.id;
+    console.log('Redirecionando para workspace ID:', workspaceId);
+    window.location.href = `/workspace/${workspaceId}/bots`;
   };
 
   const formatDate = (dateString) => {

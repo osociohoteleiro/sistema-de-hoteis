@@ -2,23 +2,65 @@ const express = require('express');
 const router = express.Router();
 const Workspace = require('../models/Workspace');
 const Hotel = require('../models/Hotel');
+const Bot = require('../models/Bot');
 
 // GET /api/workspaces - Listar todos os workspaces
 router.get('/', async (req, res) => {
   try {
-    const filters = {
-      active: req.query.active !== undefined ? req.query.active === 'true' : undefined,
-      hotel_id: req.query.hotel_id,
-      hotel_uuid: req.query.hotel_uuid,
-      search: req.query.search,
-      limit: req.query.limit
-    };
+    // Usar query direta para garantir que os dados corretos sejam retornados
+    const db = require('../config/database');
+    let query = `
+      SELECT w.*, h.name as hotel_nome 
+      FROM workspaces w 
+      LEFT JOIN hotels h ON w.hotel_id = h.id 
+      WHERE 1=1
+    `;
+    const params = [];
 
-    const workspaces = await Workspace.findAll(filters);
+    if (req.query.active !== undefined) {
+      query += ' AND w.active = $' + (params.length + 1);
+      params.push(req.query.active === 'true');
+    }
+
+    if (req.query.hotel_id) {
+      query += ' AND w.hotel_id = $' + (params.length + 1);
+      params.push(parseInt(req.query.hotel_id));
+    }
+
+    if (req.query.hotel_uuid) {
+      query += ' AND w.hotel_uuid = $' + (params.length + 1);
+      params.push(req.query.hotel_uuid);
+    }
+
+    if (req.query.search) {
+      query += ' AND (w.name LIKE $' + (params.length + 1) + ' OR w.description LIKE $' + (params.length + 2) + ' OR h.name LIKE $' + (params.length + 3) + ')';
+      params.push(`%${req.query.search}%`, `%${req.query.search}%`, `%${req.query.search}%`);
+    }
+
+    query += ' ORDER BY w.created_at DESC';
+
+    if (req.query.limit) {
+      query += ' LIMIT $' + (params.length + 1);
+      params.push(parseInt(req.query.limit));
+    }
+
+    const workspaces = await db.query(query, params);
     
     res.json({
       success: true,
-      data: workspaces.map(w => w.toJSON()),
+      data: workspaces.map(w => ({
+        id: w.id,
+        workspace_uuid: w.uuid, // Mapear corretamente o UUID
+        hotel_id: w.hotel_id,
+        hotel_uuid: w.hotel_uuid,
+        name: w.name,
+        description: w.description,
+        settings: w.settings || {},
+        active: w.active,
+        created_at: w.created_at,
+        updated_at: w.updated_at,
+        hotel_nome: w.hotel_nome
+      })),
       count: workspaces.length
     });
   } catch (error) {
@@ -375,4 +417,87 @@ router.patch('/:id/activate', async (req, res) => {
   }
 });
 
+// GET /api/workspaces/:id/bots - Listar bots do workspace por ID
+router.get('/:id/bots', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Buscar workspace primeiro (por ID numérico)
+    const workspace = await Workspace.findById(parseInt(id));
+    
+    if (!workspace) {
+      return res.status(404).json({
+        success: false,
+        message: 'Workspace não encontrado'
+      });
+    }
+    
+    // Buscar bots do workspace diretamente, sem usar o modelo Bot por enquanto
+    let query = `
+      SELECT b.*, w.name as workspace_name
+      FROM bots b 
+      LEFT JOIN workspaces w ON b.workspace_id = w.id 
+      WHERE b.workspace_id = $1
+    `;
+    const params = [workspace.id];
+    
+    if (req.query.active !== undefined) {
+      query += ' AND b.active = $' + (params.length + 1);
+      params.push(req.query.active === 'true');
+    }
+    
+    if (req.query.bot_type) {
+      query += ' AND b.bot_type = $' + (params.length + 1);
+      params.push(req.query.bot_type);
+    }
+    
+    if (req.query.status) {
+      query += ' AND b.status = $' + (params.length + 1);
+      params.push(req.query.status);
+    }
+    
+    query += ' ORDER BY b.created_at DESC';
+    
+    const db = require('../config/database');
+    const bots = await db.query(query, params);
+    
+    res.json({
+      success: true,
+      data: bots.map(b => ({
+        id: b.id,
+        uuid: b.uuid,
+        workspace_id: b.workspace_id,
+        workspace_uuid: b.workspace_uuid,
+        hotel_id: b.hotel_id,
+        hotel_uuid: b.hotel_uuid,
+        name: b.name,
+        description: b.description,
+        bot_type: b.bot_type,
+        status: b.status,
+        configuration: b.configuration,
+        settings: b.settings,
+        active: b.active,
+        created_at: b.created_at,
+        updated_at: b.updated_at,
+        workspace_name: b.workspace_name
+      })),
+      count: bots.length,
+      workspace: {
+        id: workspace.id,
+        uuid: workspace.workspace_uuid,
+        name: workspace.name
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao listar bots do workspace:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
+console.log('DEBUG: Workspace route loaded');
+ 

@@ -32,7 +32,7 @@ function App() {
           <Route path="workspaces" element={<Workspaces />} />
           
           {/* Workspace Bots */}
-          <Route path="workspace/:workspaceUuid/bots" element={<WorkspaceBots />} />
+          <Route path="workspace/:workspaceId/bots" element={<WorkspaceBots />} />
           
           {/* Bot Flows */}
           <Route path="bot/:botUuid/flows" element={<BotFlows />} />

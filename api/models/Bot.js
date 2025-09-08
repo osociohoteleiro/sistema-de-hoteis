@@ -3,7 +3,7 @@ const db = require('../config/database');
 class Bot {
   constructor(data = {}) {
     this.id = data.id;
-    this.bot_uuid = data.bot_uuid;
+    this.bot_uuid = data.uuid || data.bot_uuid;
     this.workspace_id = data.workspace_id;
     this.workspace_uuid = data.workspace_uuid;
     this.hotel_id = data.hotel_id;
@@ -25,13 +25,13 @@ class Bot {
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM bots WHERE bot_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM bots WHERE uuid = ?', [uuid]);
     return result.length > 0 ? new Bot(result[0]) : null;
   }
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT b.*, w.name as workspace_name, h.hotel_nome 
+      SELECT b.*, w.name as workspace_name, h.name as hotel_nome 
       FROM bots b 
       LEFT JOIN workspaces w ON b.workspace_id = w.id 
       LEFT JOIN hotels h ON b.hotel_id = h.id 
@@ -75,7 +75,7 @@ class Bot {
     }
 
     if (filters.search) {
-      query += ' AND (b.name LIKE ? OR b.description LIKE ? OR h.hotel_nome LIKE ?)';
+      query += ' AND (b.name LIKE ? OR b.description LIKE ? OR h.name LIKE ?)';
       params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
@@ -97,7 +97,7 @@ class Bot {
 
   static async findByWorkspace(workspaceId, filters = {}) {
     let query = `
-      SELECT b.*, w.name as workspace_name, h.hotel_nome 
+      SELECT b.*, w.name as workspace_name, h.name as hotel_nome 
       FROM bots b 
       LEFT JOIN workspaces w ON b.workspace_id = w.id 
       LEFT JOIN hotels h ON b.hotel_id = h.id 
@@ -138,7 +138,7 @@ class Bot {
 
   static async findByWorkspaceUuid(workspaceUuid, filters = {}) {
     let query = `
-      SELECT b.*, w.name as workspace_name, h.hotel_nome 
+      SELECT b.*, w.name as workspace_name, h.name as hotel_nome 
       FROM bots b 
       LEFT JOIN workspaces w ON b.workspace_id = w.id 
       LEFT JOIN hotels h ON b.hotel_id = h.id 

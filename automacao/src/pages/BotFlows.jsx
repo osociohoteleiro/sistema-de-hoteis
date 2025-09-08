@@ -18,6 +18,7 @@ const BotFlows = () => {
   const [selectedFolder, setSelectedFolder] = useState(null); // null = mostrar todos
   const [viewMode, setViewMode] = useState('folders'); // folders ou list
   const [selectedFlow, setSelectedFlow] = useState(null); // Flow selecionado para editar
+  const [showNewFlowModal, setShowNewFlowModal] = useState(false);
 
   useEffect(() => {
     loadBotData();
@@ -158,6 +159,67 @@ const BotFlows = () => {
       }
     } catch (error) {
       console.error('Erro ao salvar fluxo:', error);
+      toast.error('Erro ao conectar com a API');
+    }
+  };
+
+  const handleCreateNewFlow = async (flowName, flowDescription, folderId = null) => {
+    try {
+      if (!bot) {
+        toast.error('Dados do bot não carregados');
+        return;
+      }
+
+      const defaultFlowData = {
+        nodes: [
+          {
+            id: 'start_node_1',
+            type: 'startNode',
+            position: { x: 100, y: 250 },
+            data: { 
+              label: 'Início',
+              config: { message: `Bem-vindo ao ${bot.name}!` }
+            }
+          }
+        ],
+        edges: [],
+        viewport: { x: 0, y: 0, zoom: 1 }
+      };
+
+      const response = await axios.post(`${API_BASE_URL}/flows`, {
+        bot_id: bot.id,
+        bot_uuid: bot.bot_uuid || bot.uuid,
+        workspace_id: bot.workspace_id,
+        workspace_uuid: bot.workspace_uuid,
+        hotel_id: bot.hotel_id,
+        hotel_uuid: bot.hotel_uuid,
+        folder_id: folderId,
+        name: flowName,
+        description: flowDescription,
+        flow_type: 'CONVERSATION',
+        status: 'DRAFT',
+        flow_data: defaultFlowData,
+        variables: {},
+        settings: {
+          timeout: 30000,
+          fallback_enabled: true,
+          typing_delay: 1500
+        },
+        triggers: [
+          { type: 'keyword', keywords: [flowName.toLowerCase()] }
+        ],
+        is_default: false
+      });
+
+      if (response.data.success) {
+        toast.success('Novo fluxo criado com sucesso!');
+        setShowNewFlowModal(false);
+        loadBotData(); // Recarregar dados
+      } else {
+        toast.error('Erro ao criar fluxo');
+      }
+    } catch (error) {
+      console.error('Erro ao criar novo fluxo:', error);
       toast.error('Erro ao conectar com a API');
     }
   };
@@ -380,6 +442,14 @@ const BotFlows = () => {
             <span className="text-sm font-medium text-steel-700">
               {filteredFlows.length} fluxo{filteredFlows.length !== 1 ? 's' : ''}
             </span>
+            <button
+              onClick={() => setShowNewFlowModal(true)}
+              className="bg-gradient-sapphire hover:bg-sapphire-600 text-white px-4 py-2 rounded-lg font-medium text-sm 
+                transition-all duration-200 shadow-sapphire-glow hover:shadow-lg hover:scale-105 
+                focus:outline-none focus:ring-2 focus:ring-sapphire-400/50 flex items-center gap-2"
+            >
+              ✨ Novo
+            </button>
           </div>
         </div>
       </div>
@@ -475,6 +545,104 @@ const BotFlows = () => {
             <div>
               <span className="font-medium">Conversação:</span> {flows.filter(f => f.flow_type === 'CONVERSATION').length}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Novo Fluxo */}
+      {showNewFlowModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 shadow-blue-elegant max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-midnight-950">✨ Criar Novo Fluxo</h3>
+              <button
+                onClick={() => setShowNewFlowModal(false)}
+                className="text-steel-500 hover:text-steel-700 p-1 rounded-lg hover:bg-white/20"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const flowName = formData.get('flowName');
+              const flowDescription = formData.get('flowDescription');
+              const folderId = formData.get('folderId') || null;
+              
+              if (!flowName.trim()) {
+                toast.error('Nome do fluxo é obrigatório');
+                return;
+              }
+              
+              handleCreateNewFlow(flowName.trim(), flowDescription.trim(), folderId === 'null' ? null : parseInt(folderId));
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-steel-700 mb-2">
+                  Nome do Fluxo *
+                </label>
+                <input
+                  type="text"
+                  name="flowName"
+                  placeholder="Ex: Atendimento Inicial"
+                  className="w-full px-3 py-2 bg-white/70 border border-sapphire-200/40 rounded-lg 
+                    focus:outline-none focus:ring-2 focus:ring-sapphire-400/50 focus:border-transparent
+                    text-midnight-950 placeholder-steel-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-steel-700 mb-2">
+                  Descrição
+                </label>
+                <textarea
+                  name="flowDescription"
+                  rows="2"
+                  placeholder="Descreva brevemente o propósito deste fluxo..."
+                  className="w-full px-3 py-2 bg-white/70 border border-sapphire-200/40 rounded-lg 
+                    focus:outline-none focus:ring-2 focus:ring-sapphire-400/50 focus:border-transparent
+                    text-midnight-950 placeholder-steel-500 resize-none"
+                ></textarea>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-steel-700 mb-2">
+                  Pasta
+                </label>
+                <select
+                  name="folderId"
+                  className="w-full px-3 py-2 bg-white/70 border border-sapphire-200/40 rounded-lg 
+                    focus:outline-none focus:ring-2 focus:ring-sapphire-400/50 focus:border-transparent
+                    text-midnight-950"
+                >
+                  <option value="null">📋 Sem pasta (Geral)</option>
+                  {folders.map(folder => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.icon || '📁'} {folder.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewFlowModal(false)}
+                  className="flex-1 px-4 py-2 border border-sapphire-200/40 text-steel-700 rounded-lg 
+                    hover:bg-white/20 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-gradient-sapphire text-white rounded-lg 
+                    hover:bg-sapphire-600 transition-colors font-medium"
+                >
+                  Criar Fluxo
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

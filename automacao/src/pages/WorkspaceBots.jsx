@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
 const WorkspaceBots = () => {
-  const { workspaceUuid } = useParams();
+  const { workspaceId } = useParams();
+  const navigate = useNavigate();
   const [workspace, setWorkspace] = useState(null);
   const [bots, setBots] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,17 +17,39 @@ const WorkspaceBots = () => {
   const [showActiveOnly, setShowActiveOnly] = useState(true);
 
   useEffect(() => {
+    // Verificar se workspaceId é válido
+    if (!workspaceId || workspaceId === 'undefined' || workspaceId === 'null') {
+      console.error('WorkspaceId inválido:', workspaceId);
+      toast.error('ID do workspace inválido. Redirecionando para lista de workspaces...');
+      setTimeout(() => {
+        navigate('/workspaces');
+      }, 2000);
+      return;
+    }
+
     loadWorkspaceData();
-  }, [workspaceUuid, showActiveOnly, filterType, filterStatus]);
+  }, [workspaceId, showActiveOnly, filterType, filterStatus, navigate]);
 
   const loadWorkspaceData = async () => {
     try {
       setLoading(true);
       
+      // Verificar novamente se o workspaceId é válido antes de fazer requisições
+      if (!workspaceId || workspaceId === 'undefined' || workspaceId === 'null') {
+        setLoading(false);
+        return;
+      }
+      
       // Carregar workspace do localStorage primeiro
       const savedWorkspace = localStorage.getItem('selectedWorkspace');
       if (savedWorkspace) {
-        setWorkspace(JSON.parse(savedWorkspace));
+        try {
+          const parsedWorkspace = JSON.parse(savedWorkspace);
+          setWorkspace(parsedWorkspace);
+        } catch (parseError) {
+          console.error('Erro ao parsear workspace do localStorage:', parseError);
+          localStorage.removeItem('selectedWorkspace');
+        }
       }
 
       // Carregar bots do workspace
@@ -35,16 +58,38 @@ const WorkspaceBots = () => {
       if (filterType) params.append('bot_type', filterType);
       if (filterStatus) params.append('status', filterStatus);
       
-      const response = await axios.get(`${API_BASE_URL}/bots/workspace/uuid/${workspaceUuid}?${params}`);
+      console.log('Fazendo requisição para workspace ID:', workspaceId);
+      const response = await axios.get(`${API_BASE_URL}/bots/workspace/${workspaceId}?${params}`);
       
       if (response.data.success) {
-        setBots(response.data.data);
+        setBots(response.data.data || []);
+        console.log('Bots carregados:', response.data.data?.length || 0);
       } else {
-        toast.error('Erro ao carregar bots');
+        console.error('API retornou sucesso=false:', response.data);
+        toast.error(response.data.message || 'Erro ao carregar bots');
       }
     } catch (error) {
       console.error('Erro ao carregar dados do workspace:', error);
-      toast.error('Erro ao conectar com a API');
+      
+      if (error.response) {
+        // Erro da API
+        const statusCode = error.response.status;
+        const errorMessage = error.response.data?.message || 'Erro desconhecido da API';
+        
+        if (statusCode === 404) {
+          toast.error(`Workspace não encontrado (ID: ${workspaceId})`);
+        } else if (statusCode === 400) {
+          toast.error('Dados inválidos enviados para a API');
+        } else {
+          toast.error(`Erro da API (${statusCode}): ${errorMessage}`);
+        }
+      } else if (error.request) {
+        // Erro de conexão
+        toast.error('Erro ao conectar com a API. Verifique se o servidor está rodando na porta 3001.');
+      } else {
+        // Outros erros
+        toast.error('Erro inesperado: ' + error.message);
+      }
     } finally {
       setLoading(false);
     }
