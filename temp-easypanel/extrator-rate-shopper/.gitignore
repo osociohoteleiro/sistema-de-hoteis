@@ -1,8 +1,0 @@
-node_modules/
-
-results/**/**/*.*
-!results/**/**/.gitkeep
-src/base_files/*
-!src/base_files/.gitkeep
-
-error-logs/*.log
