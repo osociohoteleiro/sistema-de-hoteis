@@ -1,0 +1,242 @@
+[
+  {
+    "timestamp": "2025-09-04T22:55:09.793Z",
+    "type": "info",
+    "message": "🚀 Iniciando migração MySQL → PostgreSQL"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:09.875Z",
+    "type": "info",
+    "message": "Migrando tabela: users"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:09.921Z",
+    "type": "info",
+    "message": "✅ Migrados 6 usuários"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:09.921Z",
+    "type": "info",
+    "message": "Migrando tabela: hotels"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:09.961Z",
+    "type": "info",
+    "message": "✅ Migrados 12 hotéis"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:09.961Z",
+    "type": "info",
+    "message": "Migrando tabela: user_hotels"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:09.986Z",
+    "type": "info",
+    "message": "✅ Migrados 2 relacionamentos user-hotel"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:09.986Z",
+    "type": "info",
+    "message": "Migrando tabela: app_config"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.010Z",
+    "type": "error",
+    "message": "Erro ao migrar config companyName: duplicate key value violates unique constraint \"app_config_pkey\""
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.022Z",
+    "type": "error",
+    "message": "Erro ao migrar config logo: duplicate key value violates unique constraint \"app_config_pkey\""
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.033Z",
+    "type": "error",
+    "message": "Erro ao migrar config theme: duplicate key value violates unique constraint \"app_config_pkey\""
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.047Z",
+    "type": "error",
+    "message": "Erro ao migrar config version: duplicate key value violates unique constraint \"app_config_pkey\""
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.060Z",
+    "type": "info",
+    "message": "✅ Migradas 4 configurações"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.060Z",
+    "type": "info",
+    "message": "Migrando tabela: workspaces"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.087Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - Pousada Bugaendrus: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.098Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - O Sócio Hoteleiro Treinamentos: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.109Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - Rental Acomodações: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.120Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - Marine Hotel: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.132Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - Pousada Trancoso: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.144Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - Wakanda Hotel: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.154Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - passou: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.165Z",
+    "type": "error",
+    "message": "Erro ao migrar workspace Workspace Principal - Hotel API Test: null value in column \"uuid\" of relation \"workspaces\" violates not-null constraint"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.176Z",
+    "type": "info",
+    "message": "✅ Migrados 8 workspaces"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.177Z",
+    "type": "info",
+    "message": "Migrando tabela: bot_fields"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.196Z",
+    "type": "info",
+    "message": "✅ Migrados 0 bot fields"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.196Z",
+    "type": "info",
+    "message": "Migrando tabelas do Rate Shopper"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.217Z",
+    "type": "error",
+    "message": "Erro ao migrar propriedade HOTEL MARANDUBA: relation \"rate_shopper_properties\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.228Z",
+    "type": "error",
+    "message": "Erro ao migrar propriedade POUSADA KALIMAN: relation \"rate_shopper_properties\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.237Z",
+    "type": "error",
+    "message": "Erro ao migrar propriedade HOTEL EXEMPLO: relation \"rate_shopper_properties\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.249Z",
+    "type": "error",
+    "message": "Erro ao migrar propriedade POUSADA KALIMAN: relation \"rate_shopper_properties\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.257Z",
+    "type": "error",
+    "message": "Erro ao migrar propriedade HOTEL EXEMPLO: relation \"rate_shopper_properties\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.266Z",
+    "type": "error",
+    "message": "Erro ao migrar propriedade POUSADA KALIMAN: relation \"rate_shopper_properties\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.276Z",
+    "type": "error",
+    "message": "Erro ao migrar propriedade HOTEL EXEMPLO: relation \"rate_shopper_properties\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.307Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 5: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.316Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 7: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.326Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 8: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.335Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 9: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.344Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 10: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.353Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 12: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.363Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 13: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.374Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 14: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.383Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 15: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.394Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 16: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.404Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 19: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.413Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 20: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.423Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 22: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.432Z",
+    "type": "error",
+    "message": "Erro ao migrar pesquisa 23: relation \"rate_shopper_searches\" does not exist"
+  },
+  {
+    "timestamp": "2025-09-04T22:55:10.441Z",
+    "type": "error",
+    "message": "💥 Erro na migração: relation \"rate_shopper_properties\" does not exist"
+  }
+]

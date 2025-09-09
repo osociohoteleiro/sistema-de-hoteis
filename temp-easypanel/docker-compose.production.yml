@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: osh_postgres_prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-osh_db}
+      POSTGRES_USER: ${POSTGRES_USER:-osh_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./api/database/init:/docker-entrypoint-initdb.d
+    command: postgres -c 'max_connections=200' -c 'shared_buffers=512MB' -c 'effective_cache_size=2GB'
+    restart: unless-stopped
+    networks:
+      - osh_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-osh_user} -d ${POSTGRES_DB:-osh_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: osh_redis_prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    networks:
+      - osh_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # API Backend
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: osh_api_prod
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      PORT: 3001
+    env_file:
+      - .env.production
+    ports:
+      - "3001:3001"
+    volumes:
+      - api_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - osh_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # PMS Frontend
+  pms:
+    build:
+      context: ./pms
+      dockerfile: Dockerfile
+    container_name: osh_pms_prod
+    ports:
+      - "5175:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - osh_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Hotel App Frontend
+  hotel-app:
+    build:
+      context: ./hotel-app
+      dockerfile: Dockerfile
+    container_name: osh_hotel_app_prod
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - osh_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Automação Frontend
+  automacao:
+    build:
+      context: ./automacao
+      dockerfile: Dockerfile
+    container_name: osh_automacao_prod
+    ports:
+      - "5174:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - osh_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Extrator Rate Shopper
+  rate-shopper:
+    build:
+      context: ./extrator-rate-shopper
+      dockerfile: Dockerfile
+    container_name: osh_rate_shopper_prod
+    environment:
+      NODE_ENV: production
+      POSTGRES_HOST: postgres
+      HEADLESS: "true"
+    env_file:
+      - .env.production
+    ports:
+      - "3002:3002"
+    volumes:
+      - rate_shopper_results:/app/results
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - osh_network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Nginx Reverse Proxy (Optional - para produção avançada)
+  nginx:
+    image: nginx:alpine
+    container_name: osh_nginx_prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+      - pms
+      - hotel-app
+      - automacao
+    restart: unless-stopped
+    networks:
+      - osh_network
+    profiles:
+      - nginx
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  api_uploads:
+    driver: local
+  rate_shopper_results:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  osh_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

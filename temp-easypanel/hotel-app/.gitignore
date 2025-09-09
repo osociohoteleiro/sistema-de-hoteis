@@ -31,15 +31,6 @@ dist-ssr
 .env.test.local
 .env.production.local
 
-# IMPORTANTE: .env.production deve ser enviado (é template)
-# Mas .env.production.configured deve ser ignorado
-.env.production.configured
-.env.production.real
-
-# ZIP files
-*.zip
-OSH-System-Easypanel.zip
-
 # Build outputs
 build/
 dist/

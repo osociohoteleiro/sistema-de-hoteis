@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{report.name}} - {{hotel.name}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }
+        
+        .container {
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 0 20mm;
+        }
+        
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #2563eb;
+        }
+        
+        .header h1 {
+            color: #1e40af;
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+        
+        .header .subtitle {
+            color: #64748b;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .header .period {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        
+        /* Summary Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        
+        .summary-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .summary-card h3 {
+            color: #475569;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .summary-card .value {
+            color: #1e293b;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .summary-card.primary .value {
+            color: #2563eb;
+        }
+        
+        .summary-card.success .value {
+            color: #059669;
+        }
+        
+        .summary-card.warning .value {
+            color: #d97706;
+        }
+        
+        /* Section Titles */
+        .section-title {
+            color: #1e40af;
+            font-size: 20px;
+            font-weight: 700;
+            margin: 40px 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        /* Tables */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .table th {
+            background: #f1f5f9;
+            color: #374151;
+            font-weight: 600;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .table td {
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .table tr:nth-child(even) {
+            background: #fafafa;
+        }
+        
+        .table .campaign-name {
+            font-weight: 600;
+            color: #1e293b;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .table .metric {
+            font-weight: 600;
+            text-align: right;
+        }
+        
+        .table .metric.cost {
+            color: #dc2626;
+        }
+        
+        .table .metric.clicks {
+            color: #2563eb;
+        }
+        
+        .table .metric.conversions {
+            color: #059669;
+        }
+        
+        /* Insights */
+        .insights-grid {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .insight-card {
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        
+        .insight-card.positive {
+            background: #f0f9f4;
+            border-left-color: #10b981;
+        }
+        
+        .insight-card.warning {
+            background: #fefbf3;
+            border-left-color: #f59e0b;
+        }
+        
+        .insight-card.info {
+            background: #f0f9ff;
+            border-left-color: #3b82f6;
+        }
+        
+        .insight-card h4 {
+            color: #1f2937;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .insight-card p {
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        
+        /* Recommendations */
+        .recommendations-grid {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .recommendation-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .recommendation-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            border-radius: 4px 0 0 4px;
+        }
+        
+        .recommendation-card.high::before {
+            background: #dc2626;
+        }
+        
+        .recommendation-card.medium::before {
+            background: #f59e0b;
+        }
+        
+        .recommendation-card.low::before {
+            background: #10b981;
+        }
+        
+        .recommendation-card h4 {
+            color: #1f2937;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .recommendation-card p {
+            color: #4b5563;
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+        
+        .recommendation-card .action {
+            color: #2563eb;
+            font-size: 12px;
+            font-weight: 600;
+            background: #eff6ff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+        
+        /* Priority badges */
+        .priority {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .priority.high {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+        
+        .priority.medium {
+            background: #fffbeb;
+            color: #d97706;
+        }
+        
+        .priority.low {
+            background: #f0fdf4;
+            color: #16a34a;
+        }
+        
+        /* Chart placeholder */
+        .chart-placeholder {
+            background: #f8fafc;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+        
+        /* Page breaks */
+        .page-break {
+            page-break-before: always;
+        }
+        
+        /* Footer info */
+        .footer-info {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+        }
+        
+        /* Responsive adjustments for print */
+        @media print {
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>{{report.name}}</h1>
+            <div class="subtitle">{{hotel.name}}</div>
+            {{#if report.period.start}}
+            <div class="period">
+                Período: {{report.period.start}} 
+                {{#if report.period.end}}até {{report.period.end}}{{/if}}
+            </div>
+            {{/if}}
+            <div class="period">Gerado em: {{report.generated_date}}</div>
+        </div>
+
+        <!-- Summary Metrics -->
+        <div class="summary-grid">
+            <div class="summary-card primary">
+                <h3>Total de Impressões</h3>
+                <div class="value">{{summary.totalImpressions}}</div>
+            </div>
+            <div class="summary-card success">
+                <h3>Total de Cliques</h3>
+                <div class="value">{{summary.totalClicks}}</div>
+            </div>
+            <div class="summary-card warning">
+                <h3>Total Investido</h3>
+                <div class="value">{{summary.totalCost}}</div>
+            </div>
+            <div class="summary-card">
+                <h3>CTR Médio</h3>
+                <div class="value">{{summary.averageCTR}}</div>
+            </div>
+            <div class="summary-card success">
+                <h3>Conversões</h3>
+                <div class="value">{{summary.totalConversions}}</div>
+            </div>
+            <div class="summary-card warning">
+                <h3>CPC Médio</h3>
+                <div class="value">{{summary.averageCPC}}</div>
+            </div>
+            <div class="summary-card">
+                <h3>CPM Médio</h3>
+                <div class="value">{{summary.averageCPM}}</div>
+            </div>
+            <div class="summary-card primary">
+                <h3>Total Campanhas</h3>
+                <div class="value">{{summary.totalCampaigns}}</div>
+            </div>
+        </div>
+
+        <!-- Top Campaigns by Cost -->
+        <h2 class="section-title">🏆 Top 5 Campanhas por Investimento</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Campanha</th>
+                    <th>Investimento</th>
+                    <th>Impressões</th>
+                    <th>Cliques</th>
+                    <th>CTR</th>
+                    <th>Conversões</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each campaigns.top_by_cost}}
+                <tr>
+                    <td class="campaign-name">{{name}}</td>
+                    <td class="metric cost">{{cost}}</td>
+                    <td class="metric">{{impressions}}</td>
+                    <td class="metric clicks">{{clicks}}</td>
+                    <td class="metric">{{ctr}}</td>
+                    <td class="metric conversions">{{conversions}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <!-- Page Break -->
+        <div class="page-break"></div>
+
+        <!-- Top Campaigns by CTR -->
+        <h2 class="section-title">📊 Top 5 Campanhas por CTR</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Campanha</th>
+                    <th>CTR</th>
+                    <th>Cliques</th>
+                    <th>Impressões</th>
+                    <th>Investimento</th>
+                    <th>CPC</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each campaigns.top_by_ctr}}
+                <tr>
+                    <td class="campaign-name">{{name}}</td>
+                    <td class="metric success">{{ctr}}</td>
+                    <td class="metric clicks">{{clicks}}</td>
+                    <td class="metric">{{impressions}}</td>
+                    <td class="metric cost">{{cost}}</td>
+                    <td class="metric">{{cpc}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <!-- Top Campaigns by Conversions -->
+        <h2 class="section-title">🎯 Top 5 Campanhas por Conversões</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Campanha</th>
+                    <th>Conversões</th>
+                    <th>Cliques</th>
+                    <th>Taxa Conv.</th>
+                    <th>Investimento</th>
+                    <th>CPC</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each campaigns.top_by_conversion}}
+                <tr>
+                    <td class="campaign-name">{{name}}</td>
+                    <td class="metric conversions">{{conversions}}</td>
+                    <td class="metric clicks">{{clicks}}</td>
+                    <td class="metric">{{conversionRate}}%</td>
+                    <td class="metric cost">{{cost}}</td>
+                    <td class="metric">{{cpc}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <!-- Page Break -->
+        <div class="page-break"></div>
+
+        <!-- Insights -->
+        {{#if insights}}
+        <h2 class="section-title">💡 Insights da Performance</h2>
+        <div class="insights-grid">
+            {{#each insights}}
+            <div class="insight-card {{type}}">
+                <h4>{{title}}</h4>
+                <p>{{description}}</p>
+            </div>
+            {{/each}}
+        </div>
+        {{/if}}
+
+        <!-- Recommendations -->
+        {{#if recommendations}}
+        <h2 class="section-title">🚀 Recomendações de Otimização</h2>
+        <div class="recommendations-grid">
+            {{#each recommendations}}
+            <div class="recommendation-card {{priority}}">
+                <h4>
+                    {{title}}
+                    <span class="priority {{priority}}">{{priority}}</span>
+                </h4>
+                <p>{{description}}</p>
+                <div class="action">{{action}}</div>
+            </div>
+            {{/each}}
+        </div>
+        {{/if}}
+
+        <!-- Footer -->
+        <div class="footer-info">
+            <p><strong>OSH Hotels</strong> - Sistema de Gestão de Marketing Digital</p>
+            <p>Este relatório foi gerado automaticamente com base nos dados fornecidos do Meta Ads.</p>
+            <p>Para dúvidas ou suporte, entre em contato com nossa equipe.</p>
+        </div>
+    </div>
+</body>
+</html>

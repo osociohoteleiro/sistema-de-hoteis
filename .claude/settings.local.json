@@ -168,7 +168,10 @@
       "Bash(psql:*)",
       "WebFetch(domain:eco-encanto-pousada.artaxnet.com)",
       "Bash(start http://localhost:5177/rate-shopper)",
-      "Bash(start http://localhost:5177/rate-shopper/properties)"
+      "Bash(start http://localhost:5177/rate-shopper/properties)",
+      "Bash(chmod:*)",
+      "Bash(criar-zip.bat)",
+      "Bash(cmd:*)"
     ],
     "deny": [],
     "ask": []

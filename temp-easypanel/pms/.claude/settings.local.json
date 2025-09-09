@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "WebSearch",
+      "Read(//d/APPS-OSH/api/**)",
+      "Read(//d/APPS-OSH/hotel-app/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
