@@ -125,6 +125,7 @@ app.get('/api/db-test', async (req, res) => {
 
 // Importar rotas
 const authRoutes = require('./routes/auth');
+const usersRoutes = require('./routes/users');
 const hotelRoutes = require('./routes/hotels');
 const configRoutes = require('./routes/config');
 const qdrantRoutes = require('./routes/qdrant');
@@ -154,6 +155,7 @@ const migrateRoutes = require('./routes/migrate'); // Habilitado temporariamente
 
 // Rotas da API
 app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
 app.use('/api/hotels', hotelRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/qdrant', qdrantRoutes);

@@ -171,7 +171,11 @@
       "Bash(start http://localhost:5177/rate-shopper/properties)",
       "Bash(chmod:*)",
       "Bash(criar-zip.bat)",
-      "Bash(cmd:*)"
+      "Bash(cmd:*)",
+      "Bash(start http://localhost:5173/admin/permissoes)",
+      "Bash(start http://localhost:5173/login)",
+      "Bash(del check-hotels.js)",
+      "Bash(del check-users.js)"
     ],
     "deny": [],
     "ask": []

@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const Joi = require('joi');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
+const db = require('../config/database');
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ const changePasswordSchema = Joi.object({
   new_password: Joi.string().min(6).required()
 });
 
-// Utility function to generate JWT
+// Utility function to generate JWT token
 const generateToken = (user) => {
   return jwt.sign(
     { 
@@ -40,8 +41,12 @@ const generateToken = (user) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
+    console.log('🔐 Tentativa de login...');
+    console.log('📝 Dados recebidos:', req.body);
+    
     const { error, value } = loginSchema.validate(req.body);
     if (error) {
+      console.log('❌ Erro de validação:', error.details);
       return res.status(400).json({
         error: 'Dados inválidos',
         details: error.details[0].message
@@ -49,24 +54,33 @@ router.post('/login', async (req, res) => {
     }
 
     const { email, password } = value;
+    console.log('📧 Email:', email);
+    console.log('🔑 Senha recebida (length):', password.length);
 
     // Buscar usuário
+    console.log('🔍 Buscando usuário...');
     const user = await User.findByEmail(email);
     if (!user) {
+      console.log('❌ Usuário não encontrado');
       return res.status(401).json({
         error: 'Email ou senha inválidos'
       });
     }
+    console.log('✅ Usuário encontrado:', user.id, user.name);
 
     // Verificar se usuário está ativo
     if (!user.active) {
+      console.log('❌ Usuário inativo');
       return res.status(401).json({
         error: 'Conta inativa. Entre em contato com o administrador.'
       });
     }
+    console.log('✅ Usuário ativo');
 
     // Validar senha
+    console.log('🔐 Validando senha...');
     const isValidPassword = await user.validatePassword(password);
+    console.log('✅ Senha válida?', isValidPassword);
     if (!isValidPassword) {
       return res.status(401).json({
         error: 'Email ou senha inválidos'
@@ -74,11 +88,15 @@ router.post('/login', async (req, res) => {
     }
 
     // Gerar token
+    console.log('🎫 Gerando token...');
     const token = generateToken(user);
 
     // Buscar hotéis do usuário
+    console.log('🏨 Buscando hotéis do usuário...');
     const hotels = await user.getHotels();
+    console.log('✅ Hotéis encontrados:', hotels.length);
 
+    console.log('🎉 Login realizado com sucesso!');
     res.json({
       message: 'Login realizado com sucesso',
       token,
@@ -87,7 +105,7 @@ router.post('/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro no login:', error);
+    console.error('❌ Erro no login:', error);
     res.status(500).json({
       error: 'Erro interno do servidor'
     });
@@ -95,7 +113,7 @@ router.post('/login', async (req, res) => {
 });
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', authenticateToken, async (req, res) => {
   try {
     const { error, value } = registerSchema.validate(req.body);
     if (error) {
@@ -106,6 +124,20 @@ router.post('/register', async (req, res) => {
     }
 
     const { name, email, password, user_type } = value;
+    
+    // Verificar se usuário logado pode criar usuários
+    if (!req.user || (req.user.user_type !== 'SUPER_ADMIN' && req.user.user_type !== 'ADMIN')) {
+      return res.status(403).json({
+        error: 'Apenas Super Admin e Admin podem criar usuários'
+      });
+    }
+    
+    // Apenas Super Admin pode criar outros Super Admins
+    if (user_type === 'SUPER_ADMIN' && req.user.user_type !== 'SUPER_ADMIN') {
+      return res.status(403).json({
+        error: 'Apenas Super Admin pode criar outros Super Admins'
+      });
+    }
 
     // Verificar se email já existe
     const existingUser = await User.findByEmail(email);
@@ -126,6 +158,25 @@ router.post('/register', async (req, res) => {
 
     await user.setPassword(password);
     await user.save();
+    
+    // Log específico para Super Admins
+    if (user_type === 'SUPER_ADMIN') {
+      console.log('👑 Super Admin criado com sucesso!', {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdBy: req.user.name,
+        message: 'Super Admin automaticamente recebe todas as permissões no frontend'
+      });
+    } else {
+      console.log(`✅ Usuário ${user_type} criado:`, {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdBy: req.user.name,
+        message: 'Vincular a hotéis usando o botão "Gerenciar Hotéis" se necessário'
+      });
+    }
 
     // Gerar token
     const token = generateToken(user);

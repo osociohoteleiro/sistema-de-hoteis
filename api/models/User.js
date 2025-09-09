@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
+// Fixed uuid column references
 
 class User {
   constructor(data = {}) {
@@ -21,7 +22,7 @@ class User {
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM users WHERE user_uuid = $1', [uuid]);
+    const result = await db.query('SELECT * FROM users WHERE uuid = $1', [uuid]);
     return result.length > 0 ? new User(result[0]) : null;
   }
 
@@ -33,26 +34,39 @@ class User {
   static async findAll(filters = {}) {
     let query = 'SELECT * FROM users WHERE 1=1';
     const params = [];
+    let paramCount = 1;
 
     if (filters.user_type) {
-      query += ' AND user_type = ?';
-      params.push(filters.user_type);
+      if (Array.isArray(filters.user_type)) {
+        // Se for array, usar IN clause
+        const placeholders = filters.user_type.map((_, index) => `$${paramCount + index}`).join(', ');
+        query += ` AND user_type IN (${placeholders})`;
+        filters.user_type.forEach(type => params.push(type));
+        paramCount += filters.user_type.length;
+      } else {
+        // Se for string, usar = clause
+        query += ` AND user_type = $${paramCount}`;
+        params.push(filters.user_type);
+        paramCount++;
+      }
     }
 
     if (filters.active !== undefined) {
-      query += ' AND active = ?';
+      query += ` AND active = $${paramCount}`;
       params.push(filters.active);
+      paramCount++;
     }
 
     if (filters.search) {
-      query += ' AND (name LIKE ? OR email LIKE ?)';
+      query += ` AND (name ILIKE $${paramCount} OR email ILIKE $${paramCount + 1})`;
       params.push(`%${filters.search}%`, `%${filters.search}%`);
+      paramCount += 2;
     }
 
     query += ' ORDER BY created_at DESC';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      query += ` LIMIT $${paramCount}`;
       params.push(parseInt(filters.limit));
     }
 
@@ -65,23 +79,24 @@ class User {
       // Update existing user
       const result = await db.query(
         `UPDATE users SET 
-         name = ?, email = ?, user_type = ?, active = ?, email_verified = ?
-         WHERE id = ?`,
+         name = $1, email = $2, user_type = $3, active = $4, email_verified = $5
+         WHERE id = $6`,
         [this.name, this.email, this.user_type, this.active, this.email_verified, this.id]
       );
       return result;
     } else {
-      // Create new user
+      // Create new user - Generate UUID and return new user data
       const result = await db.query(
-        `INSERT INTO users (name, email, password_hash, user_type, active, email_verified) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (uuid, name, email, password_hash, user_type, active, email_verified) 
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6) RETURNING *`,
         [this.name, this.email, this.password_hash, this.user_type, this.active, this.email_verified]
       );
-      this.id = result.insertId;
       
-      // Get the generated UUID
-      const newUser = await User.findById(this.id);
-      this.uuid = newUser.uuid;
+      if (result && result.length > 0) {
+        const newUser = result[0];
+        this.id = newUser.id;
+        this.uuid = newUser.uuid;
+      }
       
       return result;
     }
@@ -100,18 +115,19 @@ class User {
     if (!this.id) {
       throw new Error('Cannot delete user without ID');
     }
-    return await db.query('DELETE FROM users WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM users WHERE id = $1', [this.id]);
   }
 
   // Get user hotels
   async getHotels() {
     const result = await db.query(`
-      SELECT h.id, h.hotel_uuid, h.hotel_nome, h.hotel_criado_em, h.hotel_capa, 
-             h.hora_checkin, h.hora_checkout, uh.role, uh.permissions, uh.active as user_active
+      SELECT h.id, h.hotel_uuid, h.name as hotel_nome, h.created_at as hotel_criado_em, 
+             h.cover_image as hotel_capa, h.checkin_time as hora_checkin, h.checkout_time as hora_checkout, 
+             uh.role, uh.permissions, uh.active as user_active
       FROM hotels h
       JOIN user_hotels uh ON h.id = uh.hotel_id
-      WHERE uh.user_id = ? AND uh.active = true
-      ORDER BY h.hotel_nome
+      WHERE uh.user_id = $1 AND uh.active = true
+      ORDER BY h.name
     `, [this.id]);
     
     return result;
