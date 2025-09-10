@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/environment';
 
 const AppContext = createContext();
 
 const DEFAULT_CONFIG = {
   companyName: 'Sistema PMS',
   appDescription: 'Sistema completo de Property Management System para gestão hoteleira eficiente.',
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
+  apiBaseUrl: API_BASE_URL
 };
 
 export const AppProvider = ({ children }) => {

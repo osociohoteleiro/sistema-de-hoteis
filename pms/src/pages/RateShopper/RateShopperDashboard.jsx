@@ -30,6 +30,7 @@ import PriceTrendChart from '../../components/PriceTrendChart';
 import ChartJsPriceChart from '../../components/ChartJsPriceChart';
 import PriceDebugTable from '../../components/PriceDebugTable';
 import { io } from 'socket.io-client';
+import { SOCKET_URL } from '../../config/environment';
 import axios from 'axios';
 import apiService from '../../services/api';
 import { format, addDays, startOfDay } from 'date-fns';
@@ -225,8 +226,7 @@ const RateShopperDashboard = () => {
 
   // Configuração do Socket.io
   useEffect(() => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
-    const newSocket = io(socketUrl, {
+    const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       timeout: 5000,
       forceNew: true

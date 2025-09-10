@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { API_BASE_URL } from '../config/environment';
 import toast from 'react-hot-toast';
 
 const Login = () => {
@@ -27,8 +28,8 @@ const Login = () => {
       try {
         // Incluir hotel_id se disponível para buscar configuração específica do hotel
         const url = selectedHotelUuid 
-          ? `${config.apiBaseUrl}/app-configurations/public/pms?hotel_id=${selectedHotelUuid}`
-          : `${config.apiBaseUrl}/app-configurations/public/pms`;
+          ? `${API_BASE_URL}/app-configurations/public/pms?hotel_id=${selectedHotelUuid}`
+          : `${API_BASE_URL}/app-configurations/public/pms`;
         
         const response = await fetch(url);
         if (response.ok) {
