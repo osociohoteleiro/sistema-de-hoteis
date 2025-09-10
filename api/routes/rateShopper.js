@@ -79,15 +79,10 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         rs.id,
         rs.hotel_id,
         rs.property_id,
-        rs.check_in_date as start_date,
-        rs.check_out_date as end_date,
-        rs.status as status,
-        rs.total_results,
-        rs.duration_seconds,
+        rs.status,
         rs.created_at,
         rs.updated_at,
-        rsp.property_name,
-        rsp.booking_engine as platform
+        rsp.property_name
       FROM rate_shopper_searches rs
       LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       WHERE rs.hotel_id = $1
@@ -95,13 +90,17 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       LIMIT 10
     `, [hotelId]);
     
-    // DEBUG: Log detalhado para verificar platform
-    console.log('🔍 DEBUG: Recent searches com platform:', 
-      recentSearches.slice(0, 3).map(s => ({
+    // DEBUG: Log detalhado para verificar searches
+    console.log('🔍 DEBUG: Recent searches full result:', recentSearches);
+    console.log('🔍 DEBUG: Recent searches type:', typeof recentSearches);
+    console.log('🔍 DEBUG: Recent searches.rows type:', typeof recentSearches.rows);
+    
+    const searchesData = recentSearches.rows || recentSearches || [];
+    console.log('🔍 DEBUG: Recent searches data:', 
+      searchesData.slice(0, 3).map(s => ({
         id: s.id,
         property_id: s.property_id,
         property_name: s.property_name,
-        platform: s.platform,
         status: s.status
       })));
 
@@ -163,7 +162,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         COUNT(DISTINCT rsp_prop.id) as total_properties,
         COUNT(DISTINCT rs.id) as total_searches,
         COUNT(rsp.id) as total_prices,
-        COUNT(CASE WHEN rs.search_status = 'RUNNING' THEN 1 END) as running_searches,
+        COUNT(CASE WHEN rs.status = 'RUNNING' THEN 1 END) as running_searches,
         COALESCE(AVG(rsp.price), 0) as avg_price,
         COALESCE(MIN(rsp.price), 0) as min_price,
         COALESCE(MAX(rsp.price), 0) as max_price
@@ -174,7 +173,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
     `, [hotelId]);
 
     // Converter valores numéricos que vêm como strings do PostgreSQL
-    const summaryData = summary[0] || {};
+    const summaryData = (summary.rows && summary.rows[0]) || summary[0] || {};
     if (summaryData.avg_price !== undefined) {
       summaryData.avg_price = parseFloat(summaryData.avg_price) || 0;
       summaryData.min_price = parseFloat(summaryData.min_price) || 0;
@@ -210,7 +209,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       success: true,
       data: {
         summary: summaryData,
-        recent_searches: recentSearches,
+        recent_searches: searchesData,
         price_trends: priceTrends,
         properties: propertiesWithPrices
       }
