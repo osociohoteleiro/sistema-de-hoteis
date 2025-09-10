@@ -121,7 +121,7 @@ class User {
   // Get user hotels
   async getHotels() {
     const result = await db.query(`
-      SELECT h.id, h.hotel_uuid, h.name as hotel_nome, h.created_at as hotel_criado_em, 
+      SELECT h.id, h.id as hotel_uuid, h.name as hotel_nome, h.created_at as hotel_criado_em, 
              h.cover_image as hotel_capa, h.checkin_time as hora_checkin, h.checkout_time as hora_checkout, 
              uh.role, uh.permissions, uh.active as user_active
       FROM hotels h
