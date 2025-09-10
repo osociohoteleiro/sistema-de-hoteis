@@ -141,6 +141,53 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
+// List database tables endpoint
+app.get('/api/list-tables', async (req, res) => {
+  try {
+    console.log('📋 Listando tabelas do banco...');
+    
+    // Conectar ao banco
+    await db.connect();
+    
+    // Listar tabelas
+    const tables = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      ORDER BY table_name
+    `);
+    
+    // Verificar usuário admin se tabela users existir
+    let adminUser = null;
+    const userTableExists = tables.some(t => t.table_name === 'users');
+    if (userTableExists) {
+      try {
+        const adminQuery = await db.query('SELECT id, name, email FROM users WHERE email = $1 LIMIT 1', ['admin@osh.com.br']);
+        adminUser = adminQuery[0] || null;
+      } catch (error) {
+        console.log('⚠️ Erro ao buscar admin user:', error.message);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'Lista de tabelas obtida com sucesso!',
+      tableCount: tables.length,
+      tables: tables.map(t => t.table_name),
+      adminUser: adminUser,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro ao listar tabelas:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Manual database initialization endpoint
 app.post('/api/init-db', async (req, res) => {
   try {
@@ -173,6 +220,52 @@ app.post('/api/init-db', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Erro na inicialização manual:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Initialize database using GET (easier for browser testing)
+app.get('/api/init-db-get', async (req, res) => {
+  try {
+    console.log('🔄 Inicialização via GET...');
+    
+    // Conectar ao banco
+    await db.connect();
+    
+    // Forçar inicialização
+    await initDatabase();
+    
+    // Verificar tabelas criadas
+    const tables = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      ORDER BY table_name
+    `);
+    
+    // Verificar usuário admin
+    let adminUser = null;
+    try {
+      const adminQuery = await db.query('SELECT id, name, email FROM users WHERE email = $1 LIMIT 1', ['admin@osh.com.br']);
+      adminUser = adminQuery[0] || null;
+    } catch (error) {
+      console.log('⚠️ Erro ao buscar admin:', error.message);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Banco inicializado com sucesso via GET!',
+      tables: tables.map(t => t.table_name),
+      adminUser: adminUser,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro na inicialização via GET:', error);
     res.status(500).json({
       success: false,
       error: error.message,
