@@ -5,7 +5,7 @@ const AppContext = createContext();
 const DEFAULT_CONFIG = {
   companyName: 'Sistema PMS',
   appDescription: 'Sistema completo de Property Management System para gestão hoteleira eficiente.',
-  apiBaseUrl: 'http://localhost:3001'
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
 };
 
 export const AppProvider = ({ children }) => {
