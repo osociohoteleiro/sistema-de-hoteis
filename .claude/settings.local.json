@@ -185,7 +185,11 @@
       "Bash(start http://localhost:5174/admin/permissoes)",
       "Bash(start http://localhost:5174)",
       "Bash(start http://localhost:5173/configuracoes)",
-      "WebFetch(domain:easypanel.io)"
+      "WebFetch(domain:easypanel.io)",
+      "Bash(git submodule:*)",
+      "Bash(rm:*)",
+      "Bash(git rm:*)",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []
