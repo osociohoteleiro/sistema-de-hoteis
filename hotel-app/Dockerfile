@@ -3,7 +3,7 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first for better caching
+# Copy package files first for better caching 
 COPY package*.json ./
 
 # Install dependencies
