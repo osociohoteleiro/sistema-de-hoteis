@@ -225,6 +225,59 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
 });
 
 // GET /api/rate-shopper/:hotel_id/price-trends
+
+// GET /api/rate-shopper/:hotel_id/price-trends - VERSÃO DE TESTE
+router.get('/:hotel_id/price-trends-test', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
+    // Retornar dados de teste fixos em vez de fazer query complexa
+    const testData = {
+      success: true,
+      data: {
+        chart_data: {
+          "2025-09-10": {
+            date: "2025-09-10",
+            "Eco Encanto Pousada (Artaxnet)": 450.00,
+            is_future: false
+          },
+          "2025-09-11": {
+            date: "2025-09-11", 
+            "Eco Encanto Pousada (Artaxnet)": 475.00,
+            is_future: false
+          }
+        },
+        properties: ["Eco Encanto Pousada (Artaxnet)"],
+        main_properties: ["Eco Encanto Pousada (Artaxnet)"],
+        date_range: {
+          start: "2025-09-10",
+          end: "2025-10-09",
+          future_end: "2025-11-09"
+        }
+      }
+    };
+
+    res.json(testData);
+
+  } catch (error) {
+    console.error('Test price trends error:', error);
+    res.status(500).json({ error: 'Failed to load test price trends' });
+  }
+});
+
+
 router.get('/:hotel_id/price-trends', async (req, res) => {
   try {
     const hotel_id = req.params.hotel_id;
