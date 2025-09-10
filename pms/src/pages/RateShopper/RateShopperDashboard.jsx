@@ -1063,6 +1063,18 @@ const RateShopperDashboard = () => {
   }
 
   if (!dashboardData) {
+    // Se não há hotel selecionado, mostrar mensagem amigável
+    if (!selectedHotelUuid) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <p className="text-gray-600 mb-4">Selecione um hotel acima para exibir os dados</p>
+          </div>
+        </div>
+      );
+    }
+    
+    // Se há hotel selecionado mas os dados não carregaram, mostrar erro com botão de retry
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -1129,13 +1141,24 @@ const RateShopperDashboard = () => {
             </p>
           </div>
           
-          <Link
-            to="/rate-shopper/properties"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            Gerenciar Propriedades
-          </Link>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => setShowNewSearchModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              disabled={submittingSearch}
+            >
+              <Search className="h-4 w-4 mr-2" />
+              Nova Busca
+            </button>
+            
+            <Link
+              to="/rate-shopper/properties"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              Gerenciar Propriedades
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -1566,25 +1589,14 @@ const RateShopperDashboard = () => {
                     <h3 className="text-lg font-semibold text-gray-900">Histórico Completo</h3>
                     <p className="text-sm text-gray-600">Todas as extrações realizadas - clique para ver os preços</p>
                   </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => loadDashboardData()}
-                      disabled={loading}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
-                    >
-                      <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                      Atualizar
-                    </button>
-                    
-                    <button 
-                      onClick={() => setShowNewSearchModal(true)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                      disabled={submittingSearch}
-                    >
-                      <Search className="h-4 w-4 mr-2" />
-                      Nova Busca
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => loadDashboardData()}
+                    disabled={loading}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                    Atualizar
+                  </button>
                 </div>
               </div>
               

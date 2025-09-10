@@ -149,6 +149,50 @@ class User {
     );
   }
 
+  // Get user permissions
+  async getPermissions() {
+    try {
+      const result = await db.query(
+        'SELECT permission FROM user_permissions WHERE user_id = $1',
+        [this.id]
+      );
+      return result.map(row => row.permission);
+    } catch (error) {
+      console.error('Erro ao buscar permissões do usuário:', error);
+      return [];
+    }
+  }
+
+  // Set user permissions (replace all existing permissions)
+  async setPermissions(permissions) {
+    try {
+      // Iniciar transação
+      await db.query('BEGIN');
+
+      // Remover todas as permissões existentes
+      await db.query('DELETE FROM user_permissions WHERE user_id = $1', [this.id]);
+
+      // Adicionar novas permissões
+      if (permissions && permissions.length > 0) {
+        for (const permission of permissions) {
+          await db.query(
+            'INSERT INTO user_permissions (user_id, permission) VALUES ($1, $2)',
+            [this.id, permission]
+          );
+        }
+      }
+
+      // Confirmar transação
+      await db.query('COMMIT');
+      return true;
+    } catch (error) {
+      // Desfazer transação em caso de erro
+      await db.query('ROLLBACK');
+      console.error('Erro ao definir permissões do usuário:', error);
+      throw error;
+    }
+  }
+
   toJSON() {
     const user = { ...this };
     delete user.password_hash; // Never expose password hash

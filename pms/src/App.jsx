@@ -13,12 +13,16 @@ function App() {
         {/* Toast Notifications */}
         <Toaster
           position="top-right"
+          containerStyle={{
+            zIndex: 99999999
+          }}
           toastOptions={{
             duration: 4000,
             style: {
               background: '#1f2937',
               color: '#fff',
-              border: '1px solid #374151'
+              border: '1px solid #374151',
+              zIndex: 99999999
             },
             success: {
               iconTheme: {

@@ -175,7 +175,17 @@
       "Bash(start http://localhost:5173/admin/permissoes)",
       "Bash(start http://localhost:5173/login)",
       "Bash(del check-hotels.js)",
-      "Bash(del check-users.js)"
+      "Bash(del check-users.js)",
+      "Bash(copy Settings.jsx Settings_backup.jsx)",
+      "Bash(copy Settings_new.jsx Settings.jsx)",
+      "Bash(start http://localhost:5174/login)",
+      "Bash(start http://localhost:5174/configuracoes)",
+      "Bash(start http://localhost:5175/login)",
+      "Bash(start http://localhost:5175/rate-shopper)",
+      "Bash(start http://localhost:5174/admin/permissoes)",
+      "Bash(start http://localhost:5174)",
+      "Bash(start http://localhost:5173/configuracoes)",
+      "WebFetch(domain:easypanel.io)"
     ],
     "deny": [],
     "ask": []

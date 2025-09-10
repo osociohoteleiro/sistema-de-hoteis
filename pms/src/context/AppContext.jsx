@@ -4,13 +4,76 @@ const AppContext = createContext();
 
 const DEFAULT_CONFIG = {
   companyName: 'Sistema PMS',
-  appDescription: 'Sistema completo de Property Management System para gestão hoteleira eficiente.'
+  appDescription: 'Sistema completo de Property Management System para gestão hoteleira eficiente.',
+  apiBaseUrl: 'http://localhost:3001'
 };
 
 export const AppProvider = ({ children }) => {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(false);
   const [selectedHotelUuid, setSelectedHotelUuid] = useState('');
+
+  // Função para atualizar o favicon dinamicamente
+  const updateFavicon = (faviconUrl) => {
+    try {
+      // Remover favicon existente
+      const existingFavicon = document.querySelector('link[rel="icon"]') || 
+                             document.querySelector('link[rel="shortcut icon"]');
+      if (existingFavicon) {
+        existingFavicon.remove();
+      }
+      
+      // Criar novo favicon
+      const favicon = document.createElement('link');
+      favicon.rel = 'icon';
+      favicon.type = 'image/x-icon';
+      favicon.href = faviconUrl;
+      
+      document.head.appendChild(favicon);
+      console.log('🔸 PMS Favicon atualizado para:', faviconUrl);
+    } catch (error) {
+      console.error('❌ Erro ao atualizar favicon do PMS:', error);
+    }
+  };
+
+  // Função para atualizar o título da página (aba do navegador)
+  const updatePageTitle = (title) => {
+    try {
+      document.title = title;
+      console.log('📋 PMS Título atualizado para:', title);
+    } catch (error) {
+      console.error('❌ Erro ao atualizar título da página do PMS:', error);
+    }
+  };
+
+  // Função para carregar configurações da aplicação
+  const loadAppConfigurations = async (hotelUuid = null) => {
+    try {
+      const url = hotelUuid 
+        ? `${DEFAULT_CONFIG.apiBaseUrl}/api/app-configurations/public/pms?hotel_id=${hotelUuid}`
+        : `${DEFAULT_CONFIG.apiBaseUrl}/api/app-configurations/public/pms`;
+      
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Atualizar favicon automaticamente
+        if (data.favicon_url) {
+          updateFavicon(data.favicon_url);
+        }
+        
+        // Atualizar título da página automaticamente
+        if (data.app_title) {
+          updatePageTitle(data.app_title);
+        }
+        
+        return data;
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações da aplicação PMS:', error);
+    }
+    return null;
+  };
 
   useEffect(() => {
     // Carregar configurações do localStorage
@@ -28,8 +91,20 @@ export const AppProvider = ({ children }) => {
     const savedSelectedHotel = localStorage.getItem('selectedHotelUuid');
     if (savedSelectedHotel) {
       setSelectedHotelUuid(savedSelectedHotel);
+      // Carregar configurações para o hotel selecionado
+      loadAppConfigurations(savedSelectedHotel);
+    } else {
+      // Carregar configurações globais
+      loadAppConfigurations();
     }
   }, []);
+
+  // Recarregar configurações quando o hotel selecionado mudar
+  useEffect(() => {
+    if (selectedHotelUuid) {
+      loadAppConfigurations(selectedHotelUuid);
+    }
+  }, [selectedHotelUuid]);
 
   // Função para selecionar um hotel
   const selectHotel = (hotelUuid) => {
@@ -67,7 +142,9 @@ export const AppProvider = ({ children }) => {
     selectHotel,
     updateConfig,
     clearSelectedHotel,
-    setLoading
+    setLoading,
+    updateFavicon,
+    updatePageTitle
   };
 
   return (

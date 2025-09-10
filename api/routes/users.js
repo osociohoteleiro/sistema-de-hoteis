@@ -70,9 +70,20 @@ router.get('/', authenticateToken, async (req, res) => {
 
     console.log(`✅ Encontrados ${users.length} usuários`);
 
+    // Carregar permissões para cada usuário
+    const usersWithPermissions = await Promise.all(
+      users.map(async (user) => {
+        const permissions = await user.getPermissions();
+        return {
+          ...user.toJSON(),
+          permissions
+        };
+      })
+    );
+
     res.json({
-      users: users.map(user => user.toJSON()),
-      total: users.length
+      users: usersWithPermissions,
+      total: usersWithPermissions.length
     });
 
   } catch (error) {
@@ -429,6 +440,93 @@ router.put('/:id/hotels', authenticateToken, async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erro ao gerenciar hotéis do usuário:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// GET /api/users/:id/permissions - Obter permissões do usuário
+router.get('/:id/permissions', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔍 Buscando permissões do usuário...');
+    
+    const userId = parseInt(req.params.id);
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'Usuário não encontrado'
+      });
+    }
+
+    // Verificar permissões - Super Admin pode ver qualquer usuário, outros só a si mesmos
+    if (req.user.user_type !== 'SUPER_ADMIN' && req.user.id !== userId) {
+      return res.status(403).json({
+        error: 'Você não tem permissão para ver as permissões deste usuário'
+      });
+    }
+
+    // Buscar permissões do usuário
+    const permissions = await user.getPermissions();
+
+    console.log(`✅ Encontradas ${permissions.length} permissões para usuário ${userId}`);
+
+    res.json({
+      permissions: permissions
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar permissões do usuário:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
+// PUT /api/users/:id/permissions - Atualizar permissões do usuário
+router.put('/:id/permissions', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔧 Atualizando permissões do usuário...');
+    console.log('👤 Usuário logado:', req.user);
+    console.log('📝 Dados recebidos:', req.body);
+    
+    const userId = parseInt(req.params.id);
+    const { permissions } = req.body;
+
+    // Validar dados de entrada
+    if (!Array.isArray(permissions)) {
+      return res.status(400).json({
+        error: 'Permissões devem ser um array'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: 'Usuário não encontrado'
+      });
+    }
+
+    // Verificar permissões - apenas Super Admin pode alterar permissões
+    if (req.user.user_type !== 'SUPER_ADMIN') {
+      return res.status(403).json({
+        error: 'Apenas Super Administradores podem alterar permissões'
+      });
+    }
+
+    // Definir novas permissões
+    await user.setPermissions(permissions);
+
+    console.log(`✅ Permissões atualizadas para usuário ${userId}:`, permissions);
+
+    res.json({
+      message: 'Permissões atualizadas com sucesso',
+      permissions: permissions
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao atualizar permissões do usuário:', error);
     res.status(500).json({
       error: 'Erro interno do servidor'
     });

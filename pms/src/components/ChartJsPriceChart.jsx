@@ -11,6 +11,8 @@ import {
   Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -640,6 +642,17 @@ const ChartJsPriceChart = ({
     }
   };
 
+  const handleDateChange = (date) => {
+    if (date && !isNaN(date.getTime())) {
+      const newDate = startOfDay(date);
+      if (onStartDateChange) {
+        onStartDateChange(newDate);
+      } else {
+        setInternalStartDate(newDate);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -719,6 +732,27 @@ const ChartJsPriceChart = ({
               <ChevronLeft className="h-4 w-4 mr-1" />
               Anterior
             </button>
+            
+            {/* Datepicker elegante para ir para uma data específica */}
+            <div className="flex items-center space-x-1 relative">
+              <Calendar className="h-4 w-4 text-gray-500" />
+              <div className="date-picker-wrapper">
+                <DatePicker
+                  selected={currentStartDate}
+                  onChange={handleDateChange}
+                  dateFormat="dd/MM/yyyy"
+                  locale={ptBR}
+                  showPopperArrow={false}
+                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors cursor-pointer w-28"
+                  placeholderText="Selecionar data"
+                  todayButton="Hoje"
+                  showTodayButton
+                  title="Selecionar data específica"
+                  popperClassName="date-picker-popper"
+                  calendarClassName="date-picker-calendar"
+                />
+              </div>
+            </div>
             
             {/* Botão Hoje no meio */}
             <button

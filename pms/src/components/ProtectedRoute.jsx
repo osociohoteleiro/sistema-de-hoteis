@@ -1,7 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const ProtectedRoute = ({ children, requiredPermissions = [], requireAll = false, fallback = null }) => {
+const ProtectedRoute = ({ children, requiredPermissions = [], requireAll = false, requireAuthOnly = false, fallback = null }) => {
   const { isAuthenticated, loading, hasPermission, hasAnyPermission, hasAllPermissions, isSuperAdmin } = useAuth();
   const location = useLocation();
 
@@ -20,6 +20,11 @@ const ProtectedRoute = ({ children, requiredPermissions = [], requireAll = false
   // Redirecionar para login se não estiver autenticado
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Se só requer autenticação, permitir acesso
+  if (requireAuthOnly) {
+    return children;
   }
 
   // Super Admin tem acesso a tudo

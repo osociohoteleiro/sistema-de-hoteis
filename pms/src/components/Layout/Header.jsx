@@ -155,7 +155,7 @@ const Header = () => {
           ...(isCalendarPage ? {} : {
             position: 'sticky',
             top: '0',
-            zIndex: '40'
+            zIndex: '9999999'
           })
         }}
       >
@@ -274,7 +274,7 @@ const Header = () => {
         {/* Right side actions */}
         <div className="flex items-center space-x-6">
           {/* User Profile */}
-          <div className="relative z-50" ref={userMenuRef}>
+          <div className="relative" ref={userMenuRef} style={{zIndex: 999999}}>
             <button 
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center space-x-3 bg-white/60 hover:bg-white/80 rounded-xl px-3 py-2 transition-colors border border-slate-300/60 hover:border-slate-400/60 shadow-sm hover:shadow-md"
@@ -297,7 +297,7 @@ const Header = () => {
 
             {/* User Menu Dropdown */}
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-48 bg-white/95 backdrop-blur-sm rounded-xl shadow-elegant border border-slate-200/60 z-[99999]">
+              <div className="absolute right-0 mt-2 w-48 bg-white/95 backdrop-blur-sm rounded-xl shadow-elegant border border-slate-200/60" style={{zIndex: 999999}}>
                 <div className="py-2">
                   <div className="px-4 py-2 border-b border-slate-200/60">
                     <p className="text-sm font-medium text-slate-800">

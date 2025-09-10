@@ -96,11 +96,17 @@ router.post('/login', async (req, res) => {
     const hotels = await user.getHotels();
     console.log('✅ Hotéis encontrados:', hotels.length);
 
+    // Buscar permissões do usuário
+    console.log('🔐 Buscando permissões do usuário...');
+    const permissions = await user.getPermissions();
+    console.log('✅ Permissões encontradas:', permissions.length);
+
     console.log('🎉 Login realizado com sucesso!');
     res.json({
       message: 'Login realizado com sucesso',
       token,
       user: user.toJSON(),
+      permissions,
       hotels
     });
 
@@ -206,9 +212,11 @@ router.get('/me', authenticateToken, async (req, res) => {
     }
 
     const hotels = await user.getHotels();
+    const permissions = await user.getPermissions();
 
     res.json({
       user: user.toJSON(),
+      permissions,
       hotels
     });
 

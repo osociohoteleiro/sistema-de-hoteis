@@ -219,9 +219,18 @@ export const AuthProvider = ({ children }) => {
         const apiResponse = await apiService.login(email, password);
         
         if (apiResponse && apiResponse.user) {
-          // Mapear dados da API para formato frontend
+          // Usar permissões reais da API em vez das hardcoded
           const userType = apiResponse.user.user_type;
-          const permissions = DEFAULT_PERMISSIONS[userType] || [];
+          
+          // Super Admin sempre tem todas as permissões
+          let permissions;
+          if (userType === USER_TYPES.SUPER_ADMIN) {
+            permissions = Object.values(PERMISSIONS); // Todas as permissões
+          } else {
+            permissions = (apiResponse.permissions && apiResponse.permissions.length > 0) 
+              ? apiResponse.permissions 
+              : DEFAULT_PERMISSIONS[userType] || [];
+          }
           
           const userData = {
             ...apiResponse.user,
@@ -256,18 +265,24 @@ export const AuthProvider = ({ children }) => {
           throw new Error('Email ou senha inválidos');
         }
 
+        // Para fallback, usar permissões padrão baseadas no tipo do usuário
+        const fallbackUser = {
+          ...userData,
+          permissions: DEFAULT_PERMISSIONS[userData.type] || []
+        };
+
         // Simular token JWT
         const token = `fake_token_${userData.id}_${Date.now()}`;
         
         // Salvar no localStorage
-        localStorage.setItem('authUser', JSON.stringify(userData));
+        localStorage.setItem('authUser', JSON.stringify(fallbackUser));
         localStorage.setItem('authToken', token);
         
-        setUser(userData);
+        setUser(fallbackUser);
         setIsAuthenticated(true);
         
-        console.log('✅ Login realizado com dados mockados:', userData);
-        return { success: true, user: userData };
+        console.log('✅ Login realizado com dados mockados:', fallbackUser);
+        return { success: true, user: fallbackUser };
       }
       
     } catch (error) {

@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import PermissionWrapper from './components/PermissionWrapper';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Reservas from './pages/Reservas';
@@ -31,7 +32,7 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: (
-      <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_PMS]}>
+      <ProtectedRoute requireAuthOnly={true}>
         <Layout />
       </ProtectedRoute>
     ),
@@ -43,9 +44,9 @@ const router = createBrowserRouter([
       { 
         path: 'dashboard', 
         element: (
-          <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_PMS]}>
+          <PermissionWrapper requiredPermissions={[PERMISSIONS.VIEW_DASHBOARD]}>
             <Dashboard />
-          </ProtectedRoute>
+          </PermissionWrapper>
         )
       },
       
@@ -53,9 +54,9 @@ const router = createBrowserRouter([
       { 
         path: 'reservas', 
         element: (
-          <ProtectedRoute requiredPermissions={[PERMISSIONS.MANAGE_PMS_RESERVATIONS]}>
+          <PermissionWrapper requiredPermissions={[PERMISSIONS.MANAGE_PMS_RESERVATIONS]}>
             <Reservas />
-          </ProtectedRoute>
+          </PermissionWrapper>
         )
       },
       
@@ -63,9 +64,9 @@ const router = createBrowserRouter([
       { 
         path: 'calendario', 
         element: (
-          <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_PMS_CALENDAR]}>
+          <PermissionWrapper requiredPermissions={[PERMISSIONS.VIEW_PMS_CALENDAR]}>
             <CalendarioFullCalendar />
-          </ProtectedRoute>
+          </PermissionWrapper>
         )
       },
       { 
@@ -145,9 +146,9 @@ const router = createBrowserRouter([
       { 
         path: 'rate-shopper', 
         element: (
-          <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_PMS_RATE_SHOPPER]}>
+          <PermissionWrapper requiredPermissions={[PERMISSIONS.VIEW_PMS_RATE_SHOPPER]}>
             <RateShopperDashboard />
-          </ProtectedRoute>
+          </PermissionWrapper>
         )
       },
       { 
@@ -183,9 +184,9 @@ const router = createBrowserRouter([
       { 
         path: 'configuracoes', 
         element: (
-          <ProtectedRoute requiredPermissions={[PERMISSIONS.VIEW_SETTINGS]}>
+          <PermissionWrapper requiredPermissions={[PERMISSIONS.VIEW_SETTINGS]}>
             <Configuracoes />
-          </ProtectedRoute>
+          </PermissionWrapper>
         )
       },
     ],

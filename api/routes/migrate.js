@@ -343,4 +343,259 @@ router.post('/run/:filename', async (req, res) => {
   }
 });
 
+// Rota específica para criar tabela app_configurations no PostgreSQL
+router.post('/create-app-configurations', async (req, res) => {
+  try {
+    console.log('Criando tabela app_configurations...');
+    
+    // Criar tabela app_configurations
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS app_configurations (
+        id SERIAL PRIMARY KEY,
+        hotel_id INTEGER,
+        app_name VARCHAR(50) CHECK (app_name IN ('hotel-app', 'pms', 'automacao', 'site-hoteleiro')) NOT NULL,
+        app_title VARCHAR(255) DEFAULT NULL,
+        logo_url TEXT DEFAULT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        shared_from_app VARCHAR(50) CHECK (shared_from_app IN ('hotel-app', 'pms', 'automacao', 'site-hoteleiro')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (hotel_id, app_name)
+      );
+    `;
+
+    const createIndexesSQL = `
+      CREATE INDEX IF NOT EXISTS idx_app_configurations_hotel_app ON app_configurations(hotel_id, app_name);
+      CREATE INDEX IF NOT EXISTS idx_app_configurations_app_name ON app_configurations(app_name);
+    `;
+
+    const createTriggerSQL = `
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+
+      DROP TRIGGER IF EXISTS update_app_configurations_updated_at ON app_configurations;
+      CREATE TRIGGER update_app_configurations_updated_at
+        BEFORE UPDATE ON app_configurations
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    `;
+
+    const insertDefaultConfigsSQL = `
+      INSERT INTO app_configurations (hotel_id, app_name, app_title, logo_url, is_active) 
+      VALUES 
+        (NULL, 'hotel-app', 'OSH - Sistema de Hotéis', NULL, TRUE),
+        (NULL, 'pms', 'OSH - PMS', NULL, TRUE),
+        (NULL, 'automacao', 'OSH - Automação', NULL, TRUE),
+        (NULL, 'site-hoteleiro', 'OSH - Site Hoteleiro', NULL, TRUE)
+      ON CONFLICT (hotel_id, app_name) DO UPDATE SET 
+        app_title = EXCLUDED.app_title,
+        updated_at = CURRENT_TIMESTAMP;
+    `;
+
+    // Executar as queries usando a conexão do database.js
+    await db.query(createTableSQL);
+    console.log('✅ Tabela app_configurations criada');
+    
+    await db.query(createIndexesSQL);
+    console.log('✅ Índices criados');
+    
+    await db.query(createTriggerSQL);
+    console.log('✅ Trigger e função criados');
+    
+    await db.query(insertDefaultConfigsSQL);
+    console.log('✅ Configurações padrão inseridas');
+
+    // Verificar se existem hotéis para inserir configurações
+    const hotelsResult = await db.query('SELECT id, name FROM hotels LIMIT 5');
+    if (hotelsResult.length > 0) {
+      console.log(`✅ Encontrados ${hotelsResult.length} hotéis`);
+      
+      for (const hotel of hotelsResult) {
+        const insertHotelConfigsSQL = `
+          INSERT INTO app_configurations (hotel_id, app_name, app_title, logo_url, is_active) 
+          VALUES 
+            ($1, 'hotel-app', $2, NULL, TRUE),
+            ($1, 'pms', $3, NULL, TRUE),
+            ($1, 'automacao', $4, NULL, TRUE),
+            ($1, 'site-hoteleiro', $5, NULL, TRUE)
+          ON CONFLICT (hotel_id, app_name) DO NOTHING;
+        `;
+        
+        await db.query(insertHotelConfigsSQL, [
+          hotel.id,
+          `${hotel.name} - Sistema`,
+          `${hotel.name} - PMS`,
+          `${hotel.name} - Automação`,
+          `${hotel.name} - Site`
+        ]);
+      }
+      console.log('✅ Configurações dos hotéis inseridas');
+    }
+
+    res.json({
+      success: true,
+      message: 'Tabela app_configurations criada com sucesso',
+      details: {
+        table_created: true,
+        indexes_created: true,
+        trigger_created: true,
+        default_configs_inserted: true,
+        hotel_configs_inserted: hotelsResult.length > 0
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao criar tabela app_configurations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao criar tabela app_configurations',
+      error: error.message
+    });
+  }
+});
+
+// Rota para adicionar campos favicon_url e description à tabela app_configurations
+router.post('/add-app-configurations-fields', async (req, res) => {
+  try {
+    console.log('Adicionando campos favicon_url e description à tabela app_configurations...');
+
+    // Adicionar campos favicon_url e description
+    const addFieldsSQL = `
+      ALTER TABLE app_configurations 
+      ADD COLUMN IF NOT EXISTS favicon_url TEXT DEFAULT NULL,
+      ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL;
+    `;
+
+    await db.query(addFieldsSQL);
+    console.log('✅ Campos adicionados à tabela app_configurations');
+
+    res.json({
+      success: true,
+      message: 'Campos favicon_url e description adicionados com sucesso à tabela app_configurations',
+      fields_added: ['favicon_url', 'description']
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao adicionar campos à tabela app_configurations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao adicionar campos à tabela app_configurations',
+      error: error.message
+    });
+  }
+});
+
+// Rota para criar tabela logo_history no PostgreSQL
+router.post('/create-logo-history', async (req, res) => {
+  try {
+    console.log('Criando tabela logo_history...');
+
+    // Criar tabela logo_history
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS logo_history (
+        id SERIAL PRIMARY KEY,
+        hotel_id INTEGER,
+        logo_url TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT FALSE,
+        upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    const createIndexesSQL = `
+      CREATE INDEX IF NOT EXISTS idx_logo_history_hotel_id ON logo_history(hotel_id);
+      CREATE INDEX IF NOT EXISTS idx_logo_history_active ON logo_history(is_active);
+    `;
+
+    const createTriggerSQL = `
+      CREATE OR REPLACE FUNCTION update_logo_history_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+
+      DROP TRIGGER IF EXISTS update_logo_history_updated_at ON logo_history;
+      CREATE TRIGGER update_logo_history_updated_at
+        BEFORE UPDATE ON logo_history
+        FOR EACH ROW
+        EXECUTE FUNCTION update_logo_history_updated_at_column();
+    `;
+
+    // Executar as queries
+    await db.query(createTableSQL);
+    console.log('✅ Tabela logo_history criada');
+    
+    await db.query(createIndexesSQL);
+    console.log('✅ Índices criados');
+    
+    await db.query(createTriggerSQL);
+    console.log('✅ Trigger e função criados');
+
+    res.json({
+      success: true,
+      message: 'Tabela logo_history criada com sucesso',
+      details: {
+        table_created: true,
+        indexes_created: true,
+        trigger_created: true
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao criar tabela logo_history:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao criar tabela logo_history',
+      error: error.message
+    });
+  }
+});
+
+// Rota para corrigir tipo do hotel_id de INTEGER para UUID
+router.post('/fix-app-configurations-hotel-id', async (req, res) => {
+  try {
+    console.log('Corrigindo tipo do campo hotel_id na tabela app_configurations...');
+
+    // Primeiro, limpar os dados existentes que não são válidos
+    console.log('🗑️ Limpando dados existentes...');
+    await db.query('TRUNCATE TABLE app_configurations');
+
+    // Alterar tipo do campo hotel_id de INTEGER para UUID
+    console.log('🔄 Alterando tipo do campo hotel_id...');
+    const alterTableSQL = `
+      ALTER TABLE app_configurations 
+      ALTER COLUMN hotel_id TYPE UUID USING NULL;
+    `;
+
+    await db.query(alterTableSQL);
+    console.log('✅ Campo hotel_id alterado de INTEGER para UUID');
+
+    res.json({
+      success: true,
+      message: 'Campo hotel_id corrigido com sucesso para UUID',
+      details: {
+        field_updated: 'hotel_id',
+        old_type: 'INTEGER',
+        new_type: 'UUID'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao corrigir tipo do campo hotel_id:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao corrigir tipo do campo hotel_id',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

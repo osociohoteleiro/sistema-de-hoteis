@@ -1,46 +1,36 @@
 const fs = require('fs');
-const path = require('path');
 const db = require('./config/database');
 
 async function applyMigration() {
   try {
-    console.log('🔄 Aplicando migration de histórico de preços...');
+    console.log('📝 Aplicando migração 004_user_permissions...');
     
-    // Conectar ao banco
-    await db.connect();
+    // Ler arquivo de migração
+    const migrationSQL = fs.readFileSync('./migrations/004_user_permissions.sql', 'utf8');
     
-    // Ler o arquivo da migration
-    const migrationPath = path.join(__dirname, 'migrations', '020_price_history.sql');
-    const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+    // Executar migração
+    await db.query(migrationSQL);
     
-    // Executar todo o SQL de uma vez para preservar estruturas complexas como functions
-    try {
-      console.log('Executando migration completa...');
-      await db.query(migrationSQL);
-      console.log('✅ Migration executada com sucesso');
-    } catch (error) {
-      if (error.message.includes('already exists') || error.message.includes('duplicate')) {
-        console.log('⚠️ Alguns recursos já existem, continuando...');
-      } else {
-        console.error('❌ Erro na migration:', error.message);
-        throw error;
-      }
-    }
+    console.log('✅ Migração aplicada com sucesso!');
     
-    console.log('✅ Migration aplicada com sucesso!');
+    // Verificar se a tabela foi criada
+    const result = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'user_permissions'
+      ORDER BY ordinal_position
+    `);
     
-  } catch (error) {
-    console.error('❌ Erro ao aplicar migration:', error);
-    process.exit(1);
-  } finally {
-    await db.close();
+    console.log('🔍 Estrutura da tabela user_permissions:');
+    result.forEach(col => {
+      console.log(`  - ${col.column_name}: ${col.data_type}`);
+    });
+    
     process.exit(0);
+  } catch (error) {
+    console.error('❌ Erro ao aplicar migração:', error);
+    process.exit(1);
   }
 }
 
-// Executar se for chamado diretamente
-if (require.main === module) {
-  applyMigration();
-}
-
-module.exports = applyMigration;
+applyMigration();

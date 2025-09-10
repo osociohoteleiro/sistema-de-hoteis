@@ -152,6 +152,7 @@ const siteThemesRoutes = require('./routes/siteThemes');
 const siteTemplatesRoutes = require('./routes/site-templates');
 const hotelSitesRoutes = require('./routes/hotel-sites');
 const migrateRoutes = require('./routes/migrate'); // Habilitado temporariamente
+const appConfigurationsRoutes = require('./routes/app-configurations');
 
 // Rotas da API
 app.use('/api/auth', authRoutes);
@@ -181,6 +182,7 @@ app.use('/api/sites', sitesRoutes);
 app.use('/api/site-themes', siteThemesRoutes);
 app.use('/api/site-templates', siteTemplatesRoutes);
 app.use('/api/hotel-sites', hotelSitesRoutes);
+app.use('/api/app-configurations', appConfigurationsRoutes);
 
 // Rate Shopper Extraction Control
 const rateShopperExtractionRoutes = require('./routes/rateShopperExtraction');

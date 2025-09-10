@@ -14,26 +14,53 @@ import {
   Menu,
   X,
   Hotel,
-  TrendingUp
+  TrendingUp,
+  Lock
 } from 'lucide-react';
+import { useAuth, PERMISSIONS } from '../../context/AuthContext';
+import { toast } from 'react-hot-toast';
 
 const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: Calendar, label: 'Reservas', path: '/reservas' },
-  { icon: CalendarDays, label: 'Calendário', path: '/calendario' },
-  { icon: LogIn, label: 'Check-in', path: '/checkin' },
-  { icon: LogOut, label: 'Check-out', path: '/checkout' },
-  { icon: Users, label: 'Hóspedes', path: '/hospedes' },
-  { icon: Bed, label: 'Quartos', path: '/quartos' },
-  { icon: DollarSign, label: 'Tarifário', path: '/tarifario' },
-  { icon: TrendingUp, label: 'Rate Shopper', path: '/rate-shopper' },
-  { icon: BarChart3, label: 'Financeiro', path: '/financeiro' },
-  { icon: BarChart3, label: 'Relatórios', path: '/relatorios' },
-  { icon: Settings, label: 'Configurações', path: '/configuracoes' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/', permission: PERMISSIONS.VIEW_DASHBOARD },
+  { icon: Calendar, label: 'Reservas', path: '/reservas', permission: PERMISSIONS.MANAGE_PMS_RESERVATIONS },
+  { icon: CalendarDays, label: 'Calendário', path: '/calendario', permission: PERMISSIONS.VIEW_PMS_CALENDAR },
+  { icon: LogIn, label: 'Check-in', path: '/checkin', permission: PERMISSIONS.MANAGE_PMS_CHECKIN },
+  { icon: LogOut, label: 'Check-out', path: '/checkout', permission: PERMISSIONS.MANAGE_PMS_CHECKOUT },
+  { icon: Users, label: 'Hóspedes', path: '/hospedes', permission: PERMISSIONS.MANAGE_PMS_GUESTS },
+  { icon: Bed, label: 'Quartos', path: '/quartos', permission: PERMISSIONS.MANAGE_PMS_ROOMS },
+  { icon: DollarSign, label: 'Tarifário', path: '/tarifario', permission: PERMISSIONS.MANAGE_PMS_RATES },
+  { icon: TrendingUp, label: 'Rate Shopper', path: '/rate-shopper', permission: PERMISSIONS.VIEW_PMS_RATE_SHOPPER },
+  { icon: BarChart3, label: 'Financeiro', path: '/financeiro', permission: PERMISSIONS.VIEW_PMS_FINANCIALS },
+  { icon: BarChart3, label: 'Relatórios', path: '/relatorios', permission: PERMISSIONS.VIEW_PMS_REPORTS },
+  { icon: Settings, label: 'Configurações', path: '/configuracoes', permission: PERMISSIONS.VIEW_SETTINGS },
 ];
 
 const Sidebar = ({ collapsed, onToggle }) => {
   const location = useLocation();
+  const { hasPermission, isSuperAdmin } = useAuth();
+
+  // Função para verificar se o usuário pode acessar um item
+  const canAccessItem = (item) => {
+    // Super Admin tem acesso a tudo
+    if (isSuperAdmin()) {
+      return true;
+    }
+    
+    // Se o item tem uma permissão específica, verificar se o usuário tem essa permissão
+    if (item.permission && !hasPermission(item.permission)) {
+      return false;
+    }
+    
+    return true;
+  };
+
+  // Função para lidar com cliques em itens sem permissão
+  const handleItemClick = (item, e) => {
+    if (!canAccessItem(item)) {
+      e.preventDefault();
+      toast.error('Você não tem permissão para acessar esta funcionalidade');
+    }
+  };
 
   return (
     <div className={`bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 shadow-2xl border-r border-slate-700/50 transition-all duration-500 ease-in-out ${collapsed ? 'w-20' : 'w-72'}`}>
@@ -75,28 +102,41 @@ const Sidebar = ({ collapsed, onToggle }) => {
           {menuItems.map((item, index) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
+            const hasAccess = canAccessItem(item);
             
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={`sidebar-item group ${isActive ? 'active' : ''} ${collapsed ? 'justify-center px-2 mx-3' : 'mx-3'}`}
+                onClick={(e) => handleItemClick(item, e)}
+                className={`sidebar-item group ${isActive ? 'active' : ''} ${collapsed ? 'justify-center px-2 mx-3' : 'mx-3'} ${!hasAccess ? 'opacity-75' : ''}`}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 <div className="relative">
                   <Icon size={20} className="flex-shrink-0 transition-all duration-200" />
-                  {isActive && (
+                  {!hasAccess && (
+                    <Lock size={12} className="absolute -top-1 -right-1 text-yellow-400 bg-slate-800 rounded-full p-0.5" />
+                  )}
+                  {isActive && hasAccess && (
                     <div className="absolute -top-1 -right-1 w-2 h-2 bg-primary-500 rounded-full animate-bounce-subtle"></div>
                   )}
                 </div>
                 {!collapsed && (
-                  <span className="ml-3 font-medium transition-all duration-200 group-hover:translate-x-1">
-                    {item.label}
-                  </span>
+                  <div className="flex items-center justify-between flex-1">
+                    <span className="ml-3 font-medium transition-all duration-200 group-hover:translate-x-1">
+                      {item.label}
+                    </span>
+                    {!hasAccess && (
+                      <Lock size={16} className="text-yellow-400 ml-2" />
+                    )}
+                  </div>
                 )}
                 {collapsed && (
-                  <div className="absolute left-full ml-6 px-3 py-2 bg-slate-700 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 whitespace-nowrap shadow-2xl border border-slate-600">
-                    {item.label}
+                  <div className="absolute left-full ml-6 px-3 py-2 bg-slate-700 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 whitespace-nowrap shadow-2xl border border-slate-600 flex items-center">
+                    <span>{item.label}</span>
+                    {!hasAccess && (
+                      <Lock size={12} className="text-yellow-400 ml-2" />
+                    )}
                     <div className="absolute top-1/2 left-0 transform -translate-x-1 -translate-y-1/2 w-2 h-2 bg-slate-700 rotate-45"></div>
                   </div>
                 )}

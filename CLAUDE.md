@@ -128,3 +128,20 @@ taskkill /f /im node.exe
 - Vector database via Qdrant
 - AI/Chatbot via Flowise
 - Cloud storage via AWS S3
+
+## Deploy e Produção
+
+### EasyPanel Deploy
+- **Dockerfiles**: Já configurados para todos os módulos
+- **Configuração**: Ver `.easypanel.yml` e `.env.production.example`
+- **Documentação**: Ver `DEPLOY-EASYPANEL.md` para guia completo
+- **Health Checks**: Configurados automaticamente
+- **SSL**: Certificados automáticos via Let's Encrypt
+
+### Arquivos de Deploy
+- `api/Dockerfile` - Container da API backend
+- `hotel-app/Dockerfile` - Container do frontend principal
+- `pms/Dockerfile` - Container do PMS
+- `.easypanel.yml` - Configuração dos serviços
+- `.env.production.example` - Exemplo de variáveis para produção
+- `DEPLOY-EASYPANEL.md` - Guia completo de deploy
