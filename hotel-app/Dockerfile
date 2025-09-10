@@ -38,6 +38,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Install wget for health check
+RUN apk add --no-cache wget
+
 # Expose port
 EXPOSE 80
 
