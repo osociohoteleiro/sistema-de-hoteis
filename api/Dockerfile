@@ -33,17 +33,16 @@ RUN mkdir -p /app/uploads /app/logs && \
 
 # Set environment variables for production
 ENV NODE_ENV=production
-ENV PORT=3001
 
 # Switch to non-root user
 USER nodejs
 
-# Expose port (EasyPanel will map this automatically)
-EXPOSE 3001
+# Expose port (EasyPanel will map this to 80 internally)
+EXPOSE 80
 
-# Health check
+# Health check (use PORT environment variable)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/api/health', (r) => {r.statusCode === 200 ? process.exit(0) : process.exit(1)})"
+  CMD node -e "const port=process.env.PORT||3001; require('http').get(\`http://localhost:\${port}/api/health\`, (r) => {r.statusCode === 200 ? process.exit(0) : process.exit(1)})"
 
 # Start application with dumb-init
 ENTRYPOINT ["dumb-init", "--"]

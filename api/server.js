@@ -26,6 +26,7 @@ const io = new Server(server, {
   }
 });
 
+// Use PORT from environment (EasyPanel sets this) or default to 3001 for local dev
 const PORT = process.env.PORT || 3001;
 
 // Middleware de segurança
