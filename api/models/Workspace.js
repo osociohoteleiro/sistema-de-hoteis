@@ -15,12 +15,12 @@ class Workspace {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM workspaces WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM workspaces WHERE id = $1', [id]);
     return result.length > 0 ? new Workspace(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM workspaces WHERE uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM workspaces WHERE uuid = $1', [uuid]);
     return result.length > 0 ? new Workspace(result[0]) : null;
   }
 
@@ -131,8 +131,8 @@ class Workspace {
       // Update existing workspace
       const result = await db.query(`
         UPDATE workspaces SET 
-        name = ?, description = ?, settings = ?, active = ?
-        WHERE id = ?
+        name = $1, description = $2, settings = $3, active = $4
+        WHERE id = $5
       `, [
         this.name,
         this.description, 
@@ -145,7 +145,7 @@ class Workspace {
       // Create new workspace
       const result = await db.query(`
         INSERT INTO workspaces (hotel_id, hotel_uuid, name, description, settings, active) 
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         this.hotel_id,
         this.hotel_uuid,
@@ -169,7 +169,7 @@ class Workspace {
     if (!this.id) {
       throw new Error('Cannot delete workspace without ID');
     }
-    return await db.query('DELETE FROM workspaces WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM workspaces WHERE id = $1', [this.id]);
   }
 
   async softDelete() {
@@ -279,7 +279,7 @@ class Workspace {
   // Count workspaces by hotel
   static async countByHotel(hotelId) {
     const result = await db.query(
-      'SELECT COUNT(*) as count FROM workspaces WHERE hotel_id = ? AND active = true',
+      'SELECT COUNT(*) as count FROM workspaces WHERE hotel_id = $1 AND active = true',
       [hotelId]
     );
     return result[0].count;

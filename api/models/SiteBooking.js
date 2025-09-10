@@ -24,17 +24,17 @@ class SiteBooking {
 
   // CRUD Methods
   static async findById(id) {
-    const result = await db.query('SELECT * FROM site_bookings WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM site_bookings WHERE id = $1', [id]);
     return result.length > 0 ? new SiteBooking(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM site_bookings WHERE booking_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM site_bookings WHERE booking_uuid = $1', [uuid]);
     return result.length > 0 ? new SiteBooking(result[0]) : null;
   }
 
   static async findByConfirmationCode(code) {
-    const result = await db.query('SELECT * FROM site_bookings WHERE confirmation_code = ?', [code]);
+    const result = await db.query('SELECT * FROM site_bookings WHERE confirmation_code = $1', [code]);
     return result.length > 0 ? new SiteBooking(result[0]) : null;
   }
 
@@ -158,10 +158,10 @@ class SiteBooking {
       // Update existing booking
       const result = await db.query(`
         UPDATE site_bookings SET 
-        guest_name = ?, guest_email = ?, guest_phone = ?, check_in = ?, 
-        check_out = ?, rooms = ?, total_amount = ?, payment_status = ?, 
-        payment_method = ?, special_requests = ?, source = ?
-        WHERE id = ?
+        guest_name = $1, guest_email = $2, guest_phone = $3, check_in = $4, 
+        check_out = $5, rooms = $6, total_amount = $7, payment_status = $8, 
+        payment_method = $9, special_requests = $10, source = $11
+        WHERE id = $12
       `, [
         this.guest_name, this.guest_email, this.guest_phone, this.check_in,
         this.check_out, JSON.stringify(this.rooms), this.total_amount,
@@ -180,7 +180,7 @@ class SiteBooking {
         INSERT INTO site_bookings (site_id, hotel_id, guest_name, guest_email, guest_phone, 
                                   check_in, check_out, rooms, total_amount, payment_status, 
                                   payment_method, confirmation_code, special_requests, source) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       `, [
         this.site_id, this.hotel_id, this.guest_name, this.guest_email, this.guest_phone,
         this.check_in, this.check_out, JSON.stringify(this.rooms), this.total_amount,
@@ -202,7 +202,7 @@ class SiteBooking {
     if (!this.id) {
       throw new Error('Cannot delete booking without ID');
     }
-    return await db.query('DELETE FROM site_bookings WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM site_bookings WHERE id = $1', [this.id]);
   }
 
   // Payment Status Management
@@ -210,24 +210,24 @@ class SiteBooking {
     this.payment_status = 'PAID';
     if (paymentMethod) this.payment_method = paymentMethod;
     await db.query(
-      'UPDATE site_bookings SET payment_status = ?, payment_method = ? WHERE id = ?',
+      'UPDATE site_bookings SET payment_status = $1, payment_method = $2 WHERE id = $3',
       [this.payment_status, this.payment_method, this.id]
     );
   }
 
   async markAsFailed() {
     this.payment_status = 'FAILED';
-    await db.query('UPDATE site_bookings SET payment_status = ? WHERE id = ?', [this.payment_status, this.id]);
+    await db.query('UPDATE site_bookings SET payment_status = $1 WHERE id = $2', [this.payment_status, this.id]);
   }
 
   async markAsRefunded() {
     this.payment_status = 'REFUNDED';
-    await db.query('UPDATE site_bookings SET payment_status = ? WHERE id = ?', [this.payment_status, this.id]);
+    await db.query('UPDATE site_bookings SET payment_status = $1 WHERE id = $2', [this.payment_status, this.id]);
   }
 
   async setPending() {
     this.payment_status = 'PENDING';
-    await db.query('UPDATE site_bookings SET payment_status = ? WHERE id = ?', [this.payment_status, this.id]);
+    await db.query('UPDATE site_bookings SET payment_status = $1 WHERE id = $2', [this.payment_status, this.id]);
   }
 
   // Site and Hotel Information

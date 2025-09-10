@@ -20,17 +20,17 @@ class PMSService {
                 // Verificar se já existe uma integração para este sistema e hotel
                 const existingIntegrations = await db.query(`
                     SELECT id FROM Integracoes 
-                    WHERE hotel_uuid = ? AND integration_name = ?
+                    WHERE hotel_uuid = $1 AND integration_name = $2
                 `, [hotelUuid, systemName]);
                 
                 if (existingIntegrations.length > 0) {
                     // Atualizar integração existente
                     await db.query(`
                         UPDATE Integracoes SET
-                            client_id = ?,
-                            client_secret = ?,
+                            client_id = $1,
+                            client_secret = $2,
                             updated_at = NOW()
-                        WHERE hotel_uuid = ? AND integration_name = ?
+                        WHERE hotel_uuid = $3 AND integration_name = $4
                     `, [clientId, clientSecret, hotelUuid, systemName]);
                     
                     console.log(`✅ Integração ${systemName} atualizada para hotel ${hotelUuid}`);
@@ -42,7 +42,7 @@ class PMSService {
                             hotel_uuid,
                             client_id,
                             client_secret
-                        ) VALUES (?, ?, ?, ?)
+                        ) VALUES ($1, $2, $3, $4)
                     `, [
                         systemName,
                         hotelUuid,
@@ -94,7 +94,7 @@ class PMSService {
                     sc.description as system_description
                 FROM pms_motor_channel pmc
                 LEFT JOIN systems_catalog sc ON pmc.system_id = sc.id
-                WHERE pmc.hotel_uuid = ? AND pmc.is_active = TRUE
+                WHERE pmc.hotel_uuid = $1 AND pmc.is_active = TRUE
                 ORDER BY pmc.name
             `, [hotelUuid]);
             
@@ -121,7 +121,7 @@ class PMSService {
             
             await db.query(`
                 DELETE FROM Integracoes 
-                WHERE hotel_uuid = ? AND integration_name = ?
+                WHERE hotel_uuid = $1 AND integration_name = $2
             `, [hotelUuid, systemName]);
             
             console.log(`✅ Integração ${systemName} removida do hotel ${hotelUuid}`);

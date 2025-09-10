@@ -14,7 +14,7 @@ class MetaAdsAPI {
         INSERT INTO meta_credentials (
           hotel_uuid, app_id, app_secret, access_token, ad_account_id, 
           business_manager_id, token_expires_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
         ON DUPLICATE KEY UPDATE
           app_id = VALUES(app_id),
           app_secret = VALUES(app_secret),
@@ -46,7 +46,7 @@ class MetaAdsAPI {
     try {
       const [credentials] = await db.query(`
         SELECT * FROM meta_credentials 
-        WHERE hotel_uuid = ? AND status = 'active'
+        WHERE hotel_uuid = $1 AND status = 'active'
         ORDER BY updated_at DESC
         LIMIT 1
       `, [hotelUuid]);
@@ -288,7 +288,7 @@ class MetaAdsAPI {
           hotel_uuid, report_name, report_type, meta_data, 
           summary_metrics, report_period_start, report_period_end,
           created_by, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
       `, [
         hotelUuid,
         reportName,
@@ -344,8 +344,8 @@ class MetaAdsAPI {
       // Salvar novo token
       await db.query(`
         UPDATE meta_credentials 
-        SET access_token = ?, token_expires_at = DATE_ADD(NOW(), INTERVAL 60 DAY)
-        WHERE hotel_uuid = ?
+        SET access_token = $1, token_expires_at = DATE_ADD(NOW(), INTERVAL 60 DAY)
+        WHERE hotel_uuid = $2
       `, [response.data.access_token, hotelUuid]);
 
       console.log('✅ Access token refreshed for hotel:', hotelUuid);

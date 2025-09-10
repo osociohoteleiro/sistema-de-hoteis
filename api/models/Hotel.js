@@ -158,7 +158,7 @@ class Hotel {
   // Add user to hotel
   async addUser(userId, role = 'STAFF', permissions = null) {
     return await db.query(
-      'INSERT INTO user_hotels (user_id, hotel_id, role, permissions) VALUES (?, ?, ?, ?)',
+      'INSERT INTO user_hotels (user_id, hotel_id, role, permissions) VALUES ($1, $2, $3, $4)',
       [userId, this.id, role, permissions ? JSON.stringify(permissions) : null]
     );
   }
@@ -166,7 +166,7 @@ class Hotel {
   // Remove user from hotel
   async removeUser(userId) {
     return await db.query(
-      'DELETE FROM user_hotels WHERE user_id = ? AND hotel_id = ?',
+      'DELETE FROM user_hotels WHERE user_id = $1 AND hotel_id = $2',
       [userId, this.id]
     );
   }
@@ -174,7 +174,7 @@ class Hotel {
   // Update user role/permissions
   async updateUserRole(userId, role, permissions = null) {
     return await db.query(
-      'UPDATE user_hotels SET role = ?, permissions = ? WHERE user_id = ? AND hotel_id = ?',
+      'UPDATE user_hotels SET role = $1, permissions = $2 WHERE user_id = $3 AND hotel_id = $4',
       [role, permissions ? JSON.stringify(permissions) : null, userId, this.id]
     );
   }
@@ -182,7 +182,7 @@ class Hotel {
   // Get hotel configurations
   async getConfigs() {
     const result = await db.query(
-      'SELECT * FROM app_config WHERE hotel_id = ? ORDER BY config_key',
+      'SELECT * FROM app_config WHERE hotel_id = $1 ORDER BY config_key',
       [this.id]
     );
     
@@ -198,7 +198,7 @@ class Hotel {
     
     const result = await db.query(`
       INSERT INTO app_config (hotel_id, config_key, config_value, config_type, description) 
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
       ON DUPLICATE KEY UPDATE 
       config_value = VALUES(config_value), 
       config_type = VALUES(config_type),
@@ -211,7 +211,7 @@ class Hotel {
   // Get hotel API endpoints
   async getApiEndpoints() {
     return await db.query(
-      'SELECT * FROM api_endpoints WHERE hotel_id = ? AND active = true ORDER BY endpoint_name',
+      'SELECT * FROM api_endpoints WHERE hotel_id = $1 AND active = true ORDER BY endpoint_name',
       [this.id]
     );
   }
@@ -233,7 +233,7 @@ class Hotel {
 
   async addKnowledge(question, answer, category = null, priority = 0) {
     return await db.query(
-      'INSERT INTO ai_knowledge (hotel_id, question, answer, category, priority) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO ai_knowledge (hotel_id, question, answer, category, priority) VALUES ($1, $2, $3, $4, $5)',
       [this.id, question, answer, category, priority]
     );
   }
@@ -241,7 +241,7 @@ class Hotel {
   // Bot Fields methods
   async getBotFields() {
     return await db.query(
-      'SELECT * FROM bot_fields WHERE hotel_id = ? AND active = true ORDER BY category, field_key',
+      'SELECT * FROM bot_fields WHERE hotel_id = $1 AND active = true ORDER BY category, field_key',
       [this.id]
     );
   }
@@ -249,7 +249,7 @@ class Hotel {
   async setBotField(key, value, type = 'STRING', category = null, description = null) {
     const result = await db.query(`
       INSERT INTO bot_fields (hotel_id, field_key, field_value, field_type, category, description) 
-      VALUES (?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON DUPLICATE KEY UPDATE 
       field_value = VALUES(field_value), 
       field_type = VALUES(field_type),

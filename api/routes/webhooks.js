@@ -179,7 +179,7 @@ async function saveWebhookEvent(eventData) {
     await db.query(`
       INSERT INTO webhook_events (
         type, field, entry_id, data, processed_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
       eventData.type,
       eventData.field,

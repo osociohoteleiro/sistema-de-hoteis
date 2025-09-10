@@ -274,7 +274,7 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
         await db.query(`
           UPDATE rate_shopper_searches 
           SET status = 'CANCELLED', completed_at = CURRENT_TIMESTAMP 
-          WHERE hotel_id = ? AND status = 'RUNNING'
+          WHERE hotel_id = $1 AND status = 'RUNNING'
         `, [hotelId]);
         
         console.log(`✅ Searches do hotel ${hotelId} marcadas como CANCELLED no banco`);

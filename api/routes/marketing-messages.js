@@ -33,7 +33,7 @@ router.get('/:hotelUuid', authenticateToken, validateHotelUuid, async (req, res)
         hotel_id,
         hotel_uuid
       FROM tipo_mensagem 
-      WHERE hotel_uuid = ?
+      WHERE hotel_uuid = $1
       ORDER BY id DESC
     `, [hotelUuid]);
 
@@ -69,7 +69,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // Buscar hotel_id pelo hotel_uuid
-    const hotel = await db.query('SELECT id FROM hotels WHERE hotel_uuid = ?', [hotel_uuid]);
+    const hotel = await db.query('SELECT id FROM hotels WHERE hotel_uuid = $1', [hotel_uuid]);
     if (hotel.length === 0) {
       return res.status(404).json({ error: 'Hotel não encontrado' });
     }
@@ -80,7 +80,7 @@ router.post('/', authenticateToken, async (req, res) => {
       INSERT INTO tipo_mensagem (
         nome, descricao, offset_tempo, unidade_tempo, antes_apos, 
         referencia, canal, modelo_mensagem, hotel_id, hotel_uuid
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     `, [
       nome,
       descricao || null,
@@ -96,7 +96,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Buscar a mensagem criada
     const newMessage = await db.query(
-      'SELECT * FROM tipo_mensagem WHERE id = ?',
+      'SELECT * FROM tipo_mensagem WHERE id = $1',
       [result.insertId]
     );
 
@@ -126,7 +126,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     } = req.body;
 
     // Verificar se a mensagem existe
-    const existing = await db.query('SELECT * FROM tipo_mensagem WHERE id = ?', [id]);
+    const existing = await db.query('SELECT * FROM tipo_mensagem WHERE id = $1', [id]);
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Mensagem de marketing não encontrada' });
     }
@@ -134,7 +134,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     // Buscar hotel_id se hotel_uuid foi alterado
     let hotel_id = existing[0].hotel_id;
     if (hotel_uuid && hotel_uuid !== existing[0].hotel_uuid) {
-      const hotel = await db.query('SELECT id FROM hotels WHERE hotel_uuid = ?', [hotel_uuid]);
+      const hotel = await db.query('SELECT id FROM hotels WHERE hotel_uuid = $1', [hotel_uuid]);
       if (hotel.length === 0) {
         return res.status(404).json({ error: 'Hotel não encontrado' });
       }
@@ -145,17 +145,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     await db.query(`
       UPDATE tipo_mensagem SET
-        nome = ?,
-        descricao = ?,
-        offset_tempo = ?,
-        unidade_tempo = ?,
-        antes_apos = ?,
-        referencia = ?,
-        canal = ?,
-        modelo_mensagem = ?,
-        hotel_id = ?,
-        hotel_uuid = ?
-      WHERE id = ?
+        nome = $1,
+        descricao = $2,
+        offset_tempo = $3,
+        unidade_tempo = $4,
+        antes_apos = $5,
+        referencia = $6,
+        canal = $7,
+        modelo_mensagem = $8,
+        hotel_id = $9,
+        hotel_uuid = $10
+      WHERE id = $11
     `, [
       nome || existing[0].nome,
       descricao !== undefined ? descricao : existing[0].descricao,
@@ -172,7 +172,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // Buscar a mensagem atualizada
     const updatedMessage = await db.query(
-      'SELECT * FROM tipo_mensagem WHERE id = ?',
+      'SELECT * FROM tipo_mensagem WHERE id = $1',
       [id]
     );
 
@@ -191,14 +191,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     // Verificar se a mensagem existe
-    const existing = await db.query('SELECT * FROM tipo_mensagem WHERE id = ?', [id]);
+    const existing = await db.query('SELECT * FROM tipo_mensagem WHERE id = $1', [id]);
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Mensagem de marketing não encontrada' });
     }
 
     console.log(`📧 Excluindo mensagem de marketing ID: ${id}`);
 
-    await db.query('DELETE FROM tipo_mensagem WHERE id = ?', [id]);
+    await db.query('DELETE FROM tipo_mensagem WHERE id = $1', [id]);
 
     console.log(`✅ Mensagem de marketing excluída ID: ${id}`);
     res.json({ message: 'Mensagem de marketing excluída com sucesso' });
@@ -217,7 +217,7 @@ router.get('/message/:id', authenticateToken, async (req, res) => {
     console.log(`📧 Buscando mensagem de marketing ID: ${id}`);
 
     const message = await db.query(
-      'SELECT * FROM tipo_mensagem WHERE id = ?',
+      'SELECT * FROM tipo_mensagem WHERE id = $1',
       [id]
     );
 

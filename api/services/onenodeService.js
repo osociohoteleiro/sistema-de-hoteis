@@ -12,17 +12,17 @@ class OneNodeService {
             // Verificar se já existe uma integração OneNode para este hotel
             const existingIntegrations = await db.query(`
                 SELECT id FROM Integracoes 
-                WHERE hotel_uuid = ? AND integration_name = 'onenode'
+                WHERE hotel_uuid = $1 AND integration_name = 'onenode'
             `, [hotelUuid]);
             
             if (existingIntegrations.length > 0) {
                 // Atualizar integração existente
                 await db.query(`
                     UPDATE Integracoes SET
-                        instancia_name = ?,
-                        apikey = ?,
-                        url_api = ?
-                    WHERE hotel_uuid = ? AND integration_name = 'onenode'
+                        instancia_name = $1,
+                        apikey = $2,
+                        url_api = $3
+                    WHERE hotel_uuid = $4 AND integration_name = 'onenode'
                 `, [workspaceName, apiKey, url, hotelUuid]);
                 
                 console.log(`✅ Integração OneNode atualizada para hotel ${hotelUuid}`);
@@ -35,7 +35,7 @@ class OneNodeService {
                         apikey,
                         instancia_name,
                         url_api
-                    ) VALUES (?, ?, ?, ?, ?)
+                    ) VALUES ($1, $2, $3, $4, $5)
                 `, [
                     'onenode',
                     hotelUuid,
@@ -76,7 +76,7 @@ class OneNodeService {
                     ow.created_at
                 FROM onenode_workspaces ow
                 INNER JOIN hotels h ON ow.hotel_id = h.id
-                WHERE h.hotel_uuid = ? AND ow.active = TRUE
+                WHERE h.hotel_uuid = $1 AND ow.active = TRUE
                 ORDER BY ow.name
             `, [hotelUuid]);
             
@@ -106,7 +106,7 @@ class OneNodeService {
                 SELECT COUNT(*) as count 
                 FROM onenode_workspaces ow
                 INNER JOIN hotels h ON ow.hotel_id = h.id
-                WHERE h.hotel_uuid = ? AND ow.active = TRUE
+                WHERE h.hotel_uuid = $1 AND ow.active = TRUE
             `, [hotelUuid]);
             
             const hasOtherWorkspaces = remainingWorkspaces[0].count > 0;
@@ -115,7 +115,7 @@ class OneNodeService {
                 // Só remove a integração se não houver mais workspaces ativos
                 await db.query(`
                     DELETE FROM Integracoes 
-                    WHERE hotel_uuid = ? AND integration_name = 'onenode'
+                    WHERE hotel_uuid = $1 AND integration_name = 'onenode'
                 `, [hotelUuid]);
                 
                 console.log(`✅ Integração OneNode removida do hotel ${hotelUuid} (não há mais workspaces)`);

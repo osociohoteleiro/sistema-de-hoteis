@@ -1220,7 +1220,7 @@ router.get('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req,
       // Create default config
       await db.query(`
         INSERT INTO rate_shopper_configs (hotel_id, auto_search_enabled, search_frequency_hours, date_range_days) 
-        VALUES (?, FALSE, 8, 90)
+        VALUES ($1, FALSE, 8, 90)
       `, [hotelId]);
       
       const newResult = await db.query(

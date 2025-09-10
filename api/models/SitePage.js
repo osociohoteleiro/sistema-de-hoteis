@@ -21,17 +21,17 @@ class SitePage {
 
   // CRUD Methods
   static async findById(id) {
-    const result = await db.query('SELECT * FROM site_pages WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM site_pages WHERE id = $1', [id]);
     return result.length > 0 ? new SitePage(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM site_pages WHERE page_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM site_pages WHERE page_uuid = $1', [uuid]);
     return result.length > 0 ? new SitePage(result[0]) : null;
   }
 
   static async findBySlug(siteId, slug) {
-    const result = await db.query('SELECT * FROM site_pages WHERE site_id = ? AND slug = ?', [siteId, slug]);
+    const result = await db.query('SELECT * FROM site_pages WHERE site_id = $1 AND slug = $2', [siteId, slug]);
     return result.length > 0 ? new SitePage(result[0]) : null;
   }
 
@@ -116,9 +116,9 @@ class SitePage {
       // Update existing page
       const result = await db.query(`
         UPDATE site_pages SET 
-        slug = ?, title = ?, meta_description = ?, content_blocks = ?, 
-        template = ?, layout_config = ?, is_homepage = ?, is_system_page = ?, status = ?
-        WHERE id = ?
+        slug = $1, title = $2, meta_description = $3, content_blocks = $4, 
+        template = $5, layout_config = $6, is_homepage = $7, is_system_page = $8, status = $9
+        WHERE id = $10
       `, [
         this.slug, this.title, this.meta_description,
         JSON.stringify(this.content_blocks), this.template,
@@ -131,7 +131,7 @@ class SitePage {
       const result = await db.query(`
         INSERT INTO site_pages (site_id, slug, title, meta_description, content_blocks, 
                                template, layout_config, is_homepage, is_system_page, status) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `, [
         this.site_id, this.slug, this.title, this.meta_description,
         JSON.stringify(this.content_blocks), this.template,
@@ -153,7 +153,7 @@ class SitePage {
     if (!this.id) {
       throw new Error('Cannot delete page without ID');
     }
-    return await db.query('DELETE FROM site_pages WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM site_pages WHERE id = $1', [this.id]);
   }
 
   // Status Management
@@ -161,14 +161,14 @@ class SitePage {
     this.status = 'PUBLISHED';
     this.published_at = new Date().toISOString();
     await db.query(
-      'UPDATE site_pages SET status = ?, published_at = ? WHERE id = ?',
+      'UPDATE site_pages SET status = $1, published_at = $2 WHERE id = $3',
       [this.status, this.published_at, this.id]
     );
   }
 
   async unpublish() {
     this.status = 'DRAFT';
-    await db.query('UPDATE site_pages SET status = ? WHERE id = ?', [this.status, this.id]);
+    await db.query('UPDATE site_pages SET status = $1 WHERE id = $2', [this.status, this.id]);
   }
 
   // Content Block Management
@@ -260,21 +260,21 @@ class SitePage {
   async setAsHomepage() {
     // First, remove homepage flag from all other pages in the site
     await db.query(
-      'UPDATE site_pages SET is_homepage = FALSE WHERE site_id = ? AND id != ?',
+      'UPDATE site_pages SET is_homepage = FALSE WHERE site_id = $1 AND id != $2',
       [this.site_id, this.id]
     );
     
     // Then set this page as homepage
     this.is_homepage = true;
     await db.query(
-      'UPDATE site_pages SET is_homepage = TRUE WHERE id = ?',
+      'UPDATE site_pages SET is_homepage = TRUE WHERE id = $1',
       [this.id]
     );
   }
 
   async removeFromHomepage() {
     this.is_homepage = false;
-    await db.query('UPDATE site_pages SET is_homepage = FALSE WHERE id = ?', [this.id]);
+    await db.query('UPDATE site_pages SET is_homepage = FALSE WHERE id = $1', [this.id]);
   }
 
   // System Pages (About, Contact, etc.)

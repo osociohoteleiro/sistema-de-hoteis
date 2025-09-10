@@ -14,7 +14,7 @@ class Config {
 
   static async findByKey(key, hotelId = null) {
     const result = await db.query(
-      'SELECT * FROM app_config WHERE config_key = ? AND hotel_id = ?',
+      'SELECT * FROM app_config WHERE config_key = $1 AND hotel_id = $2',
       [key, hotelId]
     );
     return result.length > 0 ? new Config(result[0]) : null;
@@ -22,7 +22,7 @@ class Config {
 
   static async findAllByHotel(hotelId) {
     const result = await db.query(
-      'SELECT * FROM app_config WHERE hotel_id = ? ORDER BY config_key',
+      'SELECT * FROM app_config WHERE hotel_id = $1 ORDER BY config_key',
       [hotelId]
     );
     return result.map(row => new Config(row));
@@ -47,7 +47,7 @@ class Config {
     
     const result = await db.query(`
       INSERT INTO app_config (hotel_id, config_key, config_value, config_type, description) 
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
       ON DUPLICATE KEY UPDATE 
       config_value = VALUES(config_value), 
       config_type = VALUES(config_type),
@@ -59,7 +59,7 @@ class Config {
 
   static async delete(key, hotelId = null) {
     return await db.query(
-      'DELETE FROM app_config WHERE config_key = ? AND hotel_id = ?',
+      'DELETE FROM app_config WHERE config_key = $1 AND hotel_id = $2',
       [key, hotelId]
     );
   }
@@ -73,15 +73,15 @@ class Config {
       // Update existing config
       const result = await db.query(`
         UPDATE app_config SET 
-        config_value = ?, config_type = ?, description = ?
-        WHERE id = ?
+        config_value = $1, config_type = $2, description = $3
+        WHERE id = $4
       `, [this.config_value, this.config_type, this.description, this.id]);
       return result;
     } else {
       // Create new config
       const result = await db.query(`
         INSERT INTO app_config (hotel_id, config_key, config_value, config_type, description) 
-        VALUES (?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5)
       `, [this.hotel_id, this.config_key, this.config_value, this.config_type, this.description]);
       
       this.id = result.insertId;
@@ -93,7 +93,7 @@ class Config {
     if (!this.id) {
       throw new Error('Cannot delete config without ID');
     }
-    return await db.query('DELETE FROM app_config WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM app_config WHERE id = $1', [this.id]);
   }
 
   static parseValue(value, type) {
@@ -144,13 +144,13 @@ class ApiEndpoint {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM api_endpoints WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM api_endpoints WHERE id = $1', [id]);
     return result.length > 0 ? new ApiEndpoint(result[0]) : null;
   }
 
   static async findByName(name, hotelId = null) {
     const result = await db.query(
-      'SELECT * FROM api_endpoints WHERE endpoint_name = ? AND hotel_id = ?',
+      'SELECT * FROM api_endpoints WHERE endpoint_name = $1 AND hotel_id = $2',
       [name, hotelId]
     );
     return result.length > 0 ? new ApiEndpoint(result[0]) : null;
@@ -200,15 +200,15 @@ class ApiEndpoint {
       // Update existing endpoint
       const result = await db.query(`
         UPDATE api_endpoints SET 
-        endpoint_name = ?, url = ?, method = ?, headers = ?, active = ?, description = ?
-        WHERE id = ?
+        endpoint_name = $1, url = $2, method = $3, headers = $4, active = $5, description = $6
+        WHERE id = $7
       `, [this.endpoint_name, this.url, this.method, this.headers, this.active, this.description, this.id]);
       return result;
     } else {
       // Create new endpoint
       const result = await db.query(`
         INSERT INTO api_endpoints (hotel_id, endpoint_name, url, method, headers, active, description) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `, [this.hotel_id, this.endpoint_name, this.url, this.method, this.headers, this.active, this.description]);
       
       this.id = result.insertId;
@@ -220,7 +220,7 @@ class ApiEndpoint {
     if (!this.id) {
       throw new Error('Cannot delete endpoint without ID');
     }
-    return await db.query('DELETE FROM api_endpoints WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM api_endpoints WHERE id = $1', [this.id]);
   }
 
   async test() {

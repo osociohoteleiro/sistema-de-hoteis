@@ -32,7 +32,7 @@ router.post('/credentials/:workspaceUuid', authenticateToken, async (req, res) =
     const workspaceAccess = await db.query(`
       SELECT w.id, w.workspace_name 
       FROM workspaces w 
-      WHERE w.uuid = ? AND w.active = true
+      WHERE w.uuid = $1 AND w.active = true
     `, [workspaceUuid]);
 
     if (workspaceAccess.length === 0) {
@@ -87,7 +87,7 @@ router.get('/credentials/:workspaceUuid', async (req, res) => {
       SELECT app_id, phone_number_id, business_account_id, 
              webhook_url, active, created_at, updated_at
       FROM whatsapp_cloud_configs 
-      WHERE workspace_uuid = ?
+      WHERE workspace_uuid = $1
     `, [workspaceUuid]);
 
     if (config.length === 0) {
@@ -283,7 +283,7 @@ router.post('/mark-read/:workspaceUuid', authenticateToken, async (req, res) => 
     await db.query(`
       UPDATE whatsapp_messages SET
         read_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND workspace_uuid = ?
+      WHERE id = $1 AND workspace_uuid = $2
     `, [messageId, workspaceUuid]);
 
     res.json({
@@ -442,13 +442,13 @@ router.get('/stats/:workspaceUuid', authenticateToken, async (req, res) => {
         COUNT(CASE WHEN direction = 'inbound' AND read_at IS NULL THEN 1 END) as unread_messages,
         COUNT(DISTINCT phone_number) as total_contacts
       FROM whatsapp_messages 
-      WHERE workspace_uuid = ?
+      WHERE workspace_uuid = $1
     `, [workspaceUuid]);
 
     const recentActivity = await db.query(`
       SELECT DATE(created_at) as date, COUNT(*) as message_count
       FROM whatsapp_messages 
-      WHERE workspace_uuid = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+      WHERE workspace_uuid = $1 AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
       GROUP BY DATE(created_at)
       ORDER BY date DESC
     `, [workspaceUuid]);

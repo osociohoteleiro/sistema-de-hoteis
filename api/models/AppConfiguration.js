@@ -23,7 +23,7 @@ class AppConfiguration {
     }
 
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE app_name = ? AND hotel_id = ? AND is_active = true',
+      'SELECT * FROM app_configurations WHERE app_name = $1 AND hotel_id = $2 AND is_active = true',
       [appName, hotelId]
     );
     return result.length > 0 ? new AppConfiguration(result[0]) : null;
@@ -31,7 +31,7 @@ class AppConfiguration {
 
   static async findAllByHotel(hotelId = null) {
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE hotel_id = ? AND is_active = true ORDER BY app_name',
+      'SELECT * FROM app_configurations WHERE hotel_id = $1 AND is_active = true ORDER BY app_name',
       [hotelId]
     );
     return result.map(row => new AppConfiguration(row));
@@ -43,7 +43,7 @@ class AppConfiguration {
     }
 
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE app_name = ? AND is_active = true ORDER BY hotel_id',
+      'SELECT * FROM app_configurations WHERE app_name = $1 AND is_active = true ORDER BY hotel_id',
       [appName]
     );
     return result.map(row => new AppConfiguration(row));
@@ -55,7 +55,7 @@ class AppConfiguration {
     }
 
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE app_name = ? AND is_active = true AND logo_url IS NOT NULL ORDER BY hotel_id LIMIT 1',
+      'SELECT * FROM app_configurations WHERE app_name = $1 AND is_active = true AND logo_url IS NOT NULL ORDER BY hotel_id LIMIT 1',
       [appName]
     );
     return result.length > 0 ? new AppConfiguration(result[0]) : null;
@@ -91,7 +91,7 @@ class AppConfiguration {
     }
 
     return await db.query(
-      'UPDATE app_configurations SET is_active = false WHERE app_name = ? AND hotel_id = ?',
+      'UPDATE app_configurations SET is_active = false WHERE app_name = $1 AND hotel_id = $2',
       [appName, hotelId]
     );
   }
@@ -116,7 +116,7 @@ class AppConfiguration {
 
   static async getAppConfigurations(hotelId = null) {
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE hotel_id = ? AND is_active = true ORDER BY app_name',
+      'SELECT * FROM app_configurations WHERE hotel_id = $1 AND is_active = true ORDER BY app_name',
       [hotelId]
     );
 
@@ -168,12 +168,12 @@ class AppConfiguration {
       throw new Error('Cannot delete configuration without ID');
     }
     // Soft delete - marcar como inativo
-    return await db.query('UPDATE app_configurations SET is_active = false WHERE id = ?', [this.id]);
+    return await db.query('UPDATE app_configurations SET is_active = false WHERE id = $1', [this.id]);
   }
 
   async _findId() {
     const result = await db.query(
-      'SELECT id FROM app_configurations WHERE hotel_id = ? AND app_name = ?',
+      'SELECT id FROM app_configurations WHERE hotel_id = $1 AND app_name = $2',
       [this.hotel_id, this.app_name]
     );
     return result.length > 0 ? result[0].id : null;

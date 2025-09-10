@@ -64,7 +64,7 @@ router.post('/import', authenticateToken, upload.single('report_file'), async (r
       hotelAccess = await db.query(`
         SELECT h.id, h.hotel_nome 
         FROM hotels h
-        WHERE h.hotel_uuid = ?
+        WHERE h.hotel_uuid = $1
       `, [hotel_uuid]);
     } else {
       // Usuários normais precisam ter acesso específico
@@ -72,8 +72,8 @@ router.post('/import', authenticateToken, upload.single('report_file'), async (r
         SELECT h.id, h.hotel_nome 
         FROM hotels h
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
-        WHERE h.hotel_uuid = ? 
-        AND uh.user_id = ? AND uh.active = true
+        WHERE h.hotel_uuid = $1 
+        AND uh.user_id = $2 AND uh.active = true
       `, [hotel_uuid, req.user.id]);
     }
 
@@ -127,7 +127,7 @@ router.post('/import', authenticateToken, upload.single('report_file'), async (r
       INSERT INTO manual_reports (
         hotel_uuid, report_name, report_type, report_period_start, report_period_end,
         meta_data, file_info, summary_metrics, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [
       hotel_uuid,
       report_name,
@@ -177,7 +177,7 @@ router.get('/hotel/:uuid', authenticateToken, async (req, res) => {
       hotelAccess = await db.query(`
         SELECT h.id, h.hotel_nome 
         FROM hotels h
-        WHERE h.hotel_uuid = ?
+        WHERE h.hotel_uuid = $1
       `, [hotelUuid]);
     } else {
       // Usuários normais precisam ter acesso específico
@@ -185,8 +185,8 @@ router.get('/hotel/:uuid', authenticateToken, async (req, res) => {
         SELECT h.id, h.hotel_nome 
         FROM hotels h
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
-        WHERE h.hotel_uuid = ? 
-        AND uh.user_id = ? AND uh.active = true
+        WHERE h.hotel_uuid = $1 
+        AND uh.user_id = $2 AND uh.active = true
       `, [hotelUuid, req.user.id]);
     }
 
@@ -204,7 +204,7 @@ router.get('/hotel/:uuid', authenticateToken, async (req, res) => {
         u.name as created_by_name
       FROM manual_reports r
       LEFT JOIN users u ON r.created_by = u.id
-      WHERE r.hotel_uuid = ? AND r.status = 'ACTIVE'
+      WHERE r.hotel_uuid = $1 AND r.status = 'ACTIVE'
       ORDER BY r.created_at DESC
     `, [hotelUuid]);
 
@@ -307,7 +307,7 @@ router.post('/manual', authenticateToken, async (req, res) => {
       hotelAccess = await db.query(`
         SELECT h.id, h.hotel_nome 
         FROM hotels h
-        WHERE h.hotel_uuid = ?
+        WHERE h.hotel_uuid = $1
       `, [hotel_uuid]);
     } else {
       // Usuários normais precisam ter acesso específico
@@ -315,8 +315,8 @@ router.post('/manual', authenticateToken, async (req, res) => {
         SELECT h.id, h.hotel_nome 
         FROM hotels h
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
-        WHERE h.hotel_uuid = ? 
-        AND uh.user_id = ? AND uh.active = true
+        WHERE h.hotel_uuid = $1 
+        AND uh.user_id = $2 AND uh.active = true
       `, [hotel_uuid, req.user.id]);
     }
 
@@ -351,7 +351,7 @@ router.post('/manual', authenticateToken, async (req, res) => {
       INSERT INTO manual_reports (
         hotel_uuid, report_name, report_type, report_period_start, report_period_end,
         meta_data, file_info, summary_metrics, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `, [
       hotel_uuid,
       report_name,
@@ -532,7 +532,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     await db.query(`
       UPDATE manual_reports 
       SET status = 'DELETED', updated_at = CURRENT_TIMESTAMP 
-      WHERE id = ?
+      WHERE id = $1
     `, [reportId]);
 
     res.json({

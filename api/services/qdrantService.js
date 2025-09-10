@@ -132,14 +132,14 @@ class QdrantService {
                         // Collection já existe na BD - atualizar
                         await db.query(`
                             UPDATE vector_collections SET
-                                vector_size = ?,
-                                distance_metric = ?,
+                                vector_size = $1,
+                                distance_metric = $2,
                                 qdrant_status = 'ACTIVE',
-                                total_vectors = ?,
+                                total_vectors = $3,
                                 last_sync = NOW(),
-                                config = ?,
+                                config = $4,
                                 updated_at = NOW()
-                            WHERE collection_name = ?
+                            WHERE collection_name = $5
                         `, [
                             vectorSize,
                             distanceMetric,
@@ -163,7 +163,7 @@ class QdrantService {
                                 total_vectors,
                                 last_sync,
                                 config
-                            ) VALUES (?, NULL, ?, ?, ?, 'ACTIVE', ?, NOW(), ?)
+                            ) VALUES ($1, NULL, $2, $3, $4, 'ACTIVE', $5, NOW(), $6)
                         `, [
                             collectionName,
                             `Collection sincronizada automaticamente do Qdrant`,
@@ -236,7 +236,7 @@ class QdrantService {
                     total_vectors,
                     last_sync,
                     config
-                ) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', 0, NOW(), ?)
+                ) VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', 0, NOW(), $7)
             `, [
                 collectionName,
                 hotelId,
@@ -275,7 +275,7 @@ class QdrantService {
             await db.query(`
                 UPDATE vector_collections 
                 SET qdrant_status = 'INACTIVE', updated_at = NOW()
-                WHERE collection_name = ?
+                WHERE collection_name = $1
             `, [collectionName]);
 
             console.log(`✅ Status da collection atualizado na base de dados: ${collectionName}`);
@@ -301,7 +301,7 @@ class QdrantService {
             
             // Primeiro, buscar informações do hotel (id e nome) pelo hotel_uuid
             const hotelRows = await db.query(`
-                SELECT id, hotel_nome FROM hotels WHERE hotel_uuid = ?
+                SELECT id, hotel_nome FROM hotels WHERE hotel_uuid = $1
             `, [hotelUuid]);
             
             if (hotelRows.length === 0) {
@@ -329,7 +329,7 @@ class QdrantService {
             const collectionsDetails = await db.query(`
                 SELECT collection_name, hotel_id, hotel_uuid, qdrant_status
                 FROM vector_collections 
-                WHERE (LOWER(collection_name) LIKE ? OR hotel_uuid = ?) AND qdrant_status = 'ACTIVE'
+                WHERE (LOWER(collection_name) LIKE $1 OR hotel_uuid = $2) AND qdrant_status = 'ACTIVE'
             `, [`${hotelPrefix}%`, hotelUuid]);
             
             const count = collectionsDetails.length;
@@ -415,17 +415,17 @@ class QdrantService {
             // Verificar se já existe uma integração Qdrant para este hotel
             const existingIntegrations = await db.query(`
                 SELECT id FROM Integracoes 
-                WHERE hotel_uuid = ? AND integration_name = 'Qdrant'
+                WHERE hotel_uuid = $1 AND integration_name = 'Qdrant'
             `, [hotelUuid]);
             
             if (existingIntegrations.length > 0) {
                 // Atualizar integração existente com a nova collection
                 await db.query(`
                     UPDATE Integracoes SET
-                        instancia_name = ?,
+                        instancia_name = $1,
                         apikey = 'Bearer kZDY]:V%X4wV6[SXBHyX',
                         url_api = 'https://osh-ia-qdrant.d32pnk.easypanel.host'
-                    WHERE hotel_uuid = ? AND integration_name = 'Qdrant'
+                    WHERE hotel_uuid = $2 AND integration_name = 'Qdrant'
                 `, [collectionName, hotelUuid]);
                 
                 console.log(`✅ Integração Qdrant atualizada para hotel ${hotelUuid}`);
@@ -438,7 +438,7 @@ class QdrantService {
                         apikey,
                         instancia_name,
                         url_api
-                    ) VALUES (?, ?, ?, ?, ?)
+                    ) VALUES ($1, $2, $3, $4, $5)
                 `, [
                     'Qdrant',
                     hotelUuid,
@@ -464,7 +464,7 @@ class QdrantService {
             
             // Verificar se o hotel existe
             const hotelRows = await db.query(`
-                SELECT id, hotel_nome as name FROM hotels WHERE hotel_uuid = ?
+                SELECT id, hotel_nome as name FROM hotels WHERE hotel_uuid = $1
             `, [hotelUuid]);
             
             if (hotelRows.length === 0) {
@@ -482,18 +482,18 @@ class QdrantService {
             
             // Verificar se a collection já está na base de dados
             const existingRows = await db.query(`
-                SELECT id, hotel_uuid FROM vector_collections WHERE collection_name = ?
+                SELECT id, hotel_uuid FROM vector_collections WHERE collection_name = $1
             `, [collectionName]);
             
             if (existingRows.length > 0) {
                 // Atualizar relacionamento existente
                 await db.query(`
                     UPDATE vector_collections SET
-                        hotel_id = ?,
-                        hotel_uuid = ?,
-                        description = ?,
+                        hotel_id = $1,
+                        hotel_uuid = $2,
+                        description = $3,
                         updated_at = NOW()
-                    WHERE collection_name = ?
+                    WHERE collection_name = $4
                 `, [
                     hotel.id,
                     hotelUuid,
@@ -521,7 +521,7 @@ class QdrantService {
                         total_vectors,
                         last_sync,
                         config
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', ?, NOW(), ?)
+                    ) VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE', $7, NOW(), $8)
                 `, [
                     collectionName,
                     hotel.id,
@@ -563,7 +563,7 @@ class QdrantService {
             // Verificar se ainda existem outras collections relacionadas ao hotel
             const remainingCollections = await db.query(`
                 SELECT COUNT(*) as count FROM vector_collections 
-                WHERE hotel_uuid = ? AND qdrant_status = 'ACTIVE'
+                WHERE hotel_uuid = $1 AND qdrant_status = 'ACTIVE'
             `, [hotelUuid]);
             
             const hasOtherCollections = remainingCollections[0].count > 0;
@@ -572,7 +572,7 @@ class QdrantService {
                 // Só remove a integração se não houver mais collections relacionadas
                 await db.query(`
                     DELETE FROM Integracoes 
-                    WHERE hotel_uuid = ? AND integration_name = 'Qdrant'
+                    WHERE hotel_uuid = $1 AND integration_name = 'Qdrant'
                 `, [hotelUuid]);
                 
                 console.log(`✅ Integração Qdrant removida do hotel ${hotelUuid} (não há mais collections)`);
@@ -594,7 +594,7 @@ class QdrantService {
             
             // Verificar se a collection está realmente relacionada a este hotel
             const collectionRows = await db.query(`
-                SELECT hotel_uuid FROM vector_collections WHERE collection_name = ? AND hotel_uuid = ?
+                SELECT hotel_uuid FROM vector_collections WHERE collection_name = $1 AND hotel_uuid = $2
             `, [collectionName, hotelUuid]);
             
             if (collectionRows.length === 0) {
@@ -606,9 +606,9 @@ class QdrantService {
                 UPDATE vector_collections SET
                     hotel_id = NULL,
                     hotel_uuid = NULL,
-                    description = ?,
+                    description = $1,
                     updated_at = NOW()
-                WHERE collection_name = ? AND hotel_uuid = ?
+                WHERE collection_name = $2 AND hotel_uuid = $3
             `, [
                 `Collection ${collectionName} (sem relacionamento)`,
                 collectionName,
@@ -622,8 +622,8 @@ class QdrantService {
             await db.query(`
                 DELETE FROM Integracoes 
                 WHERE integration_name = 'Qdrant' 
-                AND hotel_uuid = ? 
-                AND instancia_name = ?
+                AND hotel_uuid = $1 
+                AND instancia_name = $2
             `, [hotelUuid, collectionName]);
             
             console.log(`✅ Integração Qdrant removida para collection ${collectionName} do hotel ${hotelUuid}`);
@@ -661,7 +661,7 @@ class QdrantService {
                     h.hotel_nome as hotel_name
                 FROM vector_collections vc
                 LEFT JOIN hotels h ON vc.hotel_id = h.id
-                WHERE vc.hotel_uuid = ? AND vc.qdrant_status = 'ACTIVE'
+                WHERE vc.hotel_uuid = $1 AND vc.qdrant_status = 'ACTIVE'
                 ORDER BY vc.collection_name
             `, [hotelUuid]);
             

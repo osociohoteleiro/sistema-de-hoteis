@@ -24,14 +24,14 @@ const validateHotelAccess = async (req, res, next) => {
       hotelAccess = await db.query(`
         SELECT h.id, h.name, h.hotel_uuid
         FROM hotels h
-        WHERE h.hotel_uuid = ?
+        WHERE h.hotel_uuid = $1
       `, [hotelUuid]);
     } else {
       hotelAccess = await db.query(`
         SELECT h.id, h.name, h.hotel_uuid
         FROM hotels h
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
-        WHERE h.hotel_uuid = ? AND uh.user_id = ? AND uh.active = true
+        WHERE h.hotel_uuid = $1 AND uh.user_id = $2 AND uh.active = true
       `, [hotelUuid, req.user.id]);
     }
 
@@ -171,7 +171,7 @@ router.post('/sync/:hotelUuid', authenticateToken, validateHotelAccess, async (r
     const syncLog = await db.query(`
       INSERT INTO meta_sync_logs (
         hotel_uuid, sync_type, status, sync_started_at
-      ) VALUES (?, 'manual', 'success', NOW())
+      ) VALUES ($1, 'manual', 'success', NOW())
     `, [hotelUuid]);
 
     const syncLogId = syncLog.insertId;
@@ -184,16 +184,16 @@ router.post('/sync/:hotelUuid', authenticateToken, validateHotelAccess, async (r
       await db.query(`
         UPDATE meta_sync_logs 
         SET status = 'success', 
-            records_processed = ?, 
+            records_processed = $1, 
             sync_completed_at = NOW()
-        WHERE id = ?
+        WHERE id = $2
       `, [data.length, syncLogId]);
 
       // Atualizar último sync nas credenciais
       await db.query(`
         UPDATE meta_credentials 
         SET last_sync_at = NOW() 
-        WHERE hotel_uuid = ?
+        WHERE hotel_uuid = $1
       `, [hotelUuid]);
 
       console.log(`✅ Meta sync completed for hotel: ${hotelUuid}`);
@@ -216,9 +216,9 @@ router.post('/sync/:hotelUuid', authenticateToken, validateHotelAccess, async (r
       await db.query(`
         UPDATE meta_sync_logs 
         SET status = 'error', 
-            error_message = ?, 
+            error_message = $1, 
             sync_completed_at = NOW()
-        WHERE id = ?
+        WHERE id = $2
       `, [syncError.message, syncLogId]);
 
       throw syncError;
@@ -303,15 +303,15 @@ router.get('/sync-logs/:hotelUuid', authenticateToken, validateHotelAccess, asyn
         id, sync_type, status, records_processed, error_message,
         sync_started_at, sync_completed_at, created_at
       FROM meta_sync_logs 
-      WHERE hotel_uuid = ?
+      WHERE hotel_uuid = $1
       ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT $2 OFFSET $3
     `, [hotelUuid, parseInt(limit), parseInt(offset)]);
 
     const [{ total }] = await db.query(`
       SELECT COUNT(*) as total 
       FROM meta_sync_logs 
-      WHERE hotel_uuid = ?
+      WHERE hotel_uuid = $1
     `, [hotelUuid]);
 
     res.json({
@@ -341,7 +341,7 @@ router.delete('/credentials/:hotelUuid', authenticateToken, validateHotelAccess,
     await db.query(`
       UPDATE meta_credentials 
       SET status = 'disabled' 
-      WHERE hotel_uuid = ?
+      WHERE hotel_uuid = $1
     `, [hotelUuid]);
 
     res.json({

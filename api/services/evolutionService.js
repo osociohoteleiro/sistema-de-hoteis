@@ -113,7 +113,7 @@ class EvolutionService {
         `INSERT INTO evolution_instances (
           instance_name, api_key, hotel_uuid, host_url, 
           evolution_instance_id, webhook_url, settings, active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           dbData.instance_name,
           dbData.api_key,
@@ -133,17 +133,17 @@ class EvolutionService {
         // Verificar se já existe uma integração Evolution para este hotel
         const existingIntegrations = await db.query(`
           SELECT id, instancia_name FROM Integracoes 
-          WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+          WHERE hotel_uuid = $1 AND integration_name = 'Evolution'
         `, [dbData.hotel_uuid]);
         
         if (existingIntegrations.length > 0) {
           // Atualizar integração existente
           await db.query(`
             UPDATE Integracoes SET
-              apikey = ?,
-              instancia_name = ?,
-              url_api = ?
-            WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+              apikey = $1,
+              instancia_name = $2,
+              url_api = $3
+            WHERE hotel_uuid = $4 AND integration_name = 'Evolution'
           `, [
             dbData.api_key,
             dbData.instance_name,
@@ -161,7 +161,7 @@ class EvolutionService {
               apikey,
               instancia_name,
               url_api
-            ) VALUES (?, ?, ?, ?, ?)`,
+            ) VALUES ($1, $2, $3, $4, $5)`,
             [
               'Evolution',
               dbData.hotel_uuid,
@@ -324,14 +324,14 @@ class EvolutionService {
 
       // 2. Remover do banco de dados
       await db.query(
-        'DELETE FROM evolution_instances WHERE instance_name = ?',
+        'DELETE FROM evolution_instances WHERE instance_name = $1',
         [instanceName]
       );
 
       // 3. Remover da tabela Integracoes
       try {
         await db.query(
-          'DELETE FROM Integracoes WHERE integration_name = ? AND instancia_name = ?',
+          'DELETE FROM Integracoes WHERE integration_name = $1 AND instancia_name = $2',
           ['Evolution', instanceName]
         );
 
@@ -476,7 +476,7 @@ class EvolutionService {
             `INSERT INTO evolution_instances (
               instance_name, api_key, hotel_uuid, host_url, 
               evolution_instance_id, webhook_url, settings, active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [
               dbData.instance_name,
               dbData.api_key,
@@ -617,7 +617,7 @@ class EvolutionService {
       
       // Verificar se o hotel existe
       const hotelRows = await db.query(`
-        SELECT id, hotel_nome as name FROM hotels WHERE hotel_uuid = ?
+        SELECT id, hotel_nome as name FROM hotels WHERE hotel_uuid = $1
       `, [hotelUuid]);
       
       if (hotelRows.length === 0) {
@@ -629,7 +629,7 @@ class EvolutionService {
       // Verificar se a instância existe
       const instanceRows = await db.query(`
         SELECT id, instance_name, hotel_uuid FROM evolution_instances 
-        WHERE instance_name = ?
+        WHERE instance_name = $1
       `, [instanceName]);
       
       if (instanceRows.length === 0) {
@@ -651,7 +651,7 @@ class EvolutionService {
       // NOVA VALIDAÇÃO: Verificar se o hotel já possui uma instância relacionada
       const existingHotelInstances = await db.query(`
         SELECT instance_name FROM evolution_instances 
-        WHERE hotel_uuid = ? AND instance_name != ?
+        WHERE hotel_uuid = $1 AND instance_name != $2
       `, [hotelUuid, instanceName]);
       
       if (existingHotelInstances.length > 0) {
@@ -661,9 +661,9 @@ class EvolutionService {
       // Atualizar o relacionamento
       await db.query(`
         UPDATE evolution_instances SET
-          hotel_uuid = ?,
+          hotel_uuid = $1,
           updated_at = CURRENT_TIMESTAMP
-        WHERE instance_name = ?
+        WHERE instance_name = $2
       `, [hotelUuid, instanceName]);
       
       console.log(`✅ Instância ${instanceName} relacionada ao hotel ${hotel.name}`);
@@ -671,24 +671,24 @@ class EvolutionService {
       // Criar/atualizar integração automaticamente
       try {
         const instanceData = await db.query(`
-          SELECT api_key FROM evolution_instances WHERE instance_name = ?
+          SELECT api_key FROM evolution_instances WHERE instance_name = $1
         `, [instanceName]);
         
         if (instanceData.length > 0) {
           // Verificar se já existe uma integração Evolution para este hotel
           const existingIntegrations = await db.query(`
             SELECT id, instancia_name FROM Integracoes 
-            WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+            WHERE hotel_uuid = $1 AND integration_name = 'Evolution'
           `, [hotelUuid]);
           
           if (existingIntegrations.length > 0) {
             // Atualizar integração existente
             await db.query(`
               UPDATE Integracoes SET
-                apikey = ?,
-                instancia_name = ?,
-                url_api = ?
-              WHERE hotel_uuid = ? AND integration_name = 'Evolution'
+                apikey = $1,
+                instancia_name = $2,
+                url_api = $3
+              WHERE hotel_uuid = $4 AND integration_name = 'Evolution'
             `, [
               instanceData[0].api_key,
               instanceName,
@@ -706,7 +706,7 @@ class EvolutionService {
                 apikey,
                 instancia_name,
                 url_api
-              ) VALUES (?, ?, ?, ?, ?)
+              ) VALUES ($1, $2, $3, $4, $5)
             `, [
               'Evolution',
               hotelUuid,
@@ -751,7 +751,7 @@ class EvolutionService {
       // Verificar se a instância está relacionada ao hotel especificado
       const instanceRows = await db.query(`
         SELECT id, instance_name, hotel_uuid FROM evolution_instances 
-        WHERE instance_name = ? AND hotel_uuid = ?
+        WHERE instance_name = $1 AND hotel_uuid = $2
       `, [instanceName, hotelUuid]);
       
       if (instanceRows.length === 0) {
@@ -763,7 +763,7 @@ class EvolutionService {
         UPDATE evolution_instances SET
           hotel_uuid = NULL,
           updated_at = CURRENT_TIMESTAMP
-        WHERE instance_name = ? AND hotel_uuid = ?
+        WHERE instance_name = $1 AND hotel_uuid = $2
       `, [instanceName, hotelUuid]);
       
       console.log(`✅ Instância ${instanceName} desrelacionada do hotel`);
@@ -773,8 +773,8 @@ class EvolutionService {
         await db.query(`
           DELETE FROM Integracoes 
           WHERE integration_name = 'Evolution' 
-          AND hotel_uuid = ? 
-          AND instancia_name = ?
+          AND hotel_uuid = $1 
+          AND instancia_name = $2
         `, [hotelUuid, instanceName]);
         
         console.log(`✅ Integração Evolution removida para ${instanceName}`);

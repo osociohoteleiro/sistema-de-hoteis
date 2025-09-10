@@ -121,7 +121,7 @@ class User {
   // Get user hotels
   async getHotels() {
     const result = await db.query(`
-      SELECT h.id, h.id as hotel_uuid, h.name as hotel_nome, h.created_at as hotel_criado_em, 
+      SELECT h.id, h.hotel_uuid, h.name as hotel_nome, h.created_at as hotel_criado_em, 
              h.cover_image as hotel_capa, h.checkin_time as hora_checkin, h.checkout_time as hora_checkout, 
              uh.role, uh.permissions, uh.active as user_active
       FROM hotels h
@@ -136,7 +136,7 @@ class User {
   // Add user to hotel
   async addToHotel(hotelId, role = 'STAFF', permissions = null) {
     return await db.query(
-      'INSERT INTO user_hotels (user_id, hotel_id, role, permissions) VALUES (?, ?, ?, ?)',
+      'INSERT INTO user_hotels (user_id, hotel_id, role, permissions) VALUES ($1, $2, $3, $4)',
       [this.id, hotelId, role, permissions ? JSON.stringify(permissions) : null]
     );
   }
@@ -144,7 +144,7 @@ class User {
   // Remove user from hotel
   async removeFromHotel(hotelId) {
     return await db.query(
-      'DELETE FROM user_hotels WHERE user_id = ? AND hotel_id = ?',
+      'DELETE FROM user_hotels WHERE user_id = $1 AND hotel_id = $2',
       [this.id, hotelId]
     );
   }

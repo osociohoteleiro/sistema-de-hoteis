@@ -20,17 +20,17 @@ class SiteTheme {
 
   // CRUD Methods
   static async findById(id) {
-    const result = await db.query('SELECT * FROM site_themes WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM site_themes WHERE id = $1', [id]);
     return result.length > 0 ? new SiteTheme(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM site_themes WHERE theme_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM site_themes WHERE theme_uuid = $1', [uuid]);
     return result.length > 0 ? new SiteTheme(result[0]) : null;
   }
 
   static async findByName(name) {
-    const result = await db.query('SELECT * FROM site_themes WHERE name = ?', [name]);
+    const result = await db.query('SELECT * FROM site_themes WHERE name = $1', [name]);
     return result.length > 0 ? new SiteTheme(result[0]) : null;
   }
 
@@ -119,10 +119,10 @@ class SiteTheme {
       // Update existing theme
       const result = await db.query(`
         UPDATE site_themes SET 
-        name = ?, category = ?, thumbnail_url = ?, preview_url = ?, 
-        config = ?, styles = ?, components = ?, is_premium = ?, 
-        price = ?, active = ?
-        WHERE id = ?
+        name = $1, category = $2, thumbnail_url = $3, preview_url = $4, 
+        config = $5, styles = $6, components = $7, is_premium = $8, 
+        price = $9, active = $10
+        WHERE id = $11
       `, [
         this.name, this.category, this.thumbnail_url, this.preview_url,
         JSON.stringify(this.config), JSON.stringify(this.styles),
@@ -135,7 +135,7 @@ class SiteTheme {
       const result = await db.query(`
         INSERT INTO site_themes (name, category, thumbnail_url, preview_url, 
                                  config, styles, components, is_premium, price, active) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       `, [
         this.name, this.category, this.thumbnail_url, this.preview_url,
         JSON.stringify(this.config), JSON.stringify(this.styles),
@@ -158,22 +158,22 @@ class SiteTheme {
     }
     
     // Check if theme is being used by any sites
-    const sitesUsingTheme = await db.query('SELECT COUNT(*) as count FROM hotel_sites WHERE theme_id = ?', [this.id]);
+    const sitesUsingTheme = await db.query('SELECT COUNT(*) as count FROM hotel_sites WHERE theme_id = $1', [this.id]);
     if (sitesUsingTheme[0].count > 0) {
       throw new Error('Cannot delete theme that is being used by sites');
     }
     
-    return await db.query('DELETE FROM site_themes WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM site_themes WHERE id = $1', [this.id]);
   }
 
   async deactivate() {
     this.active = false;
-    await db.query('UPDATE site_themes SET active = FALSE WHERE id = ?', [this.id]);
+    await db.query('UPDATE site_themes SET active = FALSE WHERE id = $1', [this.id]);
   }
 
   async activate() {
     this.active = true;
-    await db.query('UPDATE site_themes SET active = TRUE WHERE id = ?', [this.id]);
+    await db.query('UPDATE site_themes SET active = TRUE WHERE id = $1', [this.id]);
   }
 
   // Usage tracking
@@ -183,7 +183,7 @@ class SiteTheme {
       SELECT hs.*, h.name as hotel_name 
       FROM hotel_sites hs 
       JOIN hotels h ON hs.hotel_id = h.id 
-      WHERE hs.theme_id = ? 
+      WHERE hs.theme_id = $1 
       ORDER BY hs.created_at DESC
     `, [this.id]);
     
@@ -195,7 +195,7 @@ class SiteTheme {
   }
 
   async getUsageCount() {
-    const result = await db.query('SELECT COUNT(*) as count FROM hotel_sites WHERE theme_id = ?', [this.id]);
+    const result = await db.query('SELECT COUNT(*) as count FROM hotel_sites WHERE theme_id = $1', [this.id]);
     return result[0].count;
   }
 

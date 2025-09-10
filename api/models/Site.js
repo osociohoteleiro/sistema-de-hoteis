@@ -20,22 +20,22 @@ class Site {
 
   // CRUD Methods
   static async findById(id) {
-    const result = await db.query('SELECT * FROM hotel_sites WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM hotel_sites WHERE id = $1', [id]);
     return result.length > 0 ? new Site(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM hotel_sites WHERE site_uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM hotel_sites WHERE site_uuid = $1', [uuid]);
     return result.length > 0 ? new Site(result[0]) : null;
   }
 
   static async findBySubdomain(subdomain) {
-    const result = await db.query('SELECT * FROM hotel_sites WHERE subdomain = ?', [subdomain]);
+    const result = await db.query('SELECT * FROM hotel_sites WHERE subdomain = $1', [subdomain]);
     return result.length > 0 ? new Site(result[0]) : null;
   }
 
   static async findByCustomDomain(domain) {
-    const result = await db.query('SELECT * FROM hotel_sites WHERE custom_domain = ?', [domain]);
+    const result = await db.query('SELECT * FROM hotel_sites WHERE custom_domain = $1', [domain]);
     return result.length > 0 ? new Site(result[0]) : null;
   }
 
@@ -110,9 +110,9 @@ class Site {
       // Update existing site
       const result = await db.query(`
         UPDATE hotel_sites SET 
-        subdomain = ?, custom_domain = ?, theme_id = ?, settings = ?, 
-        seo_config = ?, analytics_config = ?, status = ?, plan_type = ?
-        WHERE id = ?
+        subdomain = $1, custom_domain = $2, theme_id = $3, settings = $4, 
+        seo_config = $5, analytics_config = $6, status = $7, plan_type = $8
+        WHERE id = $9
       `, [
         this.subdomain, this.custom_domain, this.theme_id,
         JSON.stringify(this.settings), JSON.stringify(this.seo_config),
@@ -145,7 +145,7 @@ class Site {
     if (!this.id) {
       throw new Error('Cannot delete site without ID');
     }
-    return await db.query('DELETE FROM hotel_sites WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM hotel_sites WHERE id = $1', [this.id]);
   }
 
   // Status Management
@@ -153,19 +153,19 @@ class Site {
     this.status = 'PUBLISHED';
     this.published_at = new Date().toISOString();
     await db.query(
-      'UPDATE hotel_sites SET status = ?, published_at = ? WHERE id = ?',
+      'UPDATE hotel_sites SET status = $1, published_at = $2 WHERE id = $3',
       [this.status, this.published_at, this.id]
     );
   }
 
   async unpublish() {
     this.status = 'DRAFT';
-    await db.query('UPDATE hotel_sites SET status = ? WHERE id = ?', [this.status, this.id]);
+    await db.query('UPDATE hotel_sites SET status = $1 WHERE id = $2', [this.status, this.id]);
   }
 
   async setMaintenance() {
     this.status = 'MAINTENANCE';
-    await db.query('UPDATE hotel_sites SET status = ? WHERE id = ?', [this.status, this.id]);
+    await db.query('UPDATE hotel_sites SET status = $1 WHERE id = $2', [this.status, this.id]);
   }
 
   // Pages Management
@@ -194,10 +194,10 @@ class Site {
     const SitePage = require('./SitePage');
     
     // Remove homepage flag from all pages
-    await db.query('UPDATE site_pages SET is_homepage = FALSE WHERE site_id = ?', [this.id]);
+    await db.query('UPDATE site_pages SET is_homepage = FALSE WHERE site_id = $1', [this.id]);
     
     // Set new homepage
-    await db.query('UPDATE site_pages SET is_homepage = TRUE WHERE id = ? AND site_id = ?', [pageId, this.id]);
+    await db.query('UPDATE site_pages SET is_homepage = TRUE WHERE id = $1 AND site_id = $2', [pageId, this.id]);
   }
 
   // Theme Management
@@ -210,7 +210,7 @@ class Site {
 
   async setTheme(themeId) {
     this.theme_id = themeId;
-    await db.query('UPDATE hotel_sites SET theme_id = ? WHERE id = ?', [themeId, this.id]);
+    await db.query('UPDATE hotel_sites SET theme_id = $1 WHERE id = $2', [themeId, this.id]);
   }
 
   // Hotel Information
@@ -247,7 +247,7 @@ class Site {
   async addMedia(data) {
     const result = await db.query(`
       INSERT INTO site_media (site_id, hotel_id, url, type, alt_text, folder, size, dimensions)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `, [
       this.id, this.hotel_id, data.url, data.type || 'IMAGE',
       data.alt_text, data.folder, data.size, JSON.stringify(data.dimensions || {})
@@ -283,7 +283,7 @@ class Site {
 
   async recordAnalytics(date, data) {
     const existingRecord = await db.query(
-      'SELECT id FROM site_analytics WHERE site_id = ? AND date = ?',
+      'SELECT id FROM site_analytics WHERE site_id = $1 AND date = $2',
       [this.id, date]
     );
 
@@ -291,9 +291,9 @@ class Site {
       // Update existing record
       await db.query(`
         UPDATE site_analytics SET 
-        page_views = ?, unique_visitors = ?, bookings_count = ?,
-        conversion_rate = ?, revenue = ?, top_pages = ?, traffic_sources = ?
-        WHERE site_id = ? AND date = ?
+        page_views = $1, unique_visitors = $2, bookings_count = $3,
+        conversion_rate = $4, revenue = $5, top_pages = $6, traffic_sources = $7
+        WHERE site_id = $8 AND date = $9
       `, [
         data.page_views, data.unique_visitors, data.bookings_count,
         data.conversion_rate, data.revenue,
@@ -307,7 +307,7 @@ class Site {
         INSERT INTO site_analytics 
         (site_id, date, page_views, unique_visitors, bookings_count, 
          conversion_rate, revenue, top_pages, traffic_sources)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `, [
         this.id, date, data.page_views, data.unique_visitors, data.bookings_count,
         data.conversion_rate, data.revenue,

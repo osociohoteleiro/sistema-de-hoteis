@@ -24,21 +24,21 @@ class WhatsAppCloudService {
       // Salvar no banco de dados
       const existingConfig = await db.query(`
         SELECT id FROM whatsapp_cloud_configs 
-        WHERE workspace_uuid = ?
+        WHERE workspace_uuid = $1
       `, [workspaceUuid]);
 
       if (existingConfig.length > 0) {
         // Atualizar existente
         await db.query(`
           UPDATE whatsapp_cloud_configs SET
-            app_id = ?,
-            app_secret = ?,
-            access_token = ?,
-            phone_number_id = ?,
-            business_account_id = ?,
-            webhook_url = ?,
+            app_id = $1,
+            app_secret = $2,
+            access_token = $3,
+            phone_number_id = $4,
+            business_account_id = $5,
+            webhook_url = $6,
             updated_at = CURRENT_TIMESTAMP
-          WHERE workspace_uuid = ?
+          WHERE workspace_uuid = $7
         `, [appId, appSecret, accessToken, phoneNumberId, businessAccountId, webhookUrl, workspaceUuid]);
       } else {
         // Criar novo
@@ -46,7 +46,7 @@ class WhatsAppCloudService {
           INSERT INTO whatsapp_cloud_configs (
             workspace_uuid, app_id, app_secret, access_token, 
             phone_number_id, business_account_id, webhook_url
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [workspaceUuid, appId, appSecret, accessToken, phoneNumberId, businessAccountId, webhookUrl]);
       }
 
@@ -89,7 +89,7 @@ class WhatsAppCloudService {
         SELECT app_id, app_secret, access_token, phone_number_id, 
                business_account_id, webhook_url
         FROM whatsapp_cloud_configs 
-        WHERE workspace_uuid = ? AND active = true
+        WHERE workspace_uuid = $1 AND active = true
       `, [workspaceUuid]);
 
       if (result.length === 0) {
@@ -343,21 +343,21 @@ class WhatsAppCloudService {
       // Verificar se já existe configuração para esta workspace
       const existingConfig = await db.query(`
         SELECT id FROM whatsapp_cloud_configs 
-        WHERE workspace_uuid = ?
+        WHERE workspace_uuid = $1
       `, [workspaceUuid]);
 
       if (existingConfig.length > 0) {
         // Atualizar configuração existente
         await db.query(`
           UPDATE whatsapp_cloud_configs SET
-            app_id = ?,
-            access_token = ?,
-            phone_number_id = ?,
-            business_account_id = ?,
-            phone_number = ?,
+            app_id = $1,
+            access_token = $2,
+            phone_number_id = $3,
+            business_account_id = $4,
+            phone_number = $5,
             active = true,
             updated_at = CURRENT_TIMESTAMP
-          WHERE workspace_uuid = ?
+          WHERE workspace_uuid = $6
         `, [APP_ID, accessToken, phoneNumberId, businessAccountId, phoneNumber, workspaceUuid]);
 
         console.log(`🔄 Configuração atualizada para workspace: ${workspaceUuid}`);
@@ -367,7 +367,7 @@ class WhatsAppCloudService {
           INSERT INTO whatsapp_cloud_configs (
             workspace_uuid, app_id, access_token, phone_number_id, 
             business_account_id, phone_number, active, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ) VALUES ($1, $2, $3, $4, $5, $6, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `, [workspaceUuid, APP_ID, accessToken, phoneNumberId, businessAccountId, phoneNumber]);
 
         console.log(`✨ Nova configuração criada para workspace: ${workspaceUuid}`);
@@ -510,9 +510,9 @@ class WhatsAppCloudService {
     try {
       await db.query(`
         UPDATE whatsapp_messages SET 
-          status = ?,
+          status = $1,
           updated_at = CURRENT_TIMESTAMP
-        WHERE whatsapp_message_id = ? AND workspace_uuid = ?
+        WHERE whatsapp_message_id = $2 AND workspace_uuid = $3
       `, [status.status, status.id, workspaceUuid]);
 
       return { success: true };
@@ -532,7 +532,7 @@ class WhatsAppCloudService {
         INSERT INTO whatsapp_messages (
           workspace_uuid, whatsapp_message_id, phone_number, message_type,
           content, direction, status, timestamp, internal_message_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `, [
         workspaceUuid,
         messageData.whatsapp_message_id,
@@ -558,23 +558,23 @@ class WhatsAppCloudService {
     try {
       const existingContact = await db.query(`
         SELECT id FROM whatsapp_contacts 
-        WHERE workspace_uuid = ? AND phone_number = ?
+        WHERE workspace_uuid = $1 AND phone_number = $2
       `, [workspaceUuid, contact.wa_id]);
 
       if (existingContact.length > 0) {
         // Atualizar
         await db.query(`
           UPDATE whatsapp_contacts SET
-            name = ?,
+            name = $1,
             updated_at = CURRENT_TIMESTAMP
-          WHERE workspace_uuid = ? AND phone_number = ?
+          WHERE workspace_uuid = $2 AND phone_number = $3
         `, [contact.profile?.name || '', workspaceUuid, contact.wa_id]);
       } else {
         // Criar novo
         await db.query(`
           INSERT INTO whatsapp_contacts (
             workspace_uuid, phone_number, name
-          ) VALUES (?, ?, ?)
+          ) VALUES ($1, $2, $3)
         `, [workspaceUuid, contact.wa_id, contact.profile?.name || '']);
       }
 
@@ -599,10 +599,10 @@ class WhatsAppCloudService {
           COUNT(CASE WHEN m.direction = 'inbound' AND m.read_at IS NULL THEN 1 END) as unread_count
         FROM whatsapp_contacts c
         LEFT JOIN whatsapp_messages m ON c.phone_number = m.phone_number AND c.workspace_uuid = m.workspace_uuid
-        WHERE c.workspace_uuid = ?
+        WHERE c.workspace_uuid = $1
         GROUP BY c.phone_number, c.name
         ORDER BY MAX(m.created_at) DESC
-        LIMIT ?
+        LIMIT $2
       `, [workspaceUuid, limit]);
 
       return {
@@ -629,9 +629,9 @@ class WhatsAppCloudService {
           id, whatsapp_message_id, message_type, content, direction,
           status, created_at, timestamp, read_at
         FROM whatsapp_messages
-        WHERE workspace_uuid = ? AND phone_number = ?
+        WHERE workspace_uuid = $1 AND phone_number = $2
         ORDER BY created_at ASC
-        LIMIT ?
+        LIMIT $3
       `, [workspaceUuid, phoneNumber, limit]);
 
       return {

@@ -405,7 +405,7 @@ router.get('/integrations/:hotel_uuid', async (req, res) => {
                 instancia_name,
                 url_api
             FROM Integracoes 
-            WHERE hotel_uuid = ? AND integration_name = 'Qdrant'
+            WHERE hotel_uuid = $1 AND integration_name = 'Qdrant'
         `, [hotel_uuid]);
         
         res.json({

@@ -15,18 +15,18 @@ class FlowiseService {
             // Verificar se já existe uma integração Flowise para este hotel
             const existingIntegrations = await db.query(`
                 SELECT id FROM Integracoes 
-                WHERE hotel_uuid = ? AND integration_name = 'Flowise'
+                WHERE hotel_uuid = $1 AND integration_name = 'Flowise'
             `, [hotelUuid]);
             
             if (existingIntegrations.length > 0) {
                 // Atualizar integração existente
                 await db.query(`
                     UPDATE Integracoes SET
-                        instancia_name = ?,
-                        apikey = ?,
-                        url_api = ?,
+                        instancia_name = $1,
+                        apikey = $2,
+                        url_api = $3,
                         updated_at = NOW()
-                    WHERE hotel_uuid = ? AND integration_name = 'Flowise'
+                    WHERE hotel_uuid = $4 AND integration_name = 'Flowise'
                 `, [botName, fixedApiKey, predictionUrl, hotelUuid]);
                 
                 console.log(`✅ Integração Flowise atualizada para hotel ${hotelUuid}`);
@@ -39,7 +39,7 @@ class FlowiseService {
                         apikey,
                         instancia_name,
                         url_api
-                    ) VALUES (?, ?, ?, ?, ?)
+                    ) VALUES ($1, $2, $3, $4, $5)
                 `, [
                     'Flowise',
                     hotelUuid,
@@ -84,7 +84,7 @@ class FlowiseService {
                     active,
                     created_at
                 FROM flowise_bots
-                WHERE hotel_uuid = ? AND active = TRUE
+                WHERE hotel_uuid = $1 AND active = TRUE
                 ORDER BY bot_name
             `, [hotelUuid]);
             
@@ -112,7 +112,7 @@ class FlowiseService {
             // Verificar se ainda existem bots ativos para o hotel
             const remainingBots = await db.query(`
                 SELECT COUNT(*) as count FROM flowise_bots 
-                WHERE hotel_uuid = ? AND active = TRUE
+                WHERE hotel_uuid = $1 AND active = TRUE
             `, [hotelUuid]);
             
             const hasOtherBots = remainingBots[0].count > 0;
@@ -121,7 +121,7 @@ class FlowiseService {
                 // Só remove a integração se não houver mais bots ativos
                 await db.query(`
                     DELETE FROM Integracoes 
-                    WHERE hotel_uuid = ? AND integration_name = 'Flowise'
+                    WHERE hotel_uuid = $1 AND integration_name = 'Flowise'
                 `, [hotelUuid]);
                 
                 console.log(`✅ Integração Flowise removida do hotel ${hotelUuid} (não há mais bots)`);
@@ -160,7 +160,7 @@ class FlowiseService {
                     bot_id,
                     hotel_uuid,
                     active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE)
             `, [
                 botData.bot_name,
                 botData.bot_description,
@@ -199,13 +199,13 @@ class FlowiseService {
             // Atualizar o bot na tabela flowise_bots
             await db.query(`
                 UPDATE flowise_bots SET
-                    bot_name = ?,
-                    bot_description = ?,
-                    bot_type = ?,
-                    prediction_url = ?,
-                    upsert_url = ?,
+                    bot_name = $1,
+                    bot_description = $2,
+                    bot_type = $3,
+                    prediction_url = $4,
+                    upsert_url = $5,
                     updated_at = NOW()
-                WHERE id = ? AND hotel_uuid = ?
+                WHERE id = $6 AND hotel_uuid = $7
             `, [
                 botData.bot_name,
                 botData.bot_description,

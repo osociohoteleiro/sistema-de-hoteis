@@ -20,12 +20,12 @@ class Bot {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM bots WHERE id = ?', [id]);
+    const result = await db.query('SELECT * FROM bots WHERE id = $1', [id]);
     return result.length > 0 ? new Bot(result[0]) : null;
   }
 
   static async findByUuid(uuid) {
-    const result = await db.query('SELECT * FROM bots WHERE uuid = ?', [uuid]);
+    const result = await db.query('SELECT * FROM bots WHERE uuid = $1', [uuid]);
     return result.length > 0 ? new Bot(result[0]) : null;
   }
 
@@ -182,9 +182,9 @@ class Bot {
       // Update existing bot
       const result = await db.query(`
         UPDATE bots SET 
-        name = ?, description = ?, bot_type = ?, status = ?, 
-        configuration = ?, settings = ?, active = ?
-        WHERE id = ?
+        name = $1, description = $2, bot_type = $3, status = $4, 
+        configuration = $5, settings = $6, active = $7
+        WHERE id = $8
       `, [
         this.name,
         this.description,
@@ -200,7 +200,7 @@ class Bot {
       // Create new bot
       const result = await db.query(`
         INSERT INTO bots (workspace_id, workspace_uuid, hotel_id, hotel_uuid, name, description, bot_type, status, configuration, settings, active) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `, [
         this.workspace_id,
         this.workspace_uuid,
@@ -229,7 +229,7 @@ class Bot {
     if (!this.id) {
       throw new Error('Cannot delete bot without ID');
     }
-    return await db.query('DELETE FROM bots WHERE id = ?', [this.id]);
+    return await db.query('DELETE FROM bots WHERE id = $1', [this.id]);
   }
 
   async softDelete() {
@@ -326,7 +326,7 @@ class Bot {
   // Count bots by workspace
   static async countByWorkspace(workspaceId) {
     const result = await db.query(
-      'SELECT COUNT(*) as count FROM bots WHERE workspace_id = ? AND active = true',
+      'SELECT COUNT(*) as count FROM bots WHERE workspace_id = $1 AND active = true',
       [workspaceId]
     );
     return result[0].count;
@@ -335,7 +335,7 @@ class Bot {
   // Count bots by hotel
   static async countByHotel(hotelId) {
     const result = await db.query(
-      'SELECT COUNT(*) as count FROM bots WHERE hotel_id = ? AND active = true',
+      'SELECT COUNT(*) as count FROM bots WHERE hotel_id = $1 AND active = true',
       [hotelId]
     );
     return result[0].count;
