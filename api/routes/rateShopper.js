@@ -370,7 +370,7 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
     const properties = new Set();
     const mainProperties = new Set(); // Para rastrear propriedades principais
     
-    historicalData.rows.forEach(row => {
+    historicalData.forEach(row => {
       const date = row.date.toISOString().split('T')[0];
       
       // Criar nome único com plataforma para diferenciar Booking de Artaxnet
