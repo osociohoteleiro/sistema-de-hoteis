@@ -43,7 +43,7 @@ class DatabaseConnection {
         max: 50,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        ssl: process.env.PGSSLDISABLE === 'true' ? false : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false)
       };
 
       this.pgPool = new Pool(config);
