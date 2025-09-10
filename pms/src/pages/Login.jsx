@@ -27,8 +27,8 @@ const Login = () => {
       try {
         // Incluir hotel_id se disponível para buscar configuração específica do hotel
         const url = selectedHotelUuid 
-          ? `${config.apiBaseUrl}/api/app-configurations/public/pms?hotel_id=${selectedHotelUuid}`
-          : `${config.apiBaseUrl}/api/app-configurations/public/pms`;
+          ? `${config.apiBaseUrl}/app-configurations/public/pms?hotel_id=${selectedHotelUuid}`
+          : `${config.apiBaseUrl}/app-configurations/public/pms`;
         
         const response = await fetch(url);
         if (response.ok) {

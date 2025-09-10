@@ -50,8 +50,8 @@ export const AppProvider = ({ children }) => {
   const loadAppConfigurations = async (hotelUuid = null) => {
     try {
       const url = hotelUuid 
-        ? `${DEFAULT_CONFIG.apiBaseUrl}/api/app-configurations/public/pms?hotel_id=${hotelUuid}`
-        : `${DEFAULT_CONFIG.apiBaseUrl}/api/app-configurations/public/pms`;
+        ? `${DEFAULT_CONFIG.apiBaseUrl}/app-configurations/public/pms?hotel_id=${hotelUuid}`
+        : `${DEFAULT_CONFIG.apiBaseUrl}/app-configurations/public/pms`;
       
       const response = await fetch(url);
       if (response.ok) {
