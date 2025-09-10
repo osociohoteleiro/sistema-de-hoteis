@@ -8,6 +8,7 @@ const morgan = require('morgan');
 require('dotenv').config();
 
 const db = require('./config/database');
+const { initDatabase } = require('./init-database');
 
 const app = express();
 const server = http.createServer(app);
@@ -39,15 +40,32 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS - Permitir todas as portas locais para desenvolvimento
+// CORS - Permitir localhost para desenvolvimento e domínios configurados para produção
 app.use(cors({
   origin: function (origin, callback) {
-    // Permitir requisições sem origin (como Postman) e qualquer localhost
-    if (!origin || origin.startsWith('http://localhost:')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Não permitido pelo CORS'));
+    // Lista de origins permitidos
+    const allowedOrigins = [
+      // Desenvolvimento local
+      'http://localhost:3000',
+      'http://localhost:5173', 
+      'http://localhost:5174',
+      'http://localhost:5175',
+      // EasyPanel domains (usar variável de ambiente se configurada)
+      ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [])
+    ];
+    
+    // Permitir requisições sem origin (como Postman, apps mobile, etc)
+    if (!origin) {
+      return callback(null, true);
     }
+    
+    // Verificar se origin está na lista permitida ou é localhost
+    if (origin.startsWith('http://localhost:') || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    console.log(`🚫 CORS bloqueado para: ${origin}`);
+    callback(new Error(`Não permitido pelo CORS: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -240,11 +258,14 @@ async function startServer() {
     
     await db.connect();
     
+    // Inicializar banco de dados (criar usuário admin se necessário)
+    await initDatabase();
+    
     server.listen(PORT, () => {
       console.log(`✅ Servidor rodando na porta ${PORT}`);
       console.log(`🔌 Socket.io habilitado`);
-      console.log(`🌍 CORS configurado para: ${process.env.CORS_ORIGIN}`);
-      console.log(`🗄️  Conectado ao banco: ${db.currentHost}/${process.env.DB_NAME}`);
+      console.log(`🌍 CORS configurado para: ${process.env.CORS_ORIGINS}`);
+      console.log(`🗄️  Conectado ao banco: ${db.currentHost}/${process.env.POSTGRES_DB}`);
       console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🧪 DB test: http://localhost:${PORT}/api/db-test`);
     });
