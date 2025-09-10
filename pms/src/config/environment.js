@@ -28,6 +28,9 @@ console.log('🌍 Environment detected:', {
   config
 });
 
+console.log('🔥 API_BASE_URL HARDCODED FOR DEBUG:', config.API_BASE_URL);
+console.log('🔥 SOCKET_URL HARDCODED FOR DEBUG:', config.SOCKET_URL);
+
 export const API_BASE_URL = config.API_BASE_URL;
 export const SOCKET_URL = config.SOCKET_URL;
 

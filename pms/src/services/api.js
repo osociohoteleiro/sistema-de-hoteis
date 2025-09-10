@@ -1,5 +1,13 @@
 // Serviço de API para comunicação com o backend
-import { API_BASE_URL } from '../config/environment';
+// HARDCODED for production - TEMPORARY FIX
+const isProduction = window.location.hostname !== 'localhost';
+const API_BASE_URL = isProduction 
+  ? 'https://osh-sistemas-api-backend.d32pnk.easypanel.host/api'
+  : 'http://localhost:3001/api';
+
+console.log('🚨 APISERVICE DEBUG - isProduction:', isProduction);
+console.log('🚨 APISERVICE DEBUG - hostname:', window.location.hostname);
+console.log('🚨 APISERVICE DEBUG - API_BASE_URL:', API_BASE_URL);
 
 class ApiService {
   constructor() {
