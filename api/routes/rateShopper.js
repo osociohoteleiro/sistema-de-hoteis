@@ -73,15 +73,15 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       hotelId = parseInt(hotel_id);
     }
 
-    // Recent searches (corrigir para usar schema correto)
+    // Recent searches (versão local - usa nomes de colunas do ambiente local)
     const recentSearches = await db.query(`
       SELECT 
         rs.id,
         rs.hotel_id,
         rs.property_id,
-        rs.check_in as start_date,
-        rs.check_out as end_date,
-        rs.search_status as status,
+        rs.check_in_date as start_date,
+        rs.check_out_date as end_date,
+        rs.status as status,
         rs.total_results,
         rs.duration_seconds,
         rs.created_at,
@@ -219,7 +219,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
   } catch (error) {
     console.error('Dashboard error:', error);
     console.error('Error stack:', error.stack);
-    console.error('Hotel ID used:', hotelId);
+    console.error('Hotel ID param:', req.params.hotel_id);
     res.status(500).json({ error: 'Failed to load dashboard data' });
   }
 });
@@ -593,9 +593,9 @@ router.get('/:hotel_id/debug-prices', async (req, res) => {
         rsp.room_type,
         rsp.captured_at,
         rsp_prop.property_name,
-        rs.search_status as search_status,
-        rs.check_in as search_start,
-        rs.check_out as search_end,
+        rs.status as search_status,
+        rs.check_in_date as search_start,
+        rs.check_out_date as search_end,
         rs.updated_at as search_completed,
         -- Adicionar informações de bundle
         rsp.is_bundle,
@@ -2234,18 +2234,18 @@ router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
     const searchesCovering = await db.query(`
       SELECT 
         rs.id,
-        rs.check_in,
-        rs.check_out,
-        rs.search_status,
+        rs.check_in_date as check_in,
+        rs.check_out_date as check_out,
+        rs.status as search_status,
         rs.created_at,
         rs.updated_at,
         COUNT(rsp.id) as prices_found
       FROM rate_shopper_searches rs
-      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id AND rsp.check_in::date = $2::date
+      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id AND rsp.check_in_date::date = $2::date
       WHERE rs.hotel_id = $1 
-      AND rs.check_in <= $2::date 
-      AND rs.check_out >= $2::date
-      GROUP BY rs.id, rs.check_in, rs.check_out, rs.search_status, rs.created_at, rs.updated_at
+      AND rs.check_in_date <= $2::date 
+      AND rs.check_out_date >= $2::date
+      GROUP BY rs.id, rs.check_in_date, rs.check_out_date, rs.status, rs.created_at, rs.updated_at
       ORDER BY rs.created_at DESC
     `, [hotelId, target_date]);
     

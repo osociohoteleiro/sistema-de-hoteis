@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2025-09-10T21:30:35.489Z",
+    "type": "info",
+    "message": "🚀 Iniciando importação de dados para produção"
+  },
+  {
+    "timestamp": "2025-09-10T21:30:35.490Z",
+    "type": "info",
+    "message": "📋 Importante: Este script importa dados do banco LOCAL para o banco de PRODUÇÃO"
+  },
+  {
+    "timestamp": "2025-09-10T21:30:38.208Z",
+    "type": "error",
+    "message": "💥 Erro na importação: getaddrinfo ENOTFOUND postgresql-db"
+  }
+]

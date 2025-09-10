@@ -59,7 +59,7 @@ async function populateRateShopperData() {
                 try {
                     await db.query(`
                         INSERT INTO rate_shopper_properties 
-                        (hotel_id, property_name, property_url, booking_engine, is_main_property, active)
+                        (hotel_id, property_name, booking_url, platform, is_main_property, active)
                         VALUES ($1, $2, $3, $4, $5, $6)
                     `, [
                         mainHotel.id,
@@ -89,15 +89,16 @@ async function populateRateShopperData() {
                 try {
                     await db.query(`
                         INSERT INTO rate_shopper_configs
-                        (hotel_id, search_frequency, max_concurrent_searches, enable_alerts, alert_threshold_percentage, active)
-                        VALUES ($1, $2, $3, $4, $5, $6)
+                        (hotel_id, search_frequency_hours, date_range_days, max_bundle_size, notification_enabled, price_alert_threshold, auto_search_enabled)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
                     `, [
                         hotel.id,
-                        60, // 60 minutos
-                        3,  // 3 buscas simultâneas
-                        true, // alertas habilitados
+                        1,     // 1 hora
+                        30,    // 30 dias
+                        10,    // 10 propriedades por bundle
+                        true,  // notificações habilitadas
                         10.00, // 10% threshold
-                        true
+                        true   // busca automática habilitada
                     ]);
                     
                     console.log(`   ✅ Configuração criada para ${hotel.name}`);
@@ -111,7 +112,7 @@ async function populateRateShopperData() {
         console.log('🔍 Verificando dados finais...');
         
         const finalProperties = await db.query(`
-            SELECT rsp.id, rsp.property_name, rsp.booking_engine, rsp.is_main_property, h.name as hotel_name
+            SELECT rsp.id, rsp.property_name, rsp.platform, rsp.is_main_property, h.name as hotel_name
             FROM rate_shopper_properties rsp
             JOIN hotels h ON rsp.hotel_id = h.id
             ORDER BY rsp.is_main_property DESC, rsp.property_name
@@ -119,18 +120,18 @@ async function populateRateShopperData() {
         
         console.log('📋 Propriedades do RateShopper:');
         finalProperties.forEach(prop => {
-            console.log(`   ${prop.is_main_property ? '🏆' : '🏨'} ${prop.property_name} (${prop.booking_engine}) - Hotel: ${prop.hotel_name}`);
+            console.log(`   ${prop.is_main_property ? '🏆' : '🏨'} ${prop.property_name} (${prop.platform}) - Hotel: ${prop.hotel_name}`);
         });
         
         const finalConfigs = await db.query(`
-            SELECT rsc.id, rsc.search_frequency, h.name as hotel_name
+            SELECT rsc.id, rsc.search_frequency_hours, h.name as hotel_name
             FROM rate_shopper_configs rsc 
             JOIN hotels h ON rsc.hotel_id = h.id
         `);
         
         console.log('⚙️ Configurações do RateShopper:');
         finalConfigs.forEach(config => {
-            console.log(`   🔧 ${config.hotel_name}: busca a cada ${config.search_frequency} minutos`);
+            console.log(`   🔧 ${config.hotel_name}: busca a cada ${config.search_frequency_hours} horas`);
         });
         
         console.log('🎉 DADOS DO RATE SHOPPER POPULADOS COM SUCESSO!');

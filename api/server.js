@@ -51,20 +51,43 @@ app.use(cors({
       'http://localhost:5174',
       'http://localhost:5175',
       // EasyPanel domains (usar variável de ambiente se configurada)
-      ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [])
+      ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()) : [])
     ];
+    
+    // Log da configuração atual para debug (apenas em desenvolvimento)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 CORS Debug - Origins permitidos:', allowedOrigins);
+      console.log('🔍 CORS Debug - Origin da requisição:', origin);
+    }
     
     // Permitir requisições sem origin (como Postman, apps mobile, etc)
     if (!origin) {
+      console.log('✅ CORS permitido: requisição sem origin');
       return callback(null, true);
     }
     
     // Verificar se origin está na lista permitida ou é localhost
     if (origin.startsWith('http://localhost:') || allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS permitido para: ${origin}`);
+      return callback(null, true);
+    }
+    
+    // Suporte a wildcards para subdomínios (opcional)
+    const wildcardMatch = allowedOrigins.some(allowedOrigin => {
+      if (allowedOrigin.includes('*.')) {
+        const regex = new RegExp('^' + allowedOrigin.replace('*.', '[\\w-]+\\.').replace(/\./g, '\\.') + '$');
+        return regex.test(origin);
+      }
+      return false;
+    });
+    
+    if (wildcardMatch) {
+      console.log(`✅ CORS permitido via wildcard para: ${origin}`);
       return callback(null, true);
     }
     
     console.log(`🚫 CORS bloqueado para: ${origin}`);
+    console.log('🔍 Origins permitidos:', allowedOrigins);
     callback(new Error(`Não permitido pelo CORS: ${origin}`));
   },
   credentials: true,
@@ -305,8 +328,10 @@ const siteTemplatesRoutes = require('./routes/site-templates');
 const hotelSitesRoutes = require('./routes/hotel-sites');
 const migrateRoutes = require('./routes/migrate'); // Habilitado temporariamente
 const appConfigurationsRoutes = require('./routes/app-configurations');
+const dataImportRoutes = require('./routes/dataImport');
 
 // Rotas da API
+app.use('/api/data-import', dataImportRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/hotels', hotelRoutes);
