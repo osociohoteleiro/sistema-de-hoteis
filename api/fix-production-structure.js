@@ -33,7 +33,15 @@ async function fixProductionStructure() {
             console.log('⚠️ Tabela user_hotels não existe ou está vazia');
         }
         
-        // 2. Recriar tabela users com estrutura correta
+        // 2. Habilitar extensão UUID e recriar tabela users
+        console.log('🔧 Habilitando extensão UUID...');
+        try {
+            await db.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+            console.log('✅ Extensão UUID habilitada');
+        } catch (e) {
+            console.log('⚠️ Tentando método alternativo para UUID...');
+        }
+        
         console.log('👤 Recriando tabela users...');
         await db.query('DROP TABLE IF EXISTS user_permissions CASCADE');
         await db.query('DROP TABLE IF EXISTS user_hotels CASCADE');
@@ -42,7 +50,7 @@ async function fixProductionStructure() {
         await db.query(`
             CREATE TABLE users (
                 id SERIAL PRIMARY KEY,
-                uuid UUID NOT NULL DEFAULT uuid_generate_v4(),
+                uuid UUID NOT NULL DEFAULT gen_random_uuid(),
                 name VARCHAR(255) NOT NULL,
                 email VARCHAR(255) NOT NULL UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
@@ -64,7 +72,7 @@ async function fixProductionStructure() {
         await db.query(`
             CREATE TABLE hotels (
                 id SERIAL PRIMARY KEY,
-                hotel_uuid UUID NOT NULL DEFAULT uuid_generate_v4(),
+                hotel_uuid UUID NOT NULL DEFAULT gen_random_uuid(),
                 name VARCHAR(255) NOT NULL,
                 checkin_time TIME DEFAULT '14:00:00',
                 checkout_time TIME DEFAULT '12:00:00',
