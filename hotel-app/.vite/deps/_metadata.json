@@ -1,0 +1,70 @@
+{
+  "hash": "31014cf3",
+  "configHash": "faf463a5",
+  "lockfileHash": "7e60bbab",
+  "browserHash": "300d8f6b",
+  "optimized": {
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "5a3079fc",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "bdecea89",
+      "needsInterop": true
+    },
+    "react-router-dom": {
+      "src": "../../node_modules/react-router-dom/dist/index.mjs",
+      "file": "react-router-dom.js",
+      "fileHash": "e4b5705e",
+      "needsInterop": false
+    },
+    "react-hot-toast": {
+      "src": "../../node_modules/react-hot-toast/dist/index.mjs",
+      "file": "react-hot-toast.js",
+      "fileHash": "a1cf0219",
+      "needsInterop": false
+    },
+    "react-dom": {
+      "src": "../../node_modules/react-dom/index.js",
+      "file": "react-dom.js",
+      "fileHash": "f8f2ffe8",
+      "needsInterop": true
+    },
+    "@aws-sdk/client-s3": {
+      "src": "../../node_modules/@aws-sdk/client-s3/dist-es/index.js",
+      "file": "@aws-sdk_client-s3.js",
+      "fileHash": "08b5c8bb",
+      "needsInterop": false
+    },
+    "@aws-sdk/s3-request-presigner": {
+      "src": "../../node_modules/@aws-sdk/s3-request-presigner/dist-es/index.js",
+      "file": "@aws-sdk_s3-request-presigner.js",
+      "fileHash": "96949065",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-GWVOUNP5": {
+      "file": "chunk-GWVOUNP5.js"
+    },
+    "chunk-3VDXVL42": {
+      "file": "chunk-3VDXVL42.js"
+    },
+    "chunk-GJO6AEEC": {
+      "file": "chunk-GJO6AEEC.js"
+    },
+    "event-streams-F3XRVZ3L": {
+      "file": "event-streams-F3XRVZ3L.js"
+    },
+    "chunk-4RTY6RNN": {
+      "file": "chunk-4RTY6RNN.js"
+    },
+    "chunk-5WRI5ZAA": {
+      "file": "chunk-5WRI5ZAA.js"
+    }
+  }
+}
