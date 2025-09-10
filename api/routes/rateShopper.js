@@ -174,7 +174,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
     `, [hotelId]);
 
     // Converter valores numéricos que vêm como strings do PostgreSQL
-    const summaryData = summary.rows[0] || {};
+    const summaryData = summary[0] || {};
     if (summaryData.avg_price !== undefined) {
       summaryData.avg_price = parseFloat(summaryData.avg_price) || 0;
       summaryData.min_price = parseFloat(summaryData.min_price) || 0;
