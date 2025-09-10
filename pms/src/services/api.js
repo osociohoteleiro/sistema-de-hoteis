@@ -1,5 +1,5 @@
 // Serviço de API para comunicação com o backend
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+import { API_BASE_URL } from '../config/environment';
 
 class ApiService {
   constructor() {
