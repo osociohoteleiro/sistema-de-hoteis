@@ -15,11 +15,14 @@ COPY . .
 # Set production environment for build
 ENV NODE_ENV=production
 
-# Build arguments for environment variables
+# Copy production environment file
+COPY .env.production .env
+
+# Build arguments for environment variables (fallback)
 ARG VITE_API_BASE_URL
 ARG VITE_SOCKET_URL
-ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3001/api}
-ENV VITE_SOCKET_URL=${VITE_SOCKET_URL:-http://localhost:3001}
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-https://osh-sistemas-api-backend.d32pnk.easypanel.host/api}
+ENV VITE_SOCKET_URL=${VITE_SOCKET_URL:-https://osh-sistemas-api-backend.d32pnk.easypanel.host}
 
 # Build the application
 RUN npm run build
