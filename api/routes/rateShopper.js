@@ -269,24 +269,24 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
       dateParams.push(startDateObj.toISOString().split('T')[0], endDateObj.toISOString().split('T')[0]);
     }
 
-    // Buscar dados históricos - apenas da última extração por data
+    // Buscar dados históricos - versão simples usando nomes de produção
     const historicalData = await db.query(`
       WITH latest_extraction_per_date AS (
         SELECT 
-          DATE(COALESCE(rsp.check_in, rsp.check_in_date)) as date,
+          DATE(rsp.check_in) as date,
           rsp.property_id,
-          MAX(COALESCE(rsp.captured_at, rsp.scraped_at)) as latest_captured_at
+          MAX(rsp.captured_at) as latest_captured_at
         FROM rate_shopper_prices rsp
         JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
         WHERE rs.hotel_id = $1
-          AND DATE(COALESCE(rsp.check_in, rsp.check_in_date)) >= $2 
-          AND DATE(COALESCE(rsp.check_in, rsp.check_in_date)) <= $3
-          AND COALESCE(rs.search_status, rs.status) IN ('COMPLETED', 'CANCELLED')
-        GROUP BY DATE(COALESCE(rsp.check_in, rsp.check_in_date)), rsp.property_id
+          AND DATE(rsp.check_in) >= $2 
+          AND DATE(rsp.check_in) <= $3
+          AND rs.search_status IN ('COMPLETED', 'CANCELLED')
+        GROUP BY DATE(rsp.check_in), rsp.property_id
       )
       SELECT 
         latest.date,
-        COALESCE(rsp_prop.property_name, 'Unknown Property') as property_name,
+        rsp_prop.property_name,
         COALESCE(rsp_prop.platform, rsp_prop.booking_engine, 'booking') as platform,
         COALESCE(rsp_prop.is_main_property, false) as is_main_property,
         rsp.price as avg_price,
@@ -294,17 +294,16 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
         rsp.price as max_price,
         1 as price_count,
         CASE WHEN latest.date > CURRENT_DATE THEN true ELSE false END as is_future,
-        -- Informações sobre bundles (usar valores padrão se colunas não existirem)
-        CASE WHEN COALESCE(rsp.is_bundle, false) = true THEN 1 ELSE 0 END as bundle_count,
-        CASE WHEN COALESCE(rsp.is_bundle, false) = false THEN 1 ELSE 0 END as regular_count,
-        COALESCE(rsp.bundle_size, 1) as avg_bundle_size,
-        COALESCE(rsp.bundle_size, 1) as max_bundle_size,
-        -- Indicador se o preço vem de bundle
-        COALESCE(rsp.is_bundle, false) as is_mostly_bundle
+        -- Informações sobre bundles com valores padrão
+        0 as bundle_count,
+        1 as regular_count,
+        1 as avg_bundle_size,
+        1 as max_bundle_size,
+        false as is_mostly_bundle
       FROM latest_extraction_per_date latest
       JOIN rate_shopper_prices rsp ON rsp.property_id = latest.property_id 
-        AND DATE(COALESCE(rsp.check_in, rsp.check_in_date)) = latest.date 
-        AND COALESCE(rsp.captured_at, rsp.scraped_at) = latest.latest_captured_at
+        AND DATE(rsp.check_in) = latest.date 
+        AND rsp.captured_at = latest.latest_captured_at
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
       ORDER BY latest.date ASC, COALESCE(rsp_prop.is_main_property, false) DESC, rsp_prop.property_name
     `, dateParams);
