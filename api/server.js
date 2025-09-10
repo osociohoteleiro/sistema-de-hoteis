@@ -141,6 +141,46 @@ app.get('/api/db-test', async (req, res) => {
   }
 });
 
+// Manual database initialization endpoint
+app.post('/api/init-db', async (req, res) => {
+  try {
+    console.log('🔄 Forçando inicialização manual do banco...');
+    
+    // Conectar ao banco
+    await db.connect();
+    
+    // Forçar inicialização
+    await initDatabase();
+    
+    // Verificar tabelas criadas
+    const tables = await db.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      ORDER BY table_name
+    `);
+    
+    // Verificar usuário admin
+    const adminUser = await db.query('SELECT id, name, email FROM users WHERE email = $1 LIMIT 1', ['admin@osh.com.br']);
+    
+    res.json({
+      success: true,
+      message: 'Banco inicializado com sucesso!',
+      tables: tables.map(t => t.table_name),
+      adminUser: adminUser[0] || null,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro na inicialização manual:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 
 // Importar rotas
 const authRoutes = require('./routes/auth');
