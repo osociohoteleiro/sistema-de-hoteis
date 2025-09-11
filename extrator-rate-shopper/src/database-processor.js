@@ -137,18 +137,24 @@ class DatabaseProcessor {
       console.log(`✅ ${dbSearch.property_name}: ${pricesCount} preços extraídos`);
 
     } catch (error) {
+      // Log detalhado do erro para debug
+      console.error(`❌ Erro ao processar ${dbSearch.property_name}:`);
+      console.error(`   Mensagem: ${error.message}`);
+      console.error(`   Stack: ${error.stack}`);
+      console.error(`   Tipo: ${error.constructor.name}`);
+      
       logger.error('Search processing error', { 
         searchId, 
         property: dbSearch.property_name,
-        error: error.message 
+        error: error.message,
+        stack: error.stack,
+        errorType: error.constructor.name
       });
 
       // Atualizar status para FAILED
       await this.db.updateSearchStatus(searchId, 'FAILED', {
         error_log: error.message
       });
-
-      console.error(`❌ Erro ao processar ${dbSearch.property_name}:`, error.message);
     }
   }
 
