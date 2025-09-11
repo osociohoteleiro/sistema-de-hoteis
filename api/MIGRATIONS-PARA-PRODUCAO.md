@@ -9,15 +9,19 @@
 
 ## 📋 Arquivos Criados
 
-- `migrations/000_complete_production_setup_2025-09-11.sql` - Migration principal
-- `sync-migrations-to-production.js` - Script de sincronização (já existia)
+- `migrations/000_complete_production_setup_2025-09-11.sql` - Migration de estrutura
+- `migrations/001_complete_data_export_2025-09-11.sql` - Migration de dados
+- `migrations/complete_migration_with_data_2025-09-11.sql` - **Migration COMPLETA** (estrutura + dados)
+- `export-all-data-for-production.js` - Exportador de todos os dados
+- `deploy-complete-to-production.js` - **Script COMPLETO** para deploy (recomendado)
+- `sync-migrations-to-production.js` - Script de sincronização (apenas estrutura)
 - `deploy-migrations-to-production.sh` - Script de deploy para Linux
 - `analyze-current-database-safe.js` - Análise do banco (para debug)
 - `generate-production-migrations.js` - Gerador de migrations (reutilizável)
 
 ## 🎯 Como Aplicar em Produção
 
-### Opção 1: Deploy Manual (Recomendado)
+### ⭐ Opção 1: Deploy Completo (RECOMENDADO - Estrutura + Dados)
 
 1. **Suba os arquivos para o servidor**:
    ```bash
@@ -26,23 +30,28 @@
    # ou copie manualmente os arquivos de migration
    ```
 
-2. **Configure as variáveis de ambiente** (se necessário):
+2. **Configure as variáveis de ambiente**:
    ```bash
-   export PROD_POSTGRES_HOST="seu-host-producao"
-   export PROD_POSTGRES_PORT="5432" 
-   export PROD_POSTGRES_USER="seu-usuario"
-   export PROD_POSTGRES_PASSWORD="sua-senha"
-   export PROD_POSTGRES_DB="seu-banco"
+   export POSTGRES_HOST="seu-host-producao"
+   export POSTGRES_PORT="5432" 
+   export POSTGRES_USER="seu-usuario"
+   export POSTGRES_PASSWORD="sua-senha"
+   export POSTGRES_DB="seu-banco"
    ```
 
-3. **Execute o deploy**:
+3. **Execute o deploy completo**:
    ```bash
    cd api
-   chmod +x deploy-migrations-to-production.sh
-   ./deploy-migrations-to-production.sh
+   node deploy-complete-to-production.js production
    ```
 
-### Opção 2: Deploy com Node.js
+   Este script irá:
+   - ✅ Criar toda a estrutura do banco (34 tabelas)
+   - ✅ Importar todos os dados (1.534 registros)  
+   - ✅ Configurar sequências corretamente
+   - ✅ Verificar integridade dos dados
+
+### Opção 2: Deploy Apenas Estrutura
 
 ```bash
 cd api
@@ -53,7 +62,12 @@ node sync-migrations-to-production.js production
 
 Se preferir aplicar manualmente:
 ```bash
+# Estrutura + Dados (recomendado)
+psql -h SEU_HOST -U SEU_USER -d SEU_BANCO -f migrations/complete_migration_with_data_2025-09-11.sql
+
+# Ou separadamente:
 psql -h SEU_HOST -U SEU_USER -d SEU_BANCO -f migrations/000_complete_production_setup_2025-09-11.sql
+psql -h SEU_HOST -U SEU_USER -d SEU_BANCO -f migrations/001_complete_data_export_2025-09-11.sql
 ```
 
 ## 🔍 Verificação Pós-Deploy
@@ -75,6 +89,11 @@ SELECT COUNT(*) as total_enums FROM pg_type WHERE typtype = 'e';
 - ✅ 34+ tabelas criadas
 - ✅ 10 tipos ENUM criados  
 - ✅ 2 views criadas
+- ✅ 1.534+ registros importados
+- ✅ Users: 4 registros
+- ✅ Hotels: 12 registros  
+- ✅ Rate Shopper Prices: 1.341 registros
+- ✅ Workspaces: 12 registros
 - ✅ 1 migration registrada em schema_migrations
 
 ## 🛡️ Segurança
