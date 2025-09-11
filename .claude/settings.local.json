@@ -189,7 +189,8 @@
       "Bash(git submodule:*)",
       "Bash(rm:*)",
       "Bash(git rm:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(PGPASSWORD=osh_password_2024 psql -h localhost -p 5432 -U osh_user -d osh_db -c \"\\dt\")"
     ],
     "deny": [],
     "ask": []
