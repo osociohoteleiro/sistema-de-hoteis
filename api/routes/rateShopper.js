@@ -1813,14 +1813,15 @@ router.delete('/:hotel_id/searches/:search_id', async (req, res) => {
       WHERE rs.id = $1 AND rs.hotel_id = $2
     `, [search_id, hotelId]);
 
-    if (search.length === 0) {
+    const searchRows = search.rows || search || [];
+    if (searchRows.length === 0) {
       return res.status(404).json({ 
         success: false, 
         error: 'Busca não encontrada ou não pertence a este hotel' 
       });
     }
 
-    const searchData = search.rows[0];
+    const searchData = searchRows[0];
 
     // Não permitir deletar buscas que estão em execução
     if (searchData.status === 'RUNNING') {
