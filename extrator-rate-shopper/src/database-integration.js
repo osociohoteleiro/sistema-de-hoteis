@@ -401,7 +401,20 @@ class DatabaseIntegration {
         progressData.total_prices_found = totalPricesFound;
       }
 
-      await axios.put(`${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`, progressData);
+      // Debug da requisição
+      const url = `${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`;
+      console.log(`🔍 Debug API Call:`);
+      console.log(`   URL: ${url}`);
+      console.log(`   Hotel ID: ${hotelId} (${typeof hotelId})`);
+      console.log(`   Search ID: ${searchId} (${typeof searchId})`);
+      console.log(`   Payload:`, JSON.stringify(progressData, null, 2));
+
+      await axios.put(url, progressData, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
       
       console.log(`📡 Progresso atualizado via API: ${processedDates}/${totalDates} datas`);
       logger.info('Progress updated via API', { searchId, hotelId, processedDates, totalDates, totalPricesFound });
@@ -411,9 +424,19 @@ class DatabaseIntegration {
         hotelId, 
         processedDates, 
         totalDates,
-        error: error.message 
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: `${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`,
+        payload: progressData
       });
       console.log(`⚠️  Erro ao atualizar progresso via API: ${error.message}`);
+      if (error.response) {
+        console.log(`📊 Status: ${error.response.status}`);
+        console.log(`📊 URL: ${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`);
+        console.log(`📊 Payload:`, JSON.stringify(progressData, null, 2));
+        console.log(`📊 Response:`, JSON.stringify(error.response.data, null, 2));
+      }
       // Não propagar o erro para não interromper a extração
     }
   }
