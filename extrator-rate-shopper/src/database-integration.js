@@ -394,8 +394,7 @@ class DatabaseIntegration {
     try {
       const apiUrl = process.env.API_URL || 'http://localhost:3001';
       const progressData = {
-        processed_dates: processedDates,
-        total_dates: totalDates
+        processed_dates: processedDates
       };
 
       if (totalPricesFound !== null) {
