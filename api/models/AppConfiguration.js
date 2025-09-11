@@ -3,7 +3,7 @@ const db = require('../config/database');
 class AppConfiguration {
   constructor(data = {}) {
     this.id = data.id;
-    this.hotel_id = data.hotel_id;
+    this.hotel_uuid = data.hotel_uuid;
     this.app_name = data.app_name;
     this.app_title = data.app_title;
     this.logo_url = data.logo_url;
@@ -17,22 +17,22 @@ class AppConfiguration {
 
   static VALID_APPS = ['hotel-app', 'pms', 'automacao', 'site-hoteleiro'];
 
-  static async findByAppAndHotel(appName, hotelId = null) {
+  static async findByAppAndHotel(appName, hotelUuid = null) {
     if (!AppConfiguration.VALID_APPS.includes(appName)) {
       throw new Error(`Invalid app name: ${appName}`);
     }
 
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE app_name = $1 AND hotel_id = $2 AND is_active = true',
-      [appName, hotelId]
+      'SELECT * FROM app_configurations WHERE app_name = $1 AND hotel_uuid = $2 AND is_active = true',
+      [appName, hotelUuid]
     );
     return result.length > 0 ? new AppConfiguration(result[0]) : null;
   }
 
-  static async findAllByHotel(hotelId = null) {
+  static async findAllByHotel(hotelUuid = null) {
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE hotel_id = $1 AND is_active = true ORDER BY app_name',
-      [hotelId]
+      'SELECT * FROM app_configurations WHERE hotel_uuid = $1 AND is_active = true ORDER BY app_name',
+      [hotelUuid]
     );
     return result.map(row => new AppConfiguration(row));
   }
@@ -43,7 +43,7 @@ class AppConfiguration {
     }
 
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE app_name = $1 AND is_active = true ORDER BY hotel_id',
+      'SELECT * FROM app_configurations WHERE app_name = $1 AND is_active = true ORDER BY hotel_uuid',
       [appName]
     );
     return result.map(row => new AppConfiguration(row));
@@ -55,13 +55,13 @@ class AppConfiguration {
     }
 
     const result = await db.query(
-      'SELECT * FROM app_configurations WHERE app_name = $1 AND is_active = true AND logo_url IS NOT NULL ORDER BY hotel_id LIMIT 1',
+      'SELECT * FROM app_configurations WHERE app_name = $1 AND is_active = true AND logo_url IS NOT NULL ORDER BY hotel_uuid LIMIT 1',
       [appName]
     );
     return result.length > 0 ? new AppConfiguration(result[0]) : null;
   }
 
-  static async createOrUpdate(appName, hotelId, data) {
+  static async createOrUpdate(appName, hotelUuid, data) {
     if (!AppConfiguration.VALID_APPS.includes(appName)) {
       throw new Error(`Invalid app name: ${appName}`);
     }
@@ -69,9 +69,9 @@ class AppConfiguration {
     const { app_title, logo_url, favicon_url, description, shared_from_app, is_active = true } = data;
 
     const result = await db.query(`
-      INSERT INTO app_configurations (hotel_id, app_name, app_title, logo_url, favicon_url, description, shared_from_app, is_active) 
+      INSERT INTO app_configurations (hotel_uuid, app_name, app_title, logo_url, favicon_url, description, shared_from_app, is_active) 
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (hotel_id, app_name) DO UPDATE SET 
+      ON CONFLICT (hotel_uuid, app_name) DO UPDATE SET 
       app_title = EXCLUDED.app_title, 
       logo_url = EXCLUDED.logo_url,
       favicon_url = EXCLUDED.favicon_url,
@@ -79,52 +79,63 @@ class AppConfiguration {
       shared_from_app = EXCLUDED.shared_from_app,
       is_active = EXCLUDED.is_active,
       updated_at = CURRENT_TIMESTAMP
-    `, [hotelId, appName, app_title, logo_url, favicon_url, description, shared_from_app, is_active]);
+    `, [hotelUuid, appName, app_title, logo_url, favicon_url, description, shared_from_app, is_active]);
     
     // Buscar o registro atualizado/criado
-    return await AppConfiguration.findByAppAndHotel(appName, hotelId);
+    return await AppConfiguration.findByAppAndHotel(appName, hotelUuid);
   }
 
-  static async deleteByAppAndHotel(appName, hotelId = null) {
+  static async deleteByAppAndHotel(appName, hotelUuid = null) {
     if (!AppConfiguration.VALID_APPS.includes(appName)) {
       throw new Error(`Invalid app name: ${appName}`);
     }
 
     return await db.query(
-      'UPDATE app_configurations SET is_active = false WHERE app_name = $1 AND hotel_id = $2',
-      [appName, hotelId]
+      'UPDATE app_configurations SET is_active = false WHERE app_name = $1 AND hotel_uuid = $2',
+      [appName, hotelUuid]
     );
   }
 
-  static async shareLogoFromApp(sourceApp, targetApp, hotelId = null) {
+  static async shareLogoFromApp(sourceApp, targetApp, hotelUuid = null) {
     if (!AppConfiguration.VALID_APPS.includes(sourceApp) || !AppConfiguration.VALID_APPS.includes(targetApp)) {
       throw new Error('Invalid app names for sharing');
     }
 
     // Buscar configuração da aplicação fonte
-    const sourceConfig = await AppConfiguration.findByAppAndHotel(sourceApp, hotelId);
+    const sourceConfig = await AppConfiguration.findByAppAndHotel(sourceApp, hotelUuid);
     if (!sourceConfig || !sourceConfig.logo_url) {
       throw new Error('Source app does not have a logo to share');
     }
 
     // Atualizar aplicação destino
-    return await AppConfiguration.createOrUpdate(targetApp, hotelId, {
+    return await AppConfiguration.createOrUpdate(targetApp, hotelUuid, {
       logo_url: sourceConfig.logo_url,
       shared_from_app: sourceApp
     });
   }
 
-  static async getAppConfigurations(hotelId = null) {
-    const result = await db.query(
-      'SELECT * FROM app_configurations WHERE hotel_id = $1 AND is_active = true ORDER BY app_name',
-      [hotelId]
-    );
+  static async getAppConfigurations(hotelUuid = null) {
+    let query, params;
+    
+    if (hotelUuid === null) {
+      query = 'SELECT * FROM app_configurations WHERE hotel_uuid IS NULL AND is_active = true ORDER BY app_name';
+      params = [];
+    } else {
+      query = 'SELECT * FROM app_configurations WHERE hotel_uuid = $1 AND is_active = true ORDER BY app_name';
+      params = [hotelUuid];
+    }
+    
+    const result = await db.query(query, params);
 
-    // Organizar por aplicação
+    // Organizar por aplicação - pegar o mais recente de cada app (maior ID)
     const configs = {};
     AppConfiguration.VALID_APPS.forEach(appName => {
-      const config = result.find(r => r.app_name === appName);
-      configs[appName] = config ? new AppConfiguration(config) : null;
+      const appConfigs = result.filter(r => r.app_name === appName);
+      // Pegar o mais recente (maior ID) para evitar duplicatas
+      const latestConfig = appConfigs.length > 0 ? appConfigs.reduce((latest, current) => 
+        current.id > latest.id ? current : latest
+      ) : null;
+      configs[appName] = latestConfig ? new AppConfiguration(latestConfig) : null;
     });
 
     return configs;
@@ -146,9 +157,9 @@ class AppConfiguration {
     } else {
       // Criar novo (com ON CONFLICT DO UPDATE)
       const result = await db.query(`
-        INSERT INTO app_configurations (hotel_id, app_name, app_title, logo_url, favicon_url, description, shared_from_app, is_active) 
+        INSERT INTO app_configurations (hotel_uuid, app_name, app_title, logo_url, favicon_url, description, shared_from_app, is_active) 
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (hotel_id, app_name) DO UPDATE SET 
+        ON CONFLICT (hotel_uuid, app_name) DO UPDATE SET 
         app_title = EXCLUDED.app_title, 
         logo_url = EXCLUDED.logo_url,
         favicon_url = EXCLUDED.favicon_url,
@@ -156,7 +167,7 @@ class AppConfiguration {
         shared_from_app = EXCLUDED.shared_from_app,
         is_active = EXCLUDED.is_active,
         updated_at = CURRENT_TIMESTAMP
-      `, [this.hotel_id, this.app_name, this.app_title, this.logo_url, this.favicon_url, this.description, this.shared_from_app, this.is_active]);
+      `, [this.hotel_uuid, this.app_name, this.app_title, this.logo_url, this.favicon_url, this.description, this.shared_from_app, this.is_active]);
       
       this.id = result.insertId || await this._findId();
       return result;
@@ -173,8 +184,8 @@ class AppConfiguration {
 
   async _findId() {
     const result = await db.query(
-      'SELECT id FROM app_configurations WHERE hotel_id = $1 AND app_name = $2',
-      [this.hotel_id, this.app_name]
+      'SELECT id FROM app_configurations WHERE hotel_uuid = $1 AND app_name = $2',
+      [this.hotel_uuid, this.app_name]
     );
     return result.length > 0 ? result[0].id : null;
   }
@@ -182,7 +193,7 @@ class AppConfiguration {
   toJSON() {
     return {
       id: this.id,
-      hotel_id: this.hotel_id,
+      hotel_uuid: this.hotel_uuid,
       app_name: this.app_name,
       app_title: this.app_title,
       logo_url: this.logo_url,

@@ -97,7 +97,8 @@ export const AppProvider = ({ children }) => {
 
     // Buscar configurações de aplicação após carregar configurações básicas
     const checkForAppConfigurations = () => {
-      const token = localStorage.getItem('token');
+      // Buscar token dos possíveis locais (igual ao apiService)
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
       if (!token) {
         console.log('🔐 AppContext: Token não disponível, não carregando configurações de aplicação');
         return;
@@ -105,10 +106,10 @@ export const AppProvider = ({ children }) => {
 
       const loadAppConfigurations = async () => {
         try {
-          const hotelToUse = savedSelectedHotel || null;
-          console.log('🏨 AppContext: Buscando configurações da aplicação para hotel:', hotelToUse);
+          // ✅ CORREÇÃO: Configurações de aplicações são SEMPRE globais (sem hotel)
+          console.log('🏨 AppContext: Buscando configurações globais da aplicação');
           
-          await fetchAppConfigurations(hotelToUse);
+          await fetchAppConfigurations(null);
         } catch (error) {
           console.error('❌ Erro ao carregar configurações da aplicação inicial:', error);
         }
@@ -179,14 +180,16 @@ export const AppProvider = ({ children }) => {
   // Buscar configurações de aplicações
   const fetchAppConfigurations = async (hotelUuid = null) => {
     try {
-      const token = localStorage.getItem('token');
+      // Buscar token dos possíveis locais (igual ao apiService)
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
       if (!token) {
         console.log('🔐 Token não encontrado, não é possível buscar configurações de aplicações');
         return null;
       }
 
-      const params = hotelUuid ? `?hotel_id=${hotelUuid}` : '';
-      const response = await fetch(`${config.apiBaseUrl}/api/app-configurations${params}`, {
+      // ✅ CORREÇÃO: Configurações de aplicações são SEMPRE globais (sem hotel_id)
+      // As configurações de logo, nome e favicon são do sistema todo, não específicas por hotel
+      const response = await fetch(`${config.apiBaseUrl}/api/app-configurations`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -266,7 +269,8 @@ export const AppProvider = ({ children }) => {
   // Buscar logotipo ativo do histórico
   const fetchActiveLogo = async (hotelUuid = null) => {
     try {
-      const token = localStorage.getItem('token');
+      // Buscar token dos possíveis locais (igual ao apiService)
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
       if (!token) {
         console.log('🔐 Token não encontrado, não é possível buscar logotipo ativo');
         return null;
@@ -308,15 +312,13 @@ export const AppProvider = ({ children }) => {
     // Persistir no localStorage
     if (hotelUuid) {
       localStorage.setItem('selectedHotelUuid', hotelUuid);
-      
-      // Buscar configurações da aplicação para o hotel selecionado
-      fetchAppConfigurations(hotelUuid);
     } else {
       localStorage.removeItem('selectedHotelUuid');
-      
-      // Buscar configurações globais quando nenhum hotel estiver selecionado
-      fetchAppConfigurations(null);
     }
+
+    // ✅ CORREÇÃO: Configurações de aplicações são SEMPRE globais
+    // Não precisamos recarregar quando o hotel muda, pois são configurações do sistema
+    // fetchAppConfigurations(null); // Removido - não é necessário recarregar
 
     // Limpar dados específicos do hotel anterior
     setIntegrations([]);
@@ -694,7 +696,8 @@ export const AppProvider = ({ children }) => {
   const createMarketingMessage = async (messageData) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      // Buscar token dos possíveis locais (igual ao apiService)
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
       const response = await fetch(`${API_CONFIG.baseURL}/api/marketing-messages`, {
         method: 'POST',
         headers: {
@@ -727,7 +730,8 @@ export const AppProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      // Buscar token dos possíveis locais (igual ao apiService)
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
       console.log('📧 Buscando mensagens de marketing para hotel:', hotelUuid);
       
       const response = await fetch(`${API_CONFIG.baseURL}/api/marketing-messages/${hotelUuid}`, {
@@ -758,7 +762,8 @@ export const AppProvider = ({ children }) => {
   const updateMarketingMessage = async (messageId, messageData) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      // Buscar token dos possíveis locais (igual ao apiService)
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
       console.log('📧 Atualizando mensagem de marketing:', messageId);
       
       const response = await fetch(`${API_CONFIG.baseURL}/api/marketing-messages/${messageId}`, {
@@ -797,7 +802,8 @@ export const AppProvider = ({ children }) => {
   const deleteMarketingMessage = async (messageId) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      // Buscar token dos possíveis locais (igual ao apiService)
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
       console.log('📧 Excluindo mensagem de marketing:', messageId);
       
       const response = await fetch(`${API_CONFIG.baseURL}/api/marketing-messages/${messageId}`, {

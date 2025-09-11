@@ -12,7 +12,8 @@
       "Bash(done)",
       "Bash(for file in reports.js marketing-messages.js meta.js dataImport.js systems-catalog.js site-templates.js)",
       "Bash(for:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(start http://localhost:5173/configuracoes)"
     ],
     "deny": [],
     "ask": []

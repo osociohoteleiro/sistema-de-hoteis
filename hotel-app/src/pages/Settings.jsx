@@ -41,18 +41,54 @@ const Settings = () => {
   };
 
   // ✅ CORREÇÃO: Funções para gerenciar configurações usando apiService
-  const loadAppConfigurations = async () => {
-    if (!isInitialized) {
+  const loadAppConfigurations = async (forceReload = false, retryCount = 0) => {
+    // Evitar múltiplas chamadas simultâneas
+    if (appConfigsLoading && !forceReload && retryCount === 0) {
+      console.log('⏸️ Carregamento já em andamento, pulando...');
+      return;
+    }
+    
+    if (!isInitialized || forceReload) {
       setAppConfigsLoading(true);
       
       try {
-        console.log('🔍 loadAppConfigurations - Carregando via apiService...');
+        // Para configurações de aplicações, SEMPRE usar configurações globais
+        // As configurações de aplicações (logos, nomes) são do sistema todo, não específicas por hotel
+        // Buscar token dos possíveis locais (igual ao apiService)
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
         
-        // Usar apiService para carregar configurações
-        const params = selectedHotelUuid ? { hotel_id: selectedHotelUuid } : {};
-        const data = await apiService.getConfigs(params);
+        if (!token) {
+          console.warn('Token não encontrado, aguardando...', { retryCount });
+          if (retryCount < 5) {
+            // Aumentar delay progressivamente
+            const delay = retryCount === 0 ? 100 : (retryCount * 1000);
+            setTimeout(() => loadAppConfigurations(forceReload, retryCount + 1), delay);
+            return;
+          }
+          throw new Error('Token de autenticação não encontrado após múltiplas tentativas');
+        }
+
+        const url = `${config.apiBaseUrl}/api/app-configurations`;
         
-        console.log('🔍 loadAppConfigurations - Dados recebidos da API:', data);
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          if (response.status === 401 && retryCount < 3) {
+            console.warn('Token expirado/inválido, tentando novamente...', { retryCount, status: response.status });
+            // Delay maior para dar tempo do token ser renovado
+            const delay = (retryCount + 1) * 1500;
+            setTimeout(() => loadAppConfigurations(forceReload, retryCount + 1), delay);
+            return;
+          }
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
         
         if (data.configurations) {
           // Inicializar com configurações padrão e depois aplicar dados da API
@@ -62,7 +98,6 @@ const Settings = () => {
           Object.keys(data.configurations).forEach(appName => {
             const apiConfig = data.configurations[appName];
             if (apiConfig) {
-              console.log(`🔍 App ${appName} config da API:`, apiConfig);
               newConfigurations[appName] = {
                 app_title: apiConfig.app_title || '',
                 logo_url: apiConfig.logo_url || '',
@@ -73,7 +108,6 @@ const Settings = () => {
             }
           });
           
-          console.log('🔍 Configurações processadas para o estado:', newConfigurations);
           setAppConfigurations(newConfigurations);
           setIsInitialized(true);
         } else {
@@ -104,7 +138,6 @@ const Settings = () => {
   };
 
   const handleAppLogoUpload = async (appName, logoUrl) => {
-    console.log(`📷 Settings: Novo logo para ${appName}:`, logoUrl);
     
     // Atualizar estado local imediatamente para feedback visual
     handleAppConfigChange(appName, 'logo_url', logoUrl);
@@ -117,7 +150,6 @@ const Settings = () => {
       });
       
       if (saved) {
-        console.log('📷 Logo salvo com sucesso');
       }
     } catch (error) {
       console.error('Erro ao salvar logo:', error);
@@ -125,7 +157,6 @@ const Settings = () => {
   };
 
   const handleAppFaviconUpload = async (appName, faviconUrl) => {
-    console.log(`🔸 Settings: Novo favicon para ${appName}:`, faviconUrl);
     
     // Atualizar estado local imediatamente para feedback visual
     handleAppConfigChange(appName, 'favicon_url', faviconUrl);
@@ -138,7 +169,6 @@ const Settings = () => {
       });
       
       if (saved) {
-        console.log('🔸 Favicon salvo com sucesso');
       }
     } catch (error) {
       console.error('Erro ao salvar favicon:', error);
@@ -151,17 +181,19 @@ const Settings = () => {
       return false;
     }
 
-    const token = localStorage.getItem('token');
-    console.log('🔐 saveAppConfiguration - Token recuperado:', token ? 'Token existe' : 'Token não encontrado');
-    console.log('🔐 saveAppConfiguration - Token length:', token?.length);
+    // Buscar token dos possíveis locais (igual ao apiService)
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
     if (!token) {
       toast.error('Usuário não autenticado');
       return false;
     }
 
     try {
-      console.log('💾 saveAppConfiguration - Salvando:', { appName, configData, selectedHotelUuid });
-      const response = await fetch(`${config.apiBaseUrl}/api/app-configurations/${appName}?hotel_id=${selectedHotelUuid || ''}`, {
+      // Para configurações de aplicações, SEMPRE salvar como configurações globais
+      const url = `${config.apiBaseUrl}/api/app-configurations/${appName}`;
+        
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +208,6 @@ const Settings = () => {
         
         // Recarregar configurações após salvar (exceto quando especificado para não recarregar)
         if (!skipReload) {
-          console.log('💾 Recarregando configurações após salvamento...');
           setTimeout(() => loadAppConfigurations(), 300);
         }
         
@@ -198,14 +229,18 @@ const Settings = () => {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    // Buscar token dos possíveis locais (igual ao apiService)
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
     if (!token) {
       toast.error('Usuário não autenticado');
       return;
     }
 
     try {
-      const response = await fetch(`${config.apiBaseUrl}/api/app-configurations/share-logo?hotel_id=${selectedHotelUuid || ''}`, {
+      // Para configurações de aplicações, SEMPRE usar configurações globais
+      const url = `${config.apiBaseUrl}/api/app-configurations/share-logo`;
+        
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -263,19 +298,27 @@ const Settings = () => {
     toast.success('Configurações de upload salvas com sucesso!');
   };
 
+  // Reset do estado de inicialização quando componente é montado
+  useEffect(() => {
+    setIsInitialized(false);
+    setAppConfigsLoading(false);
+  }, []);
+
   // Carregar configurações quando a aba de aplicações for ativada
   useEffect(() => {
-    if (activeTab === 'apps') {
-      console.log('📱 Aba Aplicações ativada, carregando configurações...');
+    if (activeTab === 'apps' && !isInitialized) {
       loadAppConfigurations();
     }
-  }, [activeTab]);
+  }, [activeTab, isInitialized]);
 
-  // Carregar configurações automaticamente quando o componente inicializa ou quando o hotel muda
+  // Carregar configurações automaticamente quando o componente inicializa
   useEffect(() => {
-    console.log('⚡ Settings: Carregamento inicial ou mudança de hotel, carregando configurações...');
-    loadAppConfigurations();
-  }, [selectedHotelUuid, config.apiBaseUrl]);
+    // Buscar token dos possíveis locais (igual ao apiService)
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken') || localStorage.getItem('token');
+    if (token && config.apiBaseUrl && !isInitialized) {
+      loadAppConfigurations();
+    }
+  }, [selectedHotelUuid, config.apiBaseUrl, isInitialized]);
 
   return (
     <div className="space-y-6">
@@ -325,6 +368,7 @@ const Settings = () => {
                   </div>
                 </div>
               </div>
+
 
               {/* Loading State */}
               {appConfigsLoading && (
@@ -491,57 +535,12 @@ const Settings = () => {
                   </button>
                   
                   <button
-                    onClick={loadAppConfigurations}
+                    onClick={() => loadAppConfigurations(true)}
                     className="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
                   >
                     Recarregar da API
                   </button>
 
-                  <button
-                    onClick={() => {
-                      const token = localStorage.getItem('token');
-                      console.log('🔍 Debug Token:', { 
-                        exists: !!token, 
-                        length: token?.length, 
-                        preview: token?.substring(0, 20) + '...' 
-                      });
-                      toast.success(`Token: ${token ? 'Existe' : 'Não encontrado'}`);
-                    }}
-                    className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-                  >
-                    Debug Token
-                  </button>
-
-                  <button
-                    onClick={async () => {
-                      console.log('🔍 Testando carregamento direto da API...');
-                      const token = localStorage.getItem('token');
-                      const url = `${config.apiBaseUrl}/api/app-configurations?hotel_id=${selectedHotelUuid || ''}`;
-                      console.log('🔍 URL:', url);
-                      console.log('🔍 Token preview:', token?.substring(0, 30) + '...');
-                      
-                      try {
-                        const response = await fetch(url, {
-                          headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                          }
-                        });
-                        
-                        console.log('🔍 Response status:', response.status);
-                        const data = await response.json();
-                        console.log('🔍 Response data:', data);
-                        
-                        toast.success('Veja console para detalhes');
-                      } catch (error) {
-                        console.error('🔍 Erro:', error);
-                        toast.error('Erro - veja console');
-                      }
-                    }}
-                    className="bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-                  >
-                    Test API
-                  </button>
                 </div>
               </div>
             </div>

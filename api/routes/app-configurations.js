@@ -2,8 +2,18 @@ const express = require('express');
 const Joi = require('joi');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const AppConfiguration = require('../models/AppConfiguration');
+const db = require('../config/database');
 
 const router = express.Router();
+
+// Função auxiliar para validar UUID de hotel
+async function validateHotelUuid(hotelUuid) {
+  if (!hotelUuid) return true; // null é válido para configurações globais
+  
+  // Verificar se hotel existe usando UUID
+  const result = await db.query('SELECT hotel_uuid FROM hotels WHERE hotel_uuid = $1', [hotelUuid]);
+  return result.length > 0;
+}
 
 // Validação schemas
 const appConfigSchema = Joi.object({
@@ -29,13 +39,24 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const { hotel_id } = req.query;
     
-    let hotelIdToUse = null;
+    let hotelUuidToUse = null;
     
     if (hotel_id) {
+      // Usar UUID diretamente
+      hotelUuidToUse = hotel_id;
+      
+      // Verificar se hotel existe
+      const hotelExists = await validateHotelUuid(hotel_id);
+      if (!hotelExists) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      
       // Verificar se usuário tem acesso ao hotel
       if (req.user.user_type === 'HOTEL') {
         const userHotels = await req.user.getHotels();
-        const hasAccess = userHotels.some(h => h.id == hotel_id);
+        const hasAccess = userHotels.some(h => h.hotel_uuid === hotel_id);
         
         if (!hasAccess) {
           return res.status(403).json({
@@ -43,14 +64,13 @@ router.get('/', authenticateToken, async (req, res) => {
           });
         }
       }
-      hotelIdToUse = hotel_id;
     } else if (req.user.user_type === 'HOTEL') {
       return res.status(403).json({
         error: 'Usuários do tipo HOTEL devem especificar hotel_id'
       });
     }
 
-    const configurations = await AppConfiguration.getAppConfigurations(hotelIdToUse);
+    const configurations = await AppConfiguration.getAppConfigurations(hotelUuidToUse);
 
     res.json({ 
       configurations,
@@ -79,13 +99,23 @@ router.get('/:appName', authenticateToken, async (req, res) => {
       });
     }
     
-    let hotelIdToUse = null;
+    let hotelUuidToUse = null;
     
     if (hotel_id) {
+      hotelUuidToUse = hotel_id;
+      
+      // Verificar se hotel existe
+      const hotelExists = await validateHotelUuid(hotel_id);
+      if (!hotelExists) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      
       // Verificar acesso ao hotel se especificado
       if (req.user.user_type === 'HOTEL') {
         const userHotels = await req.user.getHotels();
-        const hasAccess = userHotels.some(h => h.id == hotel_id);
+        const hasAccess = userHotels.some(h => h.hotel_uuid === hotel_id);
         
         if (!hasAccess) {
           return res.status(403).json({
@@ -93,14 +123,13 @@ router.get('/:appName', authenticateToken, async (req, res) => {
           });
         }
       }
-      hotelIdToUse = hotel_id;
     } else if (req.user.user_type === 'HOTEL') {
       return res.status(403).json({
         error: 'Usuários do tipo HOTEL devem especificar hotel_id'
       });
     }
 
-    const configuration = await AppConfiguration.findByAppAndHotel(appName, hotelIdToUse);
+    const configuration = await AppConfiguration.findByAppAndHotel(appName, hotelUuidToUse);
 
     if (!configuration) {
       return res.status(404).json({
@@ -140,13 +169,24 @@ router.post('/:appName', authenticateToken, async (req, res) => {
       });
     }
 
-    let hotelIdToUse = null;
+    let hotelUuidToUse = null;
     
     if (hotel_id) {
+      // Usar UUID diretamente
+      hotelUuidToUse = hotel_id;
+      
+      // Verificar se hotel existe
+      const hotelExists = await validateHotelUuid(hotel_id);
+      if (!hotelExists) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      
       // Verificações de permissão
       if (req.user.user_type === 'HOTEL') {
         const userHotels = await req.user.getHotels();
-        const hasAccess = userHotels.some(h => h.id == hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
+        const hasAccess = userHotels.some(h => h.hotel_uuid === hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
         
         if (!hasAccess) {
           return res.status(403).json({
@@ -154,7 +194,6 @@ router.post('/:appName', authenticateToken, async (req, res) => {
           });
         }
       }
-      hotelIdToUse = hotel_id;
     } else if (req.user.user_type === 'HOTEL') {
       return res.status(400).json({
         error: 'hotel_id é obrigatório para usuários de hotel'
@@ -166,7 +205,7 @@ router.post('/:appName', authenticateToken, async (req, res) => {
     }
 
     // Criar/atualizar configuração
-    const configuration = await AppConfiguration.createOrUpdate(appName, hotelIdToUse, value);
+    const configuration = await AppConfiguration.createOrUpdate(appName, hotelUuidToUse, value);
 
     res.status(201).json({
       message: 'Configuração da aplicação salva com sucesso',
@@ -195,13 +234,24 @@ router.delete('/:appName', authenticateToken, async (req, res) => {
       });
     }
 
-    let hotelIdToUse = null;
+    let hotelUuidToUse = null;
     
     if (hotel_id) {
+      // Usar UUID diretamente
+      hotelUuidToUse = hotel_id;
+      
+      // Verificar se hotel existe
+      const hotelExists = await validateHotelUuid(hotel_id);
+      if (!hotelExists) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      
       // Verificações de permissão
       if (req.user.user_type === 'HOTEL') {
         const userHotels = await req.user.getHotels();
-        const hasAccess = userHotels.some(h => h.id == hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
+        const hasAccess = userHotels.some(h => h.hotel_uuid === hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
         
         if (!hasAccess) {
           return res.status(403).json({
@@ -209,7 +259,6 @@ router.delete('/:appName', authenticateToken, async (req, res) => {
           });
         }
       }
-      hotelIdToUse = hotel_id;
     } else if (req.user.user_type === 'HOTEL') {
       return res.status(400).json({
         error: 'hotel_id é obrigatório para usuários de hotel'
@@ -220,7 +269,7 @@ router.delete('/:appName', authenticateToken, async (req, res) => {
       });
     }
 
-    const result = await AppConfiguration.deleteByAppAndHotel(appName, hotelIdToUse);
+    const result = await AppConfiguration.deleteByAppAndHotel(appName, hotelUuidToUse);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
@@ -255,13 +304,24 @@ router.post('/share-logo', authenticateToken, async (req, res) => {
 
     const { source_app, target_apps } = value;
 
-    let hotelIdToUse = null;
+    let hotelUuidToUse = null;
     
     if (hotel_id) {
+      // Usar UUID diretamente
+      hotelUuidToUse = hotel_id;
+      
+      // Verificar se hotel existe
+      const hotelExists = await validateHotelUuid(hotel_id);
+      if (!hotelExists) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      
       // Verificações de permissão
       if (req.user.user_type === 'HOTEL') {
         const userHotels = await req.user.getHotels();
-        const hasAccess = userHotels.some(h => h.id == hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
+        const hasAccess = userHotels.some(h => h.hotel_uuid === hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
         
         if (!hasAccess) {
           return res.status(403).json({
@@ -269,7 +329,6 @@ router.post('/share-logo', authenticateToken, async (req, res) => {
           });
         }
       }
-      hotelIdToUse = hotel_id;
     } else if (req.user.user_type === 'HOTEL') {
       return res.status(400).json({
         error: 'hotel_id é obrigatório para usuários de hotel'
@@ -286,7 +345,7 @@ router.post('/share-logo', authenticateToken, async (req, res) => {
     // Compartilhar logo com cada aplicação de destino
     for (const targetApp of target_apps) {
       try {
-        const result = await AppConfiguration.shareLogoFromApp(source_app, targetApp, hotelIdToUse);
+        const result = await AppConfiguration.shareLogoFromApp(source_app, targetApp, hotelUuidToUse);
         results.push({
           app: targetApp,
           success: true,
@@ -332,13 +391,24 @@ router.post('/bulk-update', authenticateToken, async (req, res) => {
       });
     }
 
-    let hotelIdToUse = null;
+    let hotelUuidToUse = null;
     
     if (hotel_id) {
+      // Usar UUID diretamente
+      hotelUuidToUse = hotel_id;
+      
+      // Verificar se hotel existe
+      const hotelExists = await validateHotelUuid(hotel_id);
+      if (!hotelExists) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      
       // Verificações de permissão
       if (req.user.user_type === 'HOTEL') {
         const userHotels = await req.user.getHotels();
-        const hasAccess = userHotels.some(h => h.id == hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
+        const hasAccess = userHotels.some(h => h.hotel_uuid === hotel_id && ['OWNER', 'MANAGER'].includes(h.user_role));
         
         if (!hasAccess) {
           return res.status(403).json({
@@ -346,7 +416,6 @@ router.post('/bulk-update', authenticateToken, async (req, res) => {
           });
         }
       }
-      hotelIdToUse = hotel_id;
     } else if (req.user.user_type === 'HOTEL') {
       return res.status(400).json({
         error: 'hotel_id é obrigatório para usuários de hotel'
@@ -384,7 +453,7 @@ router.post('/bulk-update', authenticateToken, async (req, res) => {
       }
 
       try {
-        const result = await AppConfiguration.createOrUpdate(appName, hotelIdToUse, value);
+        const result = await AppConfiguration.createOrUpdate(appName, hotelUuidToUse, value);
         results.push({
           app: appName,
           success: true,

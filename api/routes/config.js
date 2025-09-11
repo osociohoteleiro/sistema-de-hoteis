@@ -3,8 +3,23 @@ const Joi = require('joi');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { Config, ApiEndpoint } = require('../models/Config');
 const LogoHistory = require('../models/LogoHistory');
+const db = require('../config/database');
 
 const router = express.Router();
+
+// Função auxiliar para converter UUID de hotel para ID numérico
+async function getHotelIdFromUuid(hotelUuid) {
+  if (!hotelUuid) return null;
+  
+  // Se já é um número, retornar como está
+  if (/^\d+$/.test(hotelUuid)) {
+    return parseInt(hotelUuid);
+  }
+  
+  // Se é UUID, buscar o ID numérico
+  const result = await db.query('SELECT id FROM hotels WHERE hotel_uuid = $1', [hotelUuid]);
+  return result.length > 0 ? result[0].id : null;
+}
 
 // Validação schemas
 const configSchema = Joi.object({
@@ -34,10 +49,19 @@ router.get('/', authenticateToken, async (req, res) => {
     let configs;
     
     if (hotel_id) {
+      // Converter UUID para ID numérico se necessário
+      const numericHotelId = await getHotelIdFromUuid(hotel_id);
+      
+      if (!numericHotelId) {
+        return res.status(404).json({
+          error: 'Hotel não encontrado'
+        });
+      }
+      
       // Verificar se usuário tem acesso ao hotel
       if (req.user.user_type === 'HOTEL') {
         const userHotels = await req.user.getHotels();
-        const hasAccess = userHotels.some(h => h.id == hotel_id);
+        const hasAccess = userHotels.some(h => h.id == numericHotelId);
         
         if (!hasAccess) {
           return res.status(403).json({
@@ -46,7 +70,7 @@ router.get('/', authenticateToken, async (req, res) => {
         }
       }
       
-      configs = await Config.findAllByHotel(hotel_id);
+      configs = await Config.findAllByHotel(numericHotelId);
     } else if (req.user.user_type === 'HOTEL') {
       return res.status(403).json({
         error: 'Usuários do tipo HOTEL devem especificar hotel_id'
