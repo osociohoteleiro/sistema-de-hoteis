@@ -32,7 +32,9 @@ class DatabaseIntegration {
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        // Usar SSL apenas se não estiver explicitamente desabilitado
+        ssl: process.env.PGSSLDISABLE === 'true' ? false : 
+             (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false)
       };
 
       this.pool = new Pool(config);
