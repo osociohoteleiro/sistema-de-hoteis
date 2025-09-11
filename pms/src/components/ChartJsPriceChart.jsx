@@ -297,7 +297,12 @@ const ChartJsPriceChart = ({
   }, [selectedHotelUuid, currentStartDate, periodDays]);
 
   const loadPriceData = async () => {
-    if (!selectedHotelUuid) return;
+    console.log('🚀 GRÁFICO: loadPriceData called with selectedHotelUuid:', selectedHotelUuid);
+    
+    if (!selectedHotelUuid) {
+      console.log('❌ GRÁFICO: No hotel UUID, returning early');
+      return;
+    }
     
     setLoading(true);
     setError(null);
@@ -307,31 +312,52 @@ const ChartJsPriceChart = ({
       const startDateStr = format(currentStartDate, 'yyyy-MM-dd');
       const endDateStr = format(endDate, 'yyyy-MM-dd');
       
-      const response = await apiService.request(
-        `/rate-shopper/${selectedHotelUuid}/price-trends?start_date=${startDateStr}&end_date=${endDateStr}&future_days=${periodDays}`
-      );
+      console.log('📅 GRÁFICO: Date range:', { startDateStr, endDateStr, periodDays });
+      
+      const apiUrl = `/rate-shopper/${selectedHotelUuid}/price-trends?start_date=${startDateStr}&end_date=${endDateStr}&future_days=${periodDays}`;
+      console.log('🌐 GRÁFICO: Making API call to:', apiUrl);
+      
+      const response = await apiService.request(apiUrl);
+      
+      console.log('📡 GRÁFICO: API response received:', {
+        success: response.success,
+        hasData: !!response.data,
+        hasChartData: !!response.data?.chart_data,
+        chartDataLength: response.data?.chart_data?.length,
+        mainProperties: response.data?.main_properties
+      });
       
       if (response.success && response.data.chart_data) {
-        console.log('✅ Usando DADOS REAIS da API');
-        console.log('🏆 Propriedades principais:', response.data.main_properties);
+        console.log('✅ GRÁFICO: Usando DADOS REAIS da API');
+        console.log('🏆 GRÁFICO: Propriedades principais:', response.data.main_properties);
+        console.log('📊 GRÁFICO: Primeiro registro de dados:', response.data.chart_data[0]);
         processRealData(response.data.chart_data, currentStartDate, endDate, response.data.main_properties);
       } else {
-        console.log('⚠️ Usando DADOS MOCKADOS');
+        console.log('⚠️ GRÁFICO: Usando DADOS MOCKADOS - response:', response);
         processMockData(currentStartDate, endDate);
       }
     } catch (err) {
-      console.error('Erro ao carregar dados:', err);
+      console.error('❌ GRÁFICO: Erro ao carregar dados:', err);
+      console.error('❌ GRÁFICO: Error stack:', err.stack);
+      setError('Erro ao carregar dados do gráfico: ' + err.message);
       processMockData(currentStartDate, endDate);
     } finally {
+      console.log('✅ GRÁFICO: loadPriceData finished, setting loading to false');
       setLoading(false);
     }
   };
 
   const processRealData = (apiData, startDate, endDate, mainProperties = []) => {
     // Log inicial para debug
-    console.log('📊 API Data recebida:', apiData.length, 'registros');
-    console.log('📊 Primeiros 3 registros:', apiData.slice(0, 3));
-    console.log('📊 Últimos 3 registros:', apiData.slice(-3));
+    console.log('🔧 GRÁFICO: processRealData called with:', {
+      apiDataLength: apiData.length,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      mainProperties
+    });
+    console.log('📊 GRÁFICO: API Data recebida:', apiData.length, 'registros');
+    console.log('📊 GRÁFICO: Primeiros 3 registros:', apiData.slice(0, 3));
+    console.log('📊 GRÁFICO: Últimos 3 registros:', apiData.slice(-3));
     
     // A API retorna dados já processados no formato: [{ date: '2025-01-01', 'Hotel A': 280, 'Hotel B': 250, ... }]
     // Cada objeto representa uma data com todos os preços das propriedades para aquela data
@@ -590,10 +616,19 @@ const ChartJsPriceChart = ({
       processedData
     };
     
+    console.log('🎯 GRÁFICO: Setting chart data with:', {
+      labelsCount: labels.length,
+      datasetsCount: datasets.length,
+      firstLabel: labels[0],
+      lastLabel: labels[labels.length - 1],
+      datasetsInfo: datasets.map(d => ({ label: d.label, dataCount: d.data.length }))
+    });
+    
     setChartData(newChartData);
     
     // Informar ao Dashboard sobre mudança de dados
     if (onDataChange) {
+      console.log('📞 GRÁFICO: Calling onDataChange callback');
       onDataChange(newChartData, propertiesList);
     }
 
@@ -795,6 +830,14 @@ const ChartJsPriceChart = ({
       
       {/* Gráfico Chart.js */}
       <div className="p-6">
+        {(() => {
+          console.log('🖼️ GRÁFICO: Render check - chartData exists:', !!chartData);
+          console.log('🖼️ GRÁFICO: Render check - datasets length:', chartData?.datasets?.length || 0);
+          console.log('🖼️ GRÁFICO: Render check - loading:', loading);
+          console.log('🖼️ GRÁFICO: Render check - error:', error);
+          return null;
+        })()}
+        
         {chartData && chartData.datasets.length > 0 ? (
           <div className="h-96">
             <Line 
