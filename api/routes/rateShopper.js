@@ -110,15 +110,15 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
     
     if (start_date && end_date) {
       // Período personalizado
-      dateCondition = `AND rsp.captured_at >= $2 AND rsp.captured_at <= $3`;
+      dateCondition = `AND rsp.scraped_at >= $2 AND rsp.scraped_at <= $3`;
       dateParams.push(start_date, end_date);
     } else if (days) {
       // Número de dias especificado
       const daysNum = parseInt(days) || 30;
-      dateCondition = `AND rsp.captured_at >= CURRENT_TIMESTAMP - INTERVAL '${daysNum} days'`;
+      dateCondition = `AND rsp.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '${daysNum} days'`;
     } else {
       // Padrão: últimos 30 dias
-      dateCondition = `AND rsp.captured_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'`;
+      dateCondition = `AND rsp.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'`;
     }
 
     // Price trends com período customizável - TEMPORARIAMENTE DESABILITADO PARA DEBUG
@@ -137,20 +137,20 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         SELECT 
           rsp.property_id,
           rsp.price as latest_price,
-          rsp.captured_at as latest_captured_at,
+          rsp.scraped_at as latest_captured_at,
           COUNT(rsp2.id) as price_count_30d,
           COALESCE(AVG(rsp2.price), 0) as avg_price_30d
         FROM rate_shopper_prices rsp
         JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
         LEFT JOIN rate_shopper_prices rsp2 ON rsp.property_id = rsp2.property_id 
           AND rsp2.captured_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
-        WHERE rsp.captured_at = (
+        WHERE rsp.scraped_at = (
           SELECT MAX(rsp3.captured_at)
           FROM rate_shopper_prices rsp3
           JOIN rate_shopper_searches rs3 ON rsp3.search_id = rs3.id
           WHERE rsp3.property_id = rsp.property_id AND rs3.search_status = 'COMPLETED'
         )
-        GROUP BY rsp.property_id, rsp.price, rsp.captured_at
+        GROUP BY rsp.property_id, rsp.price, rsp.scraped_at
       ) latest ON rsp_prop.id = latest.property_id
       WHERE rsp_prop.hotel_id = $1 AND rsp_prop.active = TRUE
       ORDER BY rsp_prop.property_name
@@ -321,25 +321,25 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
       dateParams.push(startDateObj.toISOString().split('T')[0], endDateObj.toISOString().split('T')[0]);
     }
 
-    // Buscar dados históricos - versão simples usando nomes de produção
+    // Buscar dados históricos - usando nomes corretos das colunas locais
     const historicalData = await db.query(`
       WITH latest_extraction_per_date AS (
         SELECT 
-          DATE(rsp.check_in) as date,
+          DATE(rsp.check_in_date) as date,
           rsp.property_id,
-          MAX(rsp.captured_at) as latest_captured_at
+          MAX(rsp.scraped_at) as latest_captured_at
         FROM rate_shopper_prices rsp
         JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
         WHERE rs.hotel_id = $1
-          AND DATE(rsp.check_in) >= $2 
-          AND DATE(rsp.check_in) <= $3
-          AND rs.search_status IN ('COMPLETED', 'CANCELLED')
-        GROUP BY DATE(rsp.check_in), rsp.property_id
+          AND DATE(rsp.check_in_date_date) >= $2 
+          AND DATE(rsp.check_in_date_date) <= $3
+          AND rs.status IN ('COMPLETED', 'CANCELLED')
+        GROUP BY DATE(rsp.check_in_date_date), rsp.property_id
       )
       SELECT 
         latest.date,
         rsp_prop.property_name,
-        COALESCE(rsp_prop.platform, rsp_prop.booking_engine, 'booking') as platform,
+        COALESCE(rsp_prop.platform, 'booking') as platform,
         COALESCE(rsp_prop.is_main_property, false) as is_main_property,
         rsp.price as avg_price,
         rsp.price as min_price,
@@ -354,8 +354,8 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
         false as is_mostly_bundle
       FROM latest_extraction_per_date latest
       JOIN rate_shopper_prices rsp ON rsp.property_id = latest.property_id 
-        AND DATE(rsp.check_in) = latest.date 
-        AND rsp.captured_at = latest.latest_captured_at
+        AND DATE(rsp.check_in_date) = latest.date 
+        AND rsp.scraped_at = latest.latest_captured_at
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
       ORDER BY latest.date ASC, COALESCE(rsp_prop.is_main_property, false) DESC, rsp_prop.property_name
     `, dateParams);
@@ -545,7 +545,7 @@ router.get('/:hotel_uuid/check-dates', async (req, res) => {
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
       WHERE rs.hotel_id = $1
-        AND (DATE(rsp.check_in) < '2025-09-05' OR DATE(rsp.check_in) > '2025-10-31')
+        AND (DATE(rsp.check_in_date) < '2025-09-05' OR DATE(rsp.check_in_date) > '2025-10-31')
     `, [hotel_id]);
 
     res.json({
@@ -586,11 +586,11 @@ router.get('/:hotel_id/debug-prices', async (req, res) => {
     let query = `
       SELECT 
         rsp.id,
-        rsp.check_in,
+        rsp.check_in_date,
         rsp.check_out_date,
         rsp.price,
         rsp.room_type,
-        rsp.captured_at,
+        rsp.scraped_at,
         rsp_prop.property_name,
         rs.status as search_status,
         rs.check_in_date as search_start,
@@ -610,16 +610,16 @@ router.get('/:hotel_id/debug-prices', async (req, res) => {
     
     // Adicionar filtros de data se fornecidos
     if (start_date) {
-      query += ` AND rsp.check_in >= $${queryParams.length + 1}`;
+      query += ` AND rsp.check_in_date >= $${queryParams.length + 1}`;
       queryParams.push(start_date);
     }
     
     if (end_date) {
-      query += ` AND rsp.check_in <= $${queryParams.length + 1}`;
+      query += ` AND rsp.check_in_date <= $${queryParams.length + 1}`;
       queryParams.push(end_date);
     }
     
-    query += ` ORDER BY rsp.check_in ASC, rsp.captured_at DESC LIMIT 100`;
+    query += ` ORDER BY rsp.check_in_date ASC, rsp.scraped_at DESC LIMIT 100`;
     
     console.log('📊 API debug-prices: Query final:', query, queryParams);
 
@@ -631,8 +631,8 @@ router.get('/:hotel_id/debug-prices', async (req, res) => {
       SELECT 
         COUNT(*) as total_records,
         COUNT(DISTINCT rsp.property_id) as unique_properties,
-        MIN(rsp.check_in) as oldest_date,
-        MAX(rsp.check_in) as newest_date,
+        MIN(rsp.check_in_date) as oldest_date,
+        MAX(rsp.check_in_date) as newest_date,
         MIN(rsp.price) as min_price,
         MAX(rsp.price) as max_price,
         AVG(rsp.price) as avg_price
@@ -645,12 +645,12 @@ router.get('/:hotel_id/debug-prices', async (req, res) => {
     
     // Aplicar os mesmos filtros de data nas estatísticas
     if (start_date) {
-      statsQuery += ` AND rsp.check_in >= $${statsParams.length + 1}`;
+      statsQuery += ` AND rsp.check_in_date >= $${statsParams.length + 1}`;
       statsParams.push(start_date);
     }
     
     if (end_date) {
-      statsQuery += ` AND rsp.check_in <= $${statsParams.length + 1}`;
+      statsQuery += ` AND rsp.check_in_date <= $${statsParams.length + 1}`;
       statsParams.push(end_date);
     }
     
@@ -698,9 +698,9 @@ router.get('/:hotel_id/price-history', async (req, res) => {
       WITH price_comparisons AS (
         SELECT 
           rsp1.property_id,
-          rsp1.check_in,
+          rsp1.check_in_date,
           rsp1.price as current_price,
-          rsp1.captured_at as current_captured_at,
+          rsp1.scraped_at as current_captured_at,
           rsp1.hotel_id,
           p.property_name,
           rsp2.price as previous_price,
@@ -723,16 +723,16 @@ router.get('/:hotel_id/price-history', async (req, res) => {
         JOIN rate_shopper_properties p ON rsp1.property_id = p.id
         LEFT JOIN rate_shopper_prices rsp2 ON (
           rsp1.property_id = rsp2.property_id 
-          AND rsp1.check_in = rsp2.check_in
+          AND rsp1.check_in_date = rsp2.check_in_date
           AND rsp1.hotel_id = rsp2.hotel_id
-          AND rsp2.captured_at < rsp1.captured_at
+          AND rsp2.captured_at < rsp1.scraped_at
           AND rsp2.captured_at = (
             SELECT MAX(captured_at) 
             FROM rate_shopper_prices rsp3 
             WHERE rsp3.property_id = rsp1.property_id 
-              AND rsp3.check_in = rsp1.check_in
+              AND rsp3.check_in_date = rsp1.check_in_date
               AND rsp3.hotel_id = rsp1.hotel_id
-              AND rsp3.captured_at < rsp1.captured_at
+              AND rsp3.captured_at < rsp1.scraped_at
           )
         )
         WHERE rsp1.hotel_id = $1
@@ -824,16 +824,16 @@ router.get('/:hotel_id/property-history/:property_id', async (req, res) => {
     const query = `
       SELECT 
         rsp.price,
-        rsp.captured_at,
+        rsp.scraped_at,
         rsp.room_type,
         p.property_name,
-        rsp.check_in
+        rsp.check_in_date
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_properties p ON rsp.property_id = p.id
       WHERE rsp.hotel_id = $1 
         AND rsp.property_id = $2 
-        AND rsp.check_in::date = $3::date
-      ORDER BY rsp.captured_at ASC
+        AND rsp.check_in_date::date = $3::date
+      ORDER BY rsp.scraped_at ASC
     `;
 
     const priceHistory = await db.query(query, [hotelId, parseInt(property_id), date]);
@@ -2202,9 +2202,9 @@ router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
     const exactMatches = await db.query(`
       SELECT 
         rsp.id,
-        rsp.check_in,
+        rsp.check_in_date,
         rsp.price,
-        rsp.captured_at,
+        rsp.scraped_at,
         rsp_prop.property_name,
         rs.search_status,
         rs.completed_at
@@ -2212,21 +2212,21 @@ router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
       JOIN rate_shopper_properties rsp_prop ON rsp.property_id = rsp_prop.id
       WHERE rs.hotel_id = $1 
-      AND rsp.check_in::date = $2::date
-      ORDER BY rsp.captured_at DESC
+      AND rsp.check_in_date::date = $2::date
+      ORDER BY rsp.scraped_at DESC
     `, [hotelId, target_date]);
     
     // Buscar próximas datas disponíveis
     const nearbyDates = await db.query(`
       SELECT 
-        DISTINCT rsp.check_in::date as date,
+        DISTINCT rsp.check_in_date::date as date,
         COUNT(*) as total_prices
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
       WHERE rs.hotel_id = $1 
-      AND rsp.check_in::date BETWEEN $2::date - INTERVAL '5 days' AND $2::date + INTERVAL '5 days'
-      GROUP BY rsp.check_in::date
-      ORDER BY rsp.check_in::date
+      AND rsp.check_in_date::date BETWEEN $2::date - INTERVAL '5 days' AND $2::date + INTERVAL '5 days'
+      GROUP BY rsp.check_in_date::date
+      ORDER BY rsp.check_in_date::date
     `, [hotelId, target_date]);
     
     // Verificar se há buscas realizadas que cobriam essa data
@@ -2240,7 +2240,7 @@ router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
         rs.updated_at,
         COUNT(rsp.id) as prices_found
       FROM rate_shopper_searches rs
-      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id AND rsp.check_in_date::date = $2::date
+      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id AND rsp.check_in_date_date::date = $2::date
       WHERE rs.hotel_id = $1 
       AND rs.check_in_date <= $2::date 
       AND rs.check_out_date >= $2::date
@@ -2273,6 +2273,60 @@ router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
   } catch (error) {
     console.error('Debug specific date error:', error);
     res.status(500).json({ error: 'Failed to debug specific date: ' + error.message });
+  }
+});
+
+// Rota temporária para consultar distribuição de datas
+router.get('/debug/date-distribution/:hotel_id', async (req, res) => {
+  try {
+    const hotel_id = req.params.hotel_id;
+    
+    // Verificar se hotel_id é UUID ou integer e converter para ID
+    let hotelId;
+    if (hotel_id.includes('-')) {
+      const hotel = await Hotel.findByUuid(hotel_id);
+      if (!hotel) {
+        return res.status(404).json({ error: 'Hotel not found' });
+      }
+      hotelId = hotel.id;
+    } else {
+      hotelId = parseInt(hotel_id);
+    }
+
+    const query = `
+      SELECT 
+        DATE(extracted_at) as data_extracao, 
+        COUNT(*) as total_precos,
+        MIN(extracted_at) as primeira_extracao,
+        MAX(extracted_at) as ultima_extracao
+      FROM rate_shopper_prices 
+      WHERE hotel_id = ? 
+      GROUP BY DATE(extracted_at) 
+      ORDER BY data_extracao DESC 
+      LIMIT 50
+    `;
+
+    const results = await db.query(query, [hotelId]);
+    
+    const summary = await db.query(`
+      SELECT 
+        COUNT(*) as total_precos,
+        MIN(DATE(extracted_at)) as primeira_data,
+        MAX(DATE(extracted_at)) as ultima_data,
+        COUNT(DISTINCT DATE(extracted_at)) as total_dias_com_dados
+      FROM rate_shopper_prices 
+      WHERE hotel_id = ?
+    `, [hotelId]);
+
+    res.json({
+      hotel_id: hotelId,
+      summary: summary.rows[0],
+      distribuicao_por_data: results.rows
+    });
+
+  } catch (error) {
+    console.error('Date distribution error:', error);
+    res.status(500).json({ error: 'Failed to get date distribution: ' + error.message });
   }
 });
 

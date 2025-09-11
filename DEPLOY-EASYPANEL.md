@@ -121,8 +121,11 @@ POSTGRES_DB=hotel_osh_db
 JWT_SECRET=sua-chave-jwt-super-segura-minimo-32-caracteres
 JWT_EXPIRES_IN=24h
 
-# CORS
-CORS_ORIGIN=https://app.seu-dominio.com,https://pms.seu-dominio.com
+# CORS - MÚLTIPLOS DOMÍNIOS (IMPORTANTE!)
+CORS_ORIGINS=https://app.seu-dominio.com,https://pms.seu-dominio.com
+
+# Para seu caso específico use:
+# CORS_ORIGINS=https://pms.osociohoteleiro.com.br,https://app.osociohoteleiro.com.br
 
 # Cache
 CACHE_TTL_DEFAULT=3600
@@ -264,9 +267,23 @@ EasyPanel gerencia automaticamente certificados SSL via Let's Encrypt.
 #### ❌ CORS Error
 **Erro**: CORS policy blocked
 **Solução**:
-1. Adicione o domínio frontend no `CORS_ORIGIN`
-2. Verifique se HTTPS está funcionando
-3. Confira se não há typos nos domínios
+1. Adicione o domínio frontend no `CORS_ORIGINS` (note o S no final)
+2. Use vírgulas SEM ESPAÇOS para separar múltiplos domínios
+3. Verifique se HTTPS está funcionando
+4. Confira se não há typos nos domínios
+5. Para debug, veja os logs da API que mostram quais domínios estão sendo bloqueados
+
+**Exemplo de configuração correta**:
+```env
+# ✅ Correto
+CORS_ORIGINS=https://pms.osociohoteleiro.com.br,https://app.osociohoteleiro.com.br
+
+# ❌ Incorreto (espaços após vírgulas)
+CORS_ORIGINS=https://pms.osociohoteleiro.com.br, https://app.osociohoteleiro.com.br
+
+# ❌ Incorreto (nome da variável)
+CORS_ORIGIN=https://pms.osociohoteleiro.com.br
+```
 
 ### Comandos Úteis
 

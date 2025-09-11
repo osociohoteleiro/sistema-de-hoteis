@@ -189,7 +189,14 @@
       "Bash(git submodule:*)",
       "Bash(rm:*)",
       "Bash(git rm:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Read(//d/d/APPS-OSH/api/**)",
+      "Read(//d/d/APPS-OSH/**)",
+      "Bash(copy:*)",
+      "Bash(PORT=3002 npm run dev)",
+      "Bash(python:*)",
+      "WebFetch(domain:api.osociohoteleiro.com.br)",
+      "WebFetch(domain:osh-sistemas-api-backend.d32pnk.easypanel.host)"
     ],
     "deny": [],
     "ask": []
