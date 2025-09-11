@@ -52,11 +52,10 @@ const ChartJsPriceChart = ({
   
   // Estados para controle de tempo - usar externos se fornecidos, senão usar internos
   const [internalStartDate, setInternalStartDate] = useState(() => {
-    // Começar alguns dias atrás para incluir dados históricos existentes
+    // Iniciar na data atual
     const today = startOfDay(new Date());
-    const startDate = subDays(today, 7); // 7 dias atrás
-    console.log('📅 GRÁFICO: Data inicial calculada:', startDate.toISOString(), 'para incluir dados históricos');
-    return startDate;
+    console.log('📅 GRÁFICO: Data inicial calculada:', today.toISOString(), 'iniciando na data atual');
+    return today;
   });
   const [internalPeriodDays, setInternalPeriodDays] = useState(30);
   

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -18,6 +18,7 @@ import {
   Lock
 } from 'lucide-react';
 import { useAuth, PERMISSIONS } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { toast } from 'react-hot-toast';
 
 const menuItems = [
@@ -38,6 +39,35 @@ const menuItems = [
 const Sidebar = ({ collapsed, onToggle }) => {
   const location = useLocation();
   const { hasPermission, isSuperAdmin } = useAuth();
+  const { config, selectedHotelUuid } = useApp();
+  const [appConfig, setAppConfig] = useState({
+    app_title: 'OSH PMS',
+    logo_url: null
+  });
+
+  // Buscar configurações da aplicação PMS (rota pública)
+  useEffect(() => {
+    const fetchAppConfig = async () => {
+      try {
+        // Incluir hotel_id se disponível para buscar configuração específica do hotel
+        const url = selectedHotelUuid 
+          ? `${config.apiBaseUrl}/app-configurations/public/pms?hotel_id=${selectedHotelUuid}`
+          : `${config.apiBaseUrl}/app-configurations/public/pms`;
+        
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setAppConfig(data);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar configurações da aplicação:', error);
+      }
+    };
+
+    if (config.apiBaseUrl) {
+      fetchAppConfig();
+    }
+  }, [config.apiBaseUrl, selectedHotelUuid]);
 
   // Função para verificar se o usuário pode acessar um item
   const canAccessItem = (item) => {
@@ -67,15 +97,42 @@ const Sidebar = ({ collapsed, onToggle }) => {
       <div className="flex flex-col h-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700/60 bg-slate-800/30 backdrop-blur-sm">
-          <div className={`flex items-center transition-all duration-300 ${collapsed ? 'justify-center w-full' : ''}`}>
-            <div className="relative">
-              <Hotel className="h-10 w-10 text-primary-400" />
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-primary-400 to-primary-500 rounded-full animate-bounce-subtle"></div>
-            </div>
-            {!collapsed && (
-              <div className="ml-4 animate-fade-in">
-                <h1 className="text-xl font-bold text-white">OSH PMS</h1>
-                <p className="text-xs text-slate-300 font-medium tracking-wide">Hotel Management System</p>
+          <div className={`w-full flex items-center justify-center transition-all duration-300`}>
+            {appConfig.logo_url ? (
+              <div className={`${collapsed ? 'w-10 h-10' : 'w-full h-16'} flex items-center justify-center overflow-hidden`}>
+                <img 
+                  src={appConfig.logo_url} 
+                  alt="Logo do Hotel"
+                  className={`${collapsed ? 'w-10 h-10' : 'max-w-full h-16'} object-contain`}
+                />
+              </div>
+            ) : (
+              <div className={`${collapsed ? 'w-10 h-10' : 'w-16 h-16'} bg-gradient-to-br from-blue-600 via-blue-500 to-purple-600 rounded-xl shadow-lg flex items-center justify-center relative`}>
+                <svg 
+                  width={collapsed ? "24" : "32"} 
+                  height={collapsed ? "24" : "32"} 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  className="text-white"
+                >
+                  {/* Hotel building silhouette */}
+                  <path
+                    d="M3 21V11L12 3L21 11V21H16V16C16 15.4477 15.5523 15 15 15H9C8.44772 15 8 15.4477 8 16V21H3Z"
+                    fill="currentColor"
+                    stroke="currentColor"
+                    strokeWidth="0.5"
+                  />
+                  {/* Windows */}
+                  <circle cx="8" cy="9" r="0.8" fill="rgba(255,255,255,0.8)" />
+                  <circle cx="12" cy="9" r="0.8" fill="rgba(255,255,255,0.8)" />
+                  <circle cx="16" cy="9" r="0.8" fill="rgba(255,255,255,0.8)" />
+                  <circle cx="8" cy="12" r="0.8" fill="rgba(255,255,255,0.8)" />
+                  <circle cx="12" cy="12" r="0.8" fill="rgba(255,255,255,0.8)" />
+                  <circle cx="16" cy="12" r="0.8" fill="rgba(255,255,255,0.8)" />
+                  {/* Door */}
+                  <rect x="10.5" y="17" width="3" height="4" fill="rgba(255,255,255,0.9)" rx="1" />
+                </svg>
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-primary-400 to-primary-500 rounded-full animate-bounce-subtle"></div>
               </div>
             )}
           </div>

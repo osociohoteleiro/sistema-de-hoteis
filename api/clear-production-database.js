@@ -5,7 +5,7 @@ const prodPool = new Pool({
   port: 5432,
   user: 'postgres',
   password: 'OSH4040()Xx!..nn',
-  database: 'osh_hotels'
+  database: 'osh_sistemas'
 });
 
 async function clearProductionDatabase() {
@@ -78,7 +78,7 @@ async function clearProductionDatabase() {
 
 // Confirmação de segurança
 console.log('⚠️  ATENÇÃO: Este script vai APAGAR TODOS os dados do banco de produção!');
-console.log('📍 Banco: ep.osociohoteleiro.com.br:5432/osh_hotels');
+console.log('📍 Banco: ep.osociohoteleiro.com.br:5432/osh_sistemas');
 console.log('⏰ Aguarde 3 segundos para executar...\n');
 
 setTimeout(() => {

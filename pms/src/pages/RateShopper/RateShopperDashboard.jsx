@@ -136,17 +136,17 @@ const RateShopperDashboard = () => {
   
   // Estados compartilhados para sincronizar gráfico e tabela (usar mesmos padrões do gráfico)
   const [chartStartDate, setChartStartDate] = useState(() => {
-    // Começar alguns dias atrás para incluir dados históricos existentes (igual ao gráfico)
+    // Iniciar na data atual (igual ao gráfico)
     const today = startOfDay(new Date());
-    const startDate = subDays(today, 7); // 7 dias atrás para incluir dados
-    console.log('🚀 Dashboard: Inicializando com data:', format(startDate, 'yyyy-MM-dd'), 'para incluir dados históricos');
-    return startDate;
+    console.log('🚀 Dashboard: Inicializando com data:', format(today, 'yyyy-MM-dd'), 'iniciando na data atual');
+    return today;
   });
   const [chartPeriodDays, setChartPeriodDays] = useState(30);
   
   // Estados para dados do gráfico compartilhados com a tabela
   const [sharedChartData, setSharedChartData] = useState(null);
   const [sharedPropertyNames, setSharedPropertyNames] = useState([]);
+  const [chartBasedAverage, setChartBasedAverage] = useState(null);
   
   // Debug: Log das mudanças de estado
   useEffect(() => {
@@ -169,6 +169,50 @@ const RateShopperDashboard = () => {
     setChartPeriodDays(newDays);
   }, []);
 
+  // Função para calcular média dos preços do gráfico
+  const calculateChartAverage = useCallback((chartData, propertyNames) => {
+    if (!chartData?.processedData || !propertyNames?.length) {
+      return null;
+    }
+
+    const allPrices = [];
+    
+    // Iterar sobre todos os dias no gráfico
+    chartData.processedData.forEach(dayData => {
+      // Para cada propriedade, pegar o preço válido do dia
+      propertyNames.forEach(propertyName => {
+        const price = dayData[propertyName];
+        if (price !== null && price !== undefined && typeof price === 'number' && price > 0) {
+          allPrices.push(price);
+        }
+      });
+    });
+
+    if (allPrices.length === 0) {
+      return null;
+    }
+
+    const average = allPrices.reduce((sum, price) => sum + price, 0) / allPrices.length;
+    const min = Math.min(...allPrices);
+    const max = Math.max(...allPrices);
+
+    console.log('📊 Dashboard: Média calculada do gráfico:', {
+      average: average.toFixed(2),
+      min: min.toFixed(2),
+      max: max.toFixed(2),
+      totalPrices: allPrices.length,
+      periodDays: chartData.processedData.length
+    });
+
+    return {
+      avg_price: average,
+      min_price: min,
+      max_price: max,
+      total_prices_in_chart: allPrices.length,
+      period_days: chartData.processedData.length
+    };
+  }, []);
+
   // Callback para receber dados do gráfico
   const handleDataChange = useCallback((chartData, propertyNames) => {
     console.log('📊 Dashboard: Recebendo dados do gráfico:', {
@@ -177,7 +221,11 @@ const RateShopperDashboard = () => {
     });
     setSharedChartData(chartData);
     setSharedPropertyNames(propertyNames || []);
-  }, []);
+    
+    // Calcular média baseada nos dados do gráfico
+    const chartAverage = calculateChartAverage(chartData, propertyNames);
+    setChartBasedAverage(chartAverage);
+  }, [calculateChartAverage]);
   
   // Memoizar as datas da tabela para evitar re-cálculos
   const tableDateRange = useMemo(() => {
@@ -1194,16 +1242,34 @@ const RateShopperDashboard = () => {
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Preço Médio</p>
-              <p className="text-3xl font-bold text-gray-900">R$ {summary.avg_price?.toFixed(2)}</p>
+              <p className="text-sm font-medium text-gray-600">
+                Preço Médio
+                {chartBasedAverage && (
+                  <span className="text-xs text-blue-600 font-normal ml-1">
+                    (período do gráfico)
+                  </span>
+                )}
+              </p>
+              <p className="text-3xl font-bold text-gray-900">
+                R$ {chartBasedAverage ? chartBasedAverage.avg_price.toFixed(2) : summary.avg_price?.toFixed(2)}
+              </p>
               <div className="flex items-center mt-1">
                 <span className="text-xs text-gray-500">
-                  R$ {summary.min_price?.toFixed(2)} - R$ {summary.max_price?.toFixed(2)}
+                  R$ {chartBasedAverage ? chartBasedAverage.min_price.toFixed(2) : summary.min_price?.toFixed(2)} - R$ {chartBasedAverage ? chartBasedAverage.max_price.toFixed(2) : summary.max_price?.toFixed(2)}
                 </span>
               </div>
+              {chartBasedAverage && (
+                <div className="text-xs text-blue-600 mt-1">
+                  {chartBasedAverage.total_prices_in_chart} preços em {chartBasedAverage.period_days} dias
+                </div>
+              )}
             </div>
-            <div className="h-12 w-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="h-6 w-6 text-yellow-600" />
+            <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${
+              chartBasedAverage ? 'bg-blue-100' : 'bg-yellow-100'
+            }`}>
+              <DollarSign className={`h-6 w-6 ${
+                chartBasedAverage ? 'text-blue-600' : 'text-yellow-600'
+              }`} />
             </div>
           </div>
         </div>
