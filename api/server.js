@@ -15,12 +15,30 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: function (origin, callback) {
-      // Permitir requisições sem origin e qualquer localhost
-      if (!origin || origin.startsWith('http://localhost:')) {
-        callback(null, true);
-      } else {
-        callback(new Error('Não permitido pelo CORS'));
+      // Lista de origins permitidos para Socket.io
+      const allowedOrigins = [
+        // Desenvolvimento local
+        'http://localhost:3000',
+        'http://localhost:5173', 
+        'http://localhost:5174',
+        'http://localhost:5175',
+        // EasyPanel domains (usar variável de ambiente se configurada)
+        ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()) : [])
+      ];
+
+      // Permitir requisições sem origin
+      if (!origin) {
+        return callback(null, true);
       }
+      
+      // Verificar se origin está na lista permitida ou é localhost
+      if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:') || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      console.log(`🚫 Socket.io CORS bloqueado para: ${origin}`);
+      console.log('🔍 Socket.io Origins permitidos:', allowedOrigins);
+      callback(new Error('Socket.io: Não permitido pelo CORS'));
     },
     methods: ['GET', 'POST'],
     credentials: true
