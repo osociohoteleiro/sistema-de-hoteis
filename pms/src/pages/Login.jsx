@@ -122,9 +122,9 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Lado Esquerdo - Descrição das Funcionalidades */}
-      <div className="flex-1 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 flex flex-col justify-center items-center p-12 text-white relative overflow-hidden">
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* Lado Esquerdo - Descrição das Funcionalidades - Aparece segundo no mobile */}
+      <div className="order-2 lg:order-1 flex-1 bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 flex flex-col justify-center items-center p-8 lg:p-12 text-white relative overflow-hidden">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent transform -skew-y-6"></div>
@@ -134,69 +134,70 @@ const Login = () => {
         <div className="relative z-10 max-w-lg text-center lg:text-left">
           <div className="mb-8">
             <h1 className="text-4xl lg:text-5xl font-bold mb-4">
-              Sistema PMS
+              PMS Inteligente de Nova Geração
             </h1>
             <p className="text-xl text-primary-100 mb-8">
-              Gestão Hoteleira Completa e Inteligente
+              A gestão 360° que transforma hotéis em negócios de alta performance
             </p>
           </div>
 
           <div className="space-y-6">
             <div className="flex items-start space-x-4">
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
-                </svg>
+                <span className="text-lg">✨</span>
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-1">Gestão de Reservas</h3>
-                <p className="text-primary-100">Controle completo de reservas, check-ins e check-outs em tempo real</p>
+                <h3 className="font-semibold text-lg mb-1">Gestão de Reservas Automatizada</h3>
+                <p className="text-primary-100">Centralize todas as reservas, check-ins e check-outs em tempo real com total precisão e sem esforço manual.</p>
               </div>
             </div>
 
             <div className="flex items-start space-x-4">
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"/>
-                </svg>
+                <span className="text-lg">💰</span>
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-1">Controle Financeiro</h3>
-                <p className="text-primary-100">Relatórios detalhados, faturamento e controle de receitas</p>
+                <h3 className="font-semibold text-lg mb-1">Controle Financeiro Avançado</h3>
+                <p className="text-primary-100">Tenha relatórios inteligentes, fluxo de caixa atualizado e previsões automáticas de receita — tudo pronto para guiar suas decisões estratégicas.</p>
               </div>
             </div>
 
             <div className="flex items-start space-x-4">
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
-                </svg>
+                <span className="text-lg">🤝</span>
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-1">Gestão de Hóspedes</h3>
-                <p className="text-primary-100">Perfis completos, histórico de estadias e preferências</p>
+                <h3 className="font-semibold text-lg mb-1">Gestão de Hóspedes com Experiência Única</h3>
+                <p className="text-primary-100">Perfis completos, histórico de estadias e preferências personalizadas para encantar cada cliente em cada detalhe.</p>
               </div>
             </div>
 
             <div className="flex items-start space-x-4">
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd"/>
-                </svg>
+                <span className="text-lg">📊</span>
               </div>
               <div>
-                <h3 className="font-semibold text-lg mb-1">Rate Shopper</h3>
-                <p className="text-primary-100">Monitoramento de preços da concorrência e otimização de tarifas</p>
+                <h3 className="font-semibold text-lg mb-1">Rate Shopper com Inteligência Artificial</h3>
+                <p className="text-primary-100">Monitore a concorrência em tempo real, ajuste tarifas automaticamente e maximize sua lucratividade com decisões baseadas em dados.</p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-4">
+              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
+                <span className="text-lg">🚀</span>
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-1">Muito além de um PMS comum</h3>
+                <p className="text-primary-100">Nosso sistema integra automações, inteligência artificial e análise preditiva, permitindo que seu hotel seja mais ágil, lucrativo e competitivo — sem precisar aumentar sua equipe.</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Lado Direito - Formulário de Login */}
-      <div className="flex-1 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-8">
-        <div className="max-w-md w-full space-y-8">
+      {/* Lado Direito - Formulário de Login - Aparece primeiro no mobile */}
+      <div className="order-1 lg:order-2 flex-1 bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-6 lg:p-8">
+        <div className="max-w-md w-full space-y-6 lg:space-y-8">
           {/* Logo e Título */}
           <div className="text-center">
             {appConfig.logo_url ? (
@@ -204,7 +205,7 @@ const Login = () => {
                 <img 
                   src={appConfig.logo_url} 
                   alt="Logo do Hotel"
-                  className="h-16 w-auto mx-auto object-contain"
+                  className="max-h-16 max-w-[350px] w-auto mx-auto object-contain"
                 />
               </div>
             ) : (
@@ -215,9 +216,6 @@ const Login = () => {
               </div>
             )}
             
-            <h2 className="text-3xl font-bold text-slate-800 mb-2">
-              {appConfig.app_title || 'Acesso ao PMS'}
-            </h2>
             <p className="text-slate-600">
               Entre com suas credenciais para acessar o sistema
             </p>
@@ -300,7 +298,7 @@ const Login = () => {
 
           {/* Footer */}
           <div className="text-center text-slate-500 text-sm">
-            {config.companyName} - PMS - {new Date().getFullYear()}
+            Desenvolvido por: O Sócio Hoteleiro - {new Date().getFullYear()}
           </div>
         </div>
       </div>

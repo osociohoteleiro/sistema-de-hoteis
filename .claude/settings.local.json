@@ -9,7 +9,8 @@
       "Bash(netstat:*)",
       "Bash(taskkill:*)",
       "Bash(cmd /c:*)",
-      "Bash(PORT=3002 npm run dev)"
+      "Bash(PORT=3002 npm run dev)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

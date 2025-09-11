@@ -41,7 +41,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
   const { hasPermission, isSuperAdmin } = useAuth();
   const { config, selectedHotelUuid } = useApp();
   const [appConfig, setAppConfig] = useState({
-    app_title: 'OSH PMS',
+    app_title: 'Sistema de Gerenciamento de Propriedades',
     logo_url: null
   });
 
