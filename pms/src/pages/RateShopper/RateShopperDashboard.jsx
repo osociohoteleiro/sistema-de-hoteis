@@ -33,7 +33,7 @@ import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../../config/environment';
 import axios from 'axios';
 import apiService from '../../services/api';
-import { format, addDays, startOfDay } from 'date-fns';
+import { format, addDays, startOfDay, subDays } from 'date-fns';
 
 // Função utilitária para formatar datas de forma segura
 const formatDate = (dateValue, locale = 'pt-BR', options = {}) => {
@@ -136,9 +136,11 @@ const RateShopperDashboard = () => {
   
   // Estados compartilhados para sincronizar gráfico e tabela (usar mesmos padrões do gráfico)
   const [chartStartDate, setChartStartDate] = useState(() => {
+    // Começar alguns dias atrás para incluir dados históricos existentes (igual ao gráfico)
     const today = startOfDay(new Date());
-    console.log('🚀 Dashboard: Inicializando com data:', format(today, 'yyyy-MM-dd'));
-    return today;
+    const startDate = subDays(today, 7); // 7 dias atrás para incluir dados
+    console.log('🚀 Dashboard: Inicializando com data:', format(startDate, 'yyyy-MM-dd'), 'para incluir dados históricos');
+    return startDate;
   });
   const [chartPeriodDays, setChartPeriodDays] = useState(30);
   

@@ -51,7 +51,13 @@ const ChartJsPriceChart = ({
   const chartRef = useRef();
   
   // Estados para controle de tempo - usar externos se fornecidos, senão usar internos
-  const [internalStartDate, setInternalStartDate] = useState(() => startOfDay(new Date()));
+  const [internalStartDate, setInternalStartDate] = useState(() => {
+    // Começar alguns dias atrás para incluir dados históricos existentes
+    const today = startOfDay(new Date());
+    const startDate = subDays(today, 7); // 7 dias atrás
+    console.log('📅 GRÁFICO: Data inicial calculada:', startDate.toISOString(), 'para incluir dados históricos');
+    return startDate;
+  });
   const [internalPeriodDays, setInternalPeriodDays] = useState(30);
   
   const currentStartDate = externalStartDate || internalStartDate;
@@ -373,15 +379,14 @@ const ChartJsPriceChart = ({
       Object.keys(record).forEach(key => {
         const trimmedKey = key.trim();
         
-        // Log each key being processed
-        console.log('🔍 GRÁFICO: Processando key:', { 
-          key: trimmedKey, 
-          isDate: trimmedKey === 'date',
-          isEmpty: trimmedKey === '',
-          isFuture: trimmedKey === 'isFuture',
-          hasUnderscore: trimmedKey.includes('_'),
-          value: record[key]
-        });
+        // Log somente se não for date ou isFuture para evitar spam
+        if (trimmedKey !== 'date' && trimmedKey !== 'isFuture') {
+          console.log('🔍 GRÁFICO: Processando key:', { 
+            key: trimmedKey, 
+            hasUnderscore: trimmedKey.includes('_'),
+            value: record[key]
+          });
+        }
         
         // Filtrar apenas nomes de propriedades válidos (excluir campos meta e bundle)
         if (trimmedKey !== 'date' && 
