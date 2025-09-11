@@ -38,8 +38,13 @@ COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 # Copy application code
 COPY --chown=nodejs:nodejs . .
 
-# Create results directory
-RUN mkdir -p /app/results && chown -R nodejs:nodejs /app/results
+# Create all necessary directories for the application
+RUN mkdir -p /app/results \
+             /app/results/extracted-data \
+             /app/results/extracted-data/csv \
+             /app/results/extracted-data/xlsx \
+             /app/logs && \
+    chown -R nodejs:nodejs /app/results /app/logs
 
 # Switch to non-root user
 USER nodejs
