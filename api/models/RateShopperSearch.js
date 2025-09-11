@@ -22,8 +22,29 @@ class RateShopperSearch {
   }
 
   static async findById(id) {
-    const result = await db.query('SELECT * FROM rate_shopper_searches WHERE id = $1', [id]);
-    return result.length > 0 ? new RateShopperSearch(result[0]) : null;
+    try {
+      if (!id) {
+        console.error('❌ findById: ID é obrigatório');
+        return null;
+      }
+
+      console.log(`🔍 Buscando search por ID: ${id}`);
+      const result = await db.query('SELECT * FROM rate_shopper_searches WHERE id = $1', [id]);
+      
+      // Normalizar acesso aos dados (compatibilidade entre diferentes versões do driver)
+      const data = result.rows ? result.rows : result;
+      
+      if (data && data.length > 0) {
+        console.log(`✅ Search ${id} encontrada`);
+        return new RateShopperSearch(data[0]);
+      } else {
+        console.log(`⚠️ Search ${id} não encontrada`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao buscar search ${id}:`, error);
+      throw error;
+    }
   }
 
   static async findByUuid(uuid) {
@@ -155,22 +176,53 @@ class RateShopperSearch {
 
   // Update progress during extraction
   async updateProgress(processedDates, totalPricesFound = null) {
-    this.processed_dates = processedDates;
-    
-    if (totalPricesFound !== null) {
-      this.total_prices_found = totalPricesFound;
-    }
+    try {
+      // Validar parâmetros de entrada
+      if (processedDates === null || processedDates === undefined) {
+        throw new Error('processedDates é obrigatório');
+      }
 
-    // Update only progress-related fields for efficiency
-    const result = await db.query(`
-      UPDATE rate_shopper_searches SET 
-      processed_dates = $1, 
-      total_prices_found = $2,
-      updated_at = NOW()
-      WHERE id = $3
-    `, [this.processed_dates, this.total_prices_found, this.id]);
-    
-    return result;
+      if (!this.id) {
+        throw new Error('Search ID é obrigatório para atualizar progresso');
+      }
+
+      this.processed_dates = processedDates;
+      
+      if (totalPricesFound !== null) {
+        this.total_prices_found = totalPricesFound;
+      }
+
+      console.log(`📊 Atualizando progresso search ${this.id}: processed_dates=${this.processed_dates}, total_prices_found=${this.total_prices_found}`);
+
+      // Update only progress-related fields for efficiency
+      const result = await db.query(`
+        UPDATE rate_shopper_searches SET 
+        processed_dates = $1, 
+        total_prices_found = $2,
+        updated_at = NOW()
+        WHERE id = $3
+      `, [this.processed_dates, this.total_prices_found, this.id]);
+      
+      // Verificar se a atualização foi bem-sucedida
+      const affectedRows = result.rowCount || result.affectedRows || (result.rows ? result.rows.length : 0);
+      
+      if (affectedRows === 0) {
+        throw new Error(`Nenhuma linha foi atualizada para search_id ${this.id}. A busca pode não existir.`);
+      }
+
+      console.log(`✅ Progresso atualizado com sucesso para search ${this.id} - ${affectedRows} linha(s) afetada(s)`);
+      
+      return result;
+    } catch (error) {
+      console.error(`❌ Erro ao atualizar progresso da search ${this.id}:`, error);
+      console.error('Detalhes:', {
+        search_id: this.id,
+        processed_dates: processedDates,
+        total_prices_found: totalPricesFound,
+        error_message: error.message
+      });
+      throw error;
+    }
   }
 
   // Calculate progress percentage

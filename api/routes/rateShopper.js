@@ -1875,92 +1875,187 @@ router.put('/:hotel_id/searches/:search_id/progress', async (req, res) => {
     const { hotel_id, search_id } = req.params;
     const { processed_dates, total_prices_found } = req.body;
     
+    console.log(`📊 Recebendo atualização de progresso: hotel_id=${hotel_id}, search_id=${search_id}, processed_dates=${processed_dates}, total_prices_found=${total_prices_found}`);
+    
+    // Validar parâmetros de entrada
+    if (!hotel_id || !search_id) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'hotel_id e search_id são obrigatórios' 
+      });
+    }
+    
+    if (processed_dates === null || processed_dates === undefined) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'processed_dates é obrigatório' 
+      });
+    }
+    
     // Converter UUID para ID se necessário
     let hotelId = hotel_id;
     if (hotel_id.includes('-')) {
-      const hotel = await Hotel.findByUuid(hotel_id);
-      if (!hotel) {
-        return res.status(404).json({ 
+      try {
+        const hotel = await Hotel.findByUuid(hotel_id);
+        if (!hotel) {
+          console.error(`❌ Hotel não encontrado para UUID: ${hotel_id}`);
+          return res.status(404).json({ 
+            success: false, 
+            error: 'Hotel não encontrado' 
+          });
+        }
+        hotelId = hotel.id;
+        console.log(`✅ Hotel UUID ${hotel_id} convertido para ID ${hotelId}`);
+      } catch (hotelError) {
+        console.error('❌ Erro ao buscar hotel por UUID:', hotelError);
+        return res.status(500).json({ 
           success: false, 
-          error: 'Hotel não encontrado' 
+          error: 'Erro ao verificar hotel' 
         });
       }
-      hotelId = hotel.id;
     }
     
     // Verificar se a busca existe e pertence ao hotel
-    const search = await RateShopperSearch.findById(search_id);
-    if (!search || search.hotel_id != hotelId) {
-      return res.status(404).json({ 
+    let search;
+    try {
+      search = await RateShopperSearch.findById(search_id);
+      if (!search) {
+        console.error(`❌ Search não encontrada: ${search_id}`);
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Busca não encontrada' 
+        });
+      }
+      
+      if (search.hotel_id != hotelId) {
+        console.error(`❌ Search ${search_id} não pertence ao hotel ${hotelId}. Pertence ao hotel ${search.hotel_id}`);
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Busca não pertence a este hotel' 
+        });
+      }
+      
+      console.log(`✅ Search ${search_id} encontrada e verificada para hotel ${hotelId}`);
+    } catch (searchError) {
+      console.error('❌ Erro ao buscar search:', searchError);
+      return res.status(500).json({ 
         success: false, 
-        error: 'Busca não encontrada ou não pertence a este hotel' 
+        error: 'Erro ao verificar busca' 
       });
     }
 
     // Atualizar progresso
-    await search.updateProgress(processed_dates, total_prices_found);
+    try {
+      await search.updateProgress(processed_dates, total_prices_found);
+      console.log(`✅ Progresso atualizado com sucesso para search ${search_id}`);
+    } catch (updateError) {
+      console.error('❌ Erro ao atualizar progresso:', updateError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Erro ao atualizar progresso no banco de dados' 
+      });
+    }
     
     // Buscar dados atualizados com JOIN para pegar property_name
-    const updatedSearchData = await db.query(`
-      SELECT rs.*, rsp.property_name
-      FROM rate_shopper_searches rs
-      LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
-      WHERE rs.id = $1
-    `, [search_id]);
-    
-    if (updatedSearchData.length === 0) {
-      return res.status(404).json({ 
+    let updatedSearchData;
+    try {
+      updatedSearchData = await db.query(`
+        SELECT rs.*, rsp.property_name
+        FROM rate_shopper_searches rs
+        LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+        WHERE rs.id = $1
+      `, [search_id]);
+      
+      // Normalizar acesso aos dados (compatibilidade entre diferentes versões do driver)
+      const searchData = updatedSearchData.rows ? updatedSearchData.rows[0] : updatedSearchData[0];
+      
+      if (!searchData) {
+        console.error(`❌ Search ${search_id} não encontrada após atualização`);
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Busca não encontrada após atualização' 
+        });
+      }
+      
+      const updatedSearch = new RateShopperSearch(searchData);
+      updatedSearch.property_name = searchData.property_name;
+      console.log(`✅ Dados atualizados recuperados para search ${search_id}`);
+
+      // Usar UUID original ou buscar se foi convertido
+      let hotelUuid = hotel_id;
+      if (!hotel_id.includes('-')) {
+        try {
+          // Se for ID numérico, buscar UUID
+          const hotelData = await db.query('SELECT hotel_uuid FROM hotels WHERE id = $1', [hotel_id]);
+          const hotelResult = hotelData.rows ? hotelData.rows[0] : hotelData[0];
+          
+          if (hotelResult && hotelResult.hotel_uuid) {
+            hotelUuid = hotelResult.hotel_uuid;
+            console.log(`✅ Hotel ID ${hotel_id} convertido para UUID ${hotelUuid}`);
+          } else {
+            console.warn(`⚠️ UUID não encontrado para hotel ID ${hotel_id}, usando ID como fallback`);
+            hotelUuid = hotel_id.toString();
+          }
+        } catch (uuidError) {
+          console.warn('⚠️ Erro ao buscar UUID do hotel:', uuidError);
+          hotelUuid = hotel_id.toString();
+        }
+      }
+
+      // Emitir evento Socket.io para clientes conectados
+      try {
+        const io = req.app.get('socketio');
+        if (io) {
+          emitExtractionProgress(io, hotelUuid, {
+            searchId: search_id,
+            id: updatedSearch.id,
+            status: updatedSearch.status,
+            processed_dates: updatedSearch.processed_dates,
+            total_dates: updatedSearch.total_dates,
+            progress_percentage: updatedSearch.getProgressPercentage(),
+            total_prices_found: updatedSearch.total_prices_found,
+            duration_seconds: updatedSearch.duration_seconds,
+            started_at: updatedSearch.started_at,
+            completed_at: updatedSearch.completed_at,
+            property_name: updatedSearch.property_name,
+            error_log: updatedSearch.error_log
+          });
+          console.log(`📡 Evento Socket.io emitido para hotel ${hotelUuid}`);
+        }
+      } catch (socketError) {
+        console.warn('⚠️ Erro ao emitir evento Socket.io:', socketError);
+        // Não falhar a requisição por erro de socket
+      }
+      
+      res.json({
+        success: true,
+        message: 'Progresso atualizado com sucesso',
+        data: {
+          id: updatedSearch.id,
+          processed_dates: updatedSearch.processed_dates,
+          total_dates: updatedSearch.total_dates,
+          progress_percentage: updatedSearch.getProgressPercentage(),
+          total_prices_found: updatedSearch.total_prices_found
+        }
+      });
+      
+    } catch (queryError) {
+      console.error('❌ Erro ao buscar dados atualizados:', queryError);
+      return res.status(500).json({ 
         success: false, 
-        error: 'Busca não encontrada após atualização' 
+        error: 'Erro ao recuperar dados atualizados' 
       });
     }
-    
-    const updatedSearch = new RateShopperSearch(updatedSearchData.rows[0]);
-    updatedSearch.property_name = updatedSearchData.rows[0].property_name;
-
-    // Usar UUID original ou buscar se foi convertido
-    let hotelUuid = hotel_id;
-    if (!hotel_id.includes('-')) {
-      // Se for ID numérico, buscar UUID
-      const hotelData = await db.query('SELECT hotel_uuid FROM hotels WHERE id = $1', [hotel_id]);
-      if (hotelData.length > 0) {
-        hotelUuid = hotelData.rows[0].hotel_uuid;
-      }
-    }
-
-    // Emitir evento Socket.io para clientes conectados
-    const io = req.app.get('socketio');
-    if (io) {
-      emitExtractionProgress(io, hotelUuid, {
-        searchId: search_id,
-        id: updatedSearch.id,
-        status: updatedSearch.status,
-        processed_dates: updatedSearch.processed_dates,
-        total_dates: updatedSearch.total_dates,
-        progress_percentage: updatedSearch.getProgressPercentage(),
-        total_prices_found: updatedSearch.total_prices_found,
-        duration_seconds: updatedSearch.duration_seconds,
-        started_at: updatedSearch.started_at,
-        completed_at: updatedSearch.completed_at,
-        property_name: updatedSearch.property_name,
-        error_log: updatedSearch.error_log
-      });
-    }
-    
-    res.json({
-      success: true,
-      message: 'Progresso atualizado com sucesso',
-      data: {
-        id: updatedSearch.id,
-        processed_dates: updatedSearch.processed_dates,
-        total_dates: updatedSearch.total_dates,
-        progress_percentage: updatedSearch.getProgressPercentage(),
-        total_prices_found: updatedSearch.total_prices_found
-      }
-    });
 
   } catch (error) {
-    console.error('Update progress error:', error);
+    console.error('❌ Erro geral ao atualizar progresso:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      hotel_id: req.params.hotel_id,
+      search_id: req.params.search_id,
+      body: req.body,
+      error_message: error.message
+    });
     res.status(500).json({ 
       success: false, 
       error: 'Falha ao atualizar progresso' 
