@@ -422,15 +422,16 @@ class DatabaseIntegration {
    * Atualiza o progresso da extração via API
    */
   async updateExtractionProgress(searchId, hotelId, processedDates, totalDates, totalPricesFound = null) {
-    try {
-      const apiUrl = getApiUrl();
-      const progressData = {
-        processed_dates: processedDates
-      };
+    const apiUrl = getApiUrl();
+    const progressData = {
+      processed_dates: processedDates
+    };
 
-      if (totalPricesFound !== null) {
-        progressData.total_prices_found = totalPricesFound;
-      }
+    if (totalPricesFound !== null) {
+      progressData.total_prices_found = totalPricesFound;
+    }
+    
+    try {
 
       // Debug da requisição
       const url = `${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`;
