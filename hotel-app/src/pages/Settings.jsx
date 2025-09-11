@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import ImageUpload from '../components/ImageUpload';
 import toast from 'react-hot-toast';
+import apiService from '../services/api'; // ✅ CORREÇÃO: Usar apiService
 
 const Settings = () => {
   const { config, updateConfig, selectedHotelUuid } = useApp();
@@ -39,41 +40,18 @@ const Settings = () => {
     return defaultConfigs;
   };
 
-  // Funções para gerenciar configurações de aplicações
+  // ✅ CORREÇÃO: Funções para gerenciar configurações usando apiService
   const loadAppConfigurations = async () => {
-    if (!config.apiBaseUrl) {
-      if (!isInitialized) {
-        console.log('🔧 API não configurada, inicializando com configurações padrão');
-        setAppConfigurations(initializeDefaultConfigurations());
-        setIsInitialized(true);
-      }
-      return;
-    }
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      console.warn('Token não encontrado, não é possível carregar configurações de aplicações');
-      if (!isInitialized) {
-        setAppConfigurations(initializeDefaultConfigurations());
-        setIsInitialized(true);
-      }
-      return;
-    }
-    
-    setAppConfigsLoading(true);
-    try {
-      console.log('🔍 loadAppConfigurations - Carregando do banco de dados...');
-      const response = await fetch(`${config.apiBaseUrl}/api/app-configurations?hotel_id=${selectedHotelUuid || ''}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
+    if (!isInitialized) {
+      setAppConfigsLoading(true);
+      
+      try {
+        console.log('🔍 loadAppConfigurations - Carregando via apiService...');
+        
+        // Usar apiService para carregar configurações
+        const params = selectedHotelUuid ? { hotel_id: selectedHotelUuid } : {};
+        const data = await apiService.getConfigs(params);
+        
         console.log('🔍 loadAppConfigurations - Dados recebidos da API:', data);
         
         if (data.configurations) {
@@ -103,21 +81,15 @@ const Settings = () => {
           setAppConfigurations(initializeDefaultConfigurations());
           setIsInitialized(true);
         }
-      } else {
-        console.error('❌ Erro na resposta da API:', response.status, response.statusText);
-        if (!isInitialized) {
-          setAppConfigurations(initializeDefaultConfigurations());
-          setIsInitialized(true);
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao carregar configurações de aplicações:', error);
-      if (!isInitialized) {
+        
+      } catch (error) {
+        console.error('Erro ao carregar configurações de aplicações:', error);
+        // Fallback para configurações padrão
         setAppConfigurations(initializeDefaultConfigurations());
         setIsInitialized(true);
+      } finally {
+        setAppConfigsLoading(false);
       }
-    } finally {
-      setAppConfigsLoading(false);
     }
   };
 

@@ -249,6 +249,223 @@ class ApiService {
     return await this.request(`/users/${userId}/permissions`);
   }
 
+  // ✅ NOVOS ENDPOINTS ADICIONADOS - Baseados na API real
+
+  // Evolution API endpoints
+  async getEvolutionInstances(hotelId = null) {
+    const params = hotelId ? `?hotel_id=${hotelId}` : '';
+    return await this.request(`/evolution/instances${params}`);
+  }
+
+  async createEvolutionInstance(instanceData) {
+    return await this.request('/evolution/instances', {
+      method: 'POST',
+      body: JSON.stringify(instanceData),
+    });
+  }
+
+  async deleteEvolutionInstance(instanceName) {
+    return await this.request(`/evolution/instances/${instanceName}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Flowise endpoints
+  async getFlowiseBots(hotelId = null) {
+    const params = hotelId ? `?hotel_id=${hotelId}` : '';
+    return await this.request(`/flowise/bots${params}`);
+  }
+
+  async createFlowiseBot(botData) {
+    return await this.request('/flowise/bots', {
+      method: 'POST',
+      body: JSON.stringify(botData),
+    });
+  }
+
+  async updateFlowiseBot(botId, botData) {
+    return await this.request(`/flowise/bots/${botId}`, {
+      method: 'PUT',
+      body: JSON.stringify(botData),
+    });
+  }
+
+  async deleteFlowiseBot(botId) {
+    return await this.request(`/flowise/bots/${botId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Bot Fields endpoints
+  async getBotFields(hotelId = null) {
+    const params = hotelId ? `?hotel_id=${hotelId}` : '';
+    return await this.request(`/bot-fields${params}`);
+  }
+
+  async createBotField(fieldData) {
+    return await this.request('/bot-fields', {
+      method: 'POST',
+      body: JSON.stringify(fieldData),
+    });
+  }
+
+  async updateBotField(fieldId, fieldData) {
+    return await this.request(`/bot-fields/${fieldId}`, {
+      method: 'PUT',
+      body: JSON.stringify(fieldData),
+    });
+  }
+
+  async deleteBotField(fieldId) {
+    return await this.request(`/bot-fields/${fieldId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Marketing Messages endpoints
+  async getMarketingMessages(hotelId = null) {
+    const params = hotelId ? `?hotel_id=${hotelId}` : '';
+    return await this.request(`/marketing-messages${params}`);
+  }
+
+  async createMarketingMessage(messageData) {
+    return await this.request('/marketing-messages', {
+      method: 'POST',
+      body: JSON.stringify(messageData),
+    });
+  }
+
+  async updateMarketingMessage(messageId, messageData) {
+    return await this.request(`/marketing-messages/${messageId}`, {
+      method: 'PUT',
+      body: JSON.stringify(messageData),
+    });
+  }
+
+  async deleteMarketingMessage(messageId) {
+    return await this.request(`/marketing-messages/${messageId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Qdrant endpoints
+  async getQdrantCollections() {
+    return await this.request('/qdrant/collections');
+  }
+
+  async createQdrantCollection(collectionData) {
+    return await this.request('/qdrant/collections', {
+      method: 'POST',
+      body: JSON.stringify(collectionData),
+    });
+  }
+
+  async deleteQdrantCollection(collectionName) {
+    return await this.request(`/qdrant/collections/${collectionName}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Meta API endpoints
+  async getMetaCredentials(hotelId) {
+    return await this.request(`/meta/credentials/${hotelId}`);
+  }
+
+  async setMetaCredentials(hotelId, credentials) {
+    return await this.request(`/meta/credentials/${hotelId}`, {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  }
+
+  async deleteMetaCredentials(hotelId) {
+    return await this.request(`/meta/credentials/${hotelId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getMetaOAuthUrl(hotelId) {
+    return await this.request(`/meta/oauth/url/${hotelId}`);
+  }
+
+  // Reports endpoints
+  async getReports(params = {}) {
+    const searchParams = new URLSearchParams(params);
+    const endpoint = `/reports${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+    return await this.request(endpoint);
+  }
+
+  async getReport(reportId) {
+    return await this.request(`/reports/${reportId}`);
+  }
+
+  // Rate Shopper endpoints
+  async getRateShopperData(params = {}) {
+    const searchParams = new URLSearchParams(params);
+    const endpoint = `/rate-shopper${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+    return await this.request(endpoint);
+  }
+
+  async getRateShopperExtraction() {
+    return await this.request('/rate-shopper-extraction');
+  }
+
+  // Hotel Sites endpoints
+  async getHotelSites(hotelId = null) {
+    const params = hotelId ? `?hotel_id=${hotelId}` : '';
+    return await this.request(`/hotel-sites${params}`);
+  }
+
+  async createHotelSite(siteData) {
+    return await this.request('/hotel-sites', {
+      method: 'POST',
+      body: JSON.stringify(siteData),
+    });
+  }
+
+  async updateHotelSite(siteId, siteData) {
+    return await this.request(`/hotel-sites/${siteId}`, {
+      method: 'PUT',
+      body: JSON.stringify(siteData),
+    });
+  }
+
+  async deleteHotelSite(siteId) {
+    return await this.request(`/hotel-sites/${siteId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Logos endpoints
+  async uploadLogo(hotelId, logoData) {
+    return await this.request(`/logos/upload/${hotelId}`, {
+      method: 'POST',
+      body: JSON.stringify(logoData),
+    });
+  }
+
+  async getLogoHistory(hotelId) {
+    return await this.request(`/logos/history/${hotelId}`);
+  }
+
+  async setActiveLogo(hotelId, logoId) {
+    return await this.request(`/logos/set-active/${hotelId}/${logoId}`, {
+      method: 'POST',
+    });
+  }
+
+  // User Hotels management
+  async getUserHotels(userId) {
+    return await this.request(`/users/${userId}/hotels`);
+  }
+
+  async assignUserToHotels(userId, hotelIds) {
+    return await this.request(`/hotels/assign-user`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, hotel_ids: hotelIds }),
+    });
+  }
+
   // Health check
   async healthCheck() {
     return await this.request('/health');

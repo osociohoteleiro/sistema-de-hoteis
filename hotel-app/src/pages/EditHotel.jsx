@@ -10,10 +10,15 @@ const EditHotel = () => {
   const { hotel, loading, fetchHotel, updateHotel, deleteHotel } = useHotel();
   
   const [formData, setFormData] = useState({
-    hotel_nome: '',
-    hora_checkin: '',
-    hora_checkout: '',
-    hotel_capa: ''
+    name: '',
+    checkin_time: '',
+    checkout_time: '',
+    cover_image: '',
+    description: '',
+    address: '',
+    phone: '',
+    email: '',
+    website: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,17 +41,22 @@ const EditHotel = () => {
       };
       
       setFormData({
-        hotel_nome: hotel.hotel_nome === 'Hotel para Editar' ? '' : hotel.hotel_nome || '',
-        hora_checkin: formatTimeForInput(hotel.hora_checkin),
-        hora_checkout: formatTimeForInput(hotel.hora_checkout),
-        hotel_capa: hotel.hotel_capa || ''
+        name: hotel.name || hotel.hotel_nome === 'Hotel para Editar' ? '' : hotel.hotel_nome || '',
+        checkin_time: formatTimeForInput(hotel.checkin_time || hotel.hora_checkin),
+        checkout_time: formatTimeForInput(hotel.checkout_time || hotel.hora_checkout),
+        cover_image: hotel.cover_image || hotel.hotel_capa || '',
+        description: hotel.description || '',
+        address: hotel.address || '',
+        phone: hotel.phone || '',
+        email: hotel.email || '',
+        website: hotel.website || ''
       });
       
       console.log('Form data definido:', {
-        hotel_nome: hotel.hotel_nome,
-        hora_checkin: formatTimeForInput(hotel.hora_checkin),
-        hora_checkout: formatTimeForInput(hotel.hora_checkout),
-        hotel_capa: hotel.hotel_capa
+        name: hotel.name || hotel.hotel_nome,
+        checkin_time: formatTimeForInput(hotel.checkin_time || hotel.hora_checkin),
+        checkout_time: formatTimeForInput(hotel.checkout_time || hotel.hora_checkout),
+        cover_image: hotel.cover_image || hotel.hotel_capa
       });
     }
   }, [hotel]);
@@ -62,19 +72,19 @@ const EditHotel = () => {
   const handleImageChange = (imageUrl) => {
     setFormData(prev => ({
       ...prev,
-      hotel_capa: imageUrl
+      cover_image: imageUrl
     }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.hotel_nome.trim()) {
+    if (!formData.name.trim()) {
       toast.error('Nome do hotel é obrigatório');
       return;
     }
 
-    if (!formData.hora_checkin || !formData.hora_checkout) {
+    if (!formData.checkin_time || !formData.checkout_time) {
       toast.error('Horários de check-in e check-out são obrigatórios');
       return;
     }
@@ -149,7 +159,7 @@ const EditHotel = () => {
             <span className="text-white">Editar Hotel</span>
           </div>
           <h1 className="text-2xl font-bold text-white">
-            {hotel?.hotel_nome || 'Editar Hotel'}
+            {hotel?.name || hotel?.hotel_nome || 'Editar Hotel'}
           </h1>
         </div>
 
@@ -175,23 +185,23 @@ const EditHotel = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Hotel Image */}
           <ImageUpload
-            value={formData.hotel_capa}
+            value={formData.cover_image}
             onChange={handleImageChange}
             label="Imagem de Capa do Hotel"
-            hotelName={formData.hotel_nome || hotel?.hotel_nome}
+            hotelName={formData.name || hotel?.name || hotel?.hotel_nome}
             acceptFiles="image/*"
           />
 
           {/* Hotel Name */}
           <div>
-            <label htmlFor="hotel_nome" className="block text-sm font-medium text-white mb-2">
+            <label htmlFor="name" className="block text-sm font-medium text-white mb-2">
               Nome do Hotel
             </label>
             <input
               type="text"
-              id="hotel_nome"
-              name="hotel_nome"
-              value={formData.hotel_nome}
+              id="name"
+              name="name"
+              value={formData.name}
               onChange={handleInputChange}
               className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Digite o nome do hotel"
@@ -202,14 +212,14 @@ const EditHotel = () => {
           {/* Check-in and Check-out Times */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label htmlFor="hora_checkin" className="block text-sm font-medium text-white mb-2">
+              <label htmlFor="checkin_time" className="block text-sm font-medium text-white mb-2">
                 Horário de Check-in
               </label>
               <input
                 type="time"
-                id="hora_checkin"
-                name="hora_checkin"
-                value={formData.hora_checkin}
+                id="checkin_time"
+                name="checkin_time"
+                value={formData.checkin_time}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 required
@@ -217,14 +227,14 @@ const EditHotel = () => {
             </div>
 
             <div>
-              <label htmlFor="hora_checkout" className="block text-sm font-medium text-white mb-2">
+              <label htmlFor="checkout_time" className="block text-sm font-medium text-white mb-2">
                 Horário de Check-out
               </label>
               <input
                 type="time"
-                id="hora_checkout"
-                name="hora_checkout"
-                value={formData.hora_checkout}
+                id="checkout_time"
+                name="checkout_time"
+                value={formData.checkout_time}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 required
@@ -232,6 +242,82 @@ const EditHotel = () => {
             </div>
           </div>
 
+          {/* Additional Fields */}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-white mb-2">
+              Descrição do Hotel
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={handleInputChange}
+              rows={3}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="Descreva o hotel..."
+            />
+          </div>
+
+          <div>
+            <label htmlFor="address" className="block text-sm font-medium text-white mb-2">
+              Endereço
+            </label>
+            <input
+              type="text"
+              id="address"
+              name="address"
+              value={formData.address}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="Endereço completo do hotel"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-white mb-2">
+                Telefone
+              </label>
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="(11) 99999-9999"
+              />
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                E-mail
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="contato@hotel.com"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="website" className="block text-sm font-medium text-white mb-2">
+              Website
+            </label>
+            <input
+              type="url"
+              id="website"
+              name="website"
+              value={formData.website}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="https://www.hotel.com"
+            />
+          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-4">

@@ -14,7 +14,7 @@ router.get('/bots/count/:hotel_uuid', async (req, res) => {
     const query = `
       SELECT COUNT(*) as count 
       FROM flowise_bots 
-      WHERE hotel_uuid = ? AND active = 1
+      WHERE hotel_uuid = $1 AND active = TRUE
     `;
     
     const result = await db.query(query, [hotel_uuid]);
@@ -62,7 +62,7 @@ router.get('/bots/:hotel_uuid', async (req, res) => {
         created_at,
         updated_at
       FROM flowise_bots 
-      WHERE hotel_uuid = ?
+      WHERE hotel_uuid = $1
       ORDER BY created_at DESC
     `;
     
@@ -96,7 +96,7 @@ router.post('/sync', async (req, res) => {
     await syncFlowiseBots();
     
     // Buscar contagem total após sincronização
-    const countQuery = 'SELECT COUNT(*) as count FROM flowise_bots WHERE active = 1';
+    const countQuery = 'SELECT COUNT(*) as count FROM flowise_bots WHERE active = TRUE';
     const countResult = await db.query(countQuery);
     const totalCount = countResult[0]?.count || 0;
     
@@ -140,7 +140,7 @@ router.post('/relate', async (req, res) => {
     console.log(`🔗 Relacionando chatbot ${bot_id} com hotel ${hotel_uuid}`);
     
     // Verificar se o hotel já possui um chatbot (regra: 1 hotel = 1 chatbot máximo)
-    const existingHotelBotQuery = 'SELECT id, bot_name FROM flowise_bots WHERE hotel_uuid = ?';
+    const existingHotelBotQuery = 'SELECT id, bot_name FROM flowise_bots WHERE hotel_uuid = $1';
     const existingHotelBot = await db.query(existingHotelBotQuery, [hotel_uuid]);
     
     if (existingHotelBot.length > 0) {
@@ -154,7 +154,7 @@ router.post('/relate', async (req, res) => {
     }
     
     // Verificar se o relacionamento específico já existe
-    const existingRelationQuery = 'SELECT id FROM flowise_bots WHERE bot_id = ? AND hotel_uuid = ?';
+    const existingRelationQuery = 'SELECT id FROM flowise_bots WHERE bot_id = $1 AND hotel_uuid = $2';
     const existingRelation = await db.query(existingRelationQuery, [bot_id, hotel_uuid]);
     
     if (existingRelation.length > 0) {
@@ -212,7 +212,7 @@ router.post('/relate', async (req, res) => {
         bot_id,
         hotel_uuid,
         active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     `;
     
     await db.query(insertQuery, [
@@ -271,7 +271,7 @@ router.get('/available/:hotel_uuid', async (req, res) => {
     const existingBotQuery = `
       SELECT bot_id, bot_name 
       FROM flowise_bots 
-      WHERE hotel_uuid = ? 
+      WHERE hotel_uuid = $1 
       LIMIT 1
     `;
     const existingBots = await db.query(existingBotQuery, [hotel_uuid]);
@@ -383,7 +383,7 @@ router.delete('/unrelate/:hotel_uuid', async (req, res) => {
     const existingBotQuery = `
       SELECT id, bot_name, bot_id 
       FROM flowise_bots 
-      WHERE hotel_uuid = ? 
+      WHERE hotel_uuid = $1 
       LIMIT 1
     `;
     const existingBots = await db.query(existingBotQuery, [hotel_uuid]);
@@ -401,7 +401,7 @@ router.delete('/unrelate/:hotel_uuid', async (req, res) => {
     const currentBot = existingBots[0];
     
     // Remover o relacionamento
-    const deleteQuery = 'DELETE FROM flowise_bots WHERE hotel_uuid = ?';
+    const deleteQuery = 'DELETE FROM flowise_bots WHERE hotel_uuid = $1';
     await db.query(deleteQuery, [hotel_uuid]);
     
     console.log(`✅ Chatbot ${currentBot.bot_name} desrelacionado do hotel ${hotel_uuid}`);
@@ -452,7 +452,7 @@ router.put('/replace/:hotel_uuid', async (req, res) => {
     const existingBotQuery = `
       SELECT id, bot_name, bot_id 
       FROM flowise_bots 
-      WHERE hotel_uuid = ? 
+      WHERE hotel_uuid = $1 
       LIMIT 1
     `;
     const existingBots = await db.query(existingBotQuery, [hotel_uuid]);
@@ -508,14 +508,14 @@ router.put('/replace/:hotel_uuid', async (req, res) => {
     const updateQuery = `
       UPDATE flowise_bots 
       SET 
-        bot_name = ?,
-        bot_description = ?,
-        bot_type = ?,
-        prediction_url = ?,
-        upsert_url = ?,
-        bot_id = ?,
+        bot_name = $1,
+        bot_description = $2,
+        bot_type = $3,
+        prediction_url = $4,
+        upsert_url = $5,
+        bot_id = $6,
         updated_at = CURRENT_TIMESTAMP
-      WHERE hotel_uuid = ?
+      WHERE hotel_uuid = $7
     `;
     
     await db.query(updateQuery, [

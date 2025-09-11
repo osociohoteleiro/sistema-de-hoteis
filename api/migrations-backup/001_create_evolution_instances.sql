@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS evolution_instances (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    FOREIGN KEY (hotel_uuid) REFERENCES hotels(uuid) ON DELETE CASCADE,
+    FOREIGN KEY (hotel_uuid) REFERENCES hotels(hotel_uuid) ON DELETE CASCADE,
     UNIQUE KEY unique_hotel_instance (hotel_uuid, instance_name),
     INDEX idx_hotel_uuid (hotel_uuid),
     INDEX idx_instance_name (instance_name),
@@ -22,5 +22,5 @@ CREATE TABLE IF NOT EXISTS evolution_instances (
 
 -- Inserir instância padrão da Evolution API para Hotel Exemplo 1
 INSERT IGNORE INTO evolution_instances (instance_name, api_key, hotel_uuid, host_url, active) 
-SELECT 'instancia-principal', '429683C4C977415CAAFCCE10F7D57E11', uuid, 'https://osh-ia-evolution-api.d32pnk.easypanel.host/', TRUE 
+SELECT 'instancia-principal', '429683C4C977415CAAFCCE10F7D57E11', hotel_uuid, 'https://osh-ia-evolution-api.d32pnk.easypanel.host/', TRUE 
 FROM hotels WHERE name = 'Hotel Exemplo 1' LIMIT 1;

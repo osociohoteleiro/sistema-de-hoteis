@@ -1,32 +1,16 @@
 const express = require('express');
-const mysql = require('mysql2/promise');
+const db = require('../config/database');
 // const { authenticateToken } = require('../middleware/auth'); // Removido temporariamente
 
 const router = express.Router();
-
-// Configuração do banco de dados
-const dbConfig = {
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-};
 
 // Middleware de autenticação para todas as rotas
 // router.use(authenticateToken); // Removido temporariamente para manter consistência
 
 // GET /api/systems-catalog - Listar todos os sistemas cadastrados
 router.get('/', async (req, res) => {
-  let connection;
-  
   try {
-    connection = await mysql.createConnection(dbConfig);
-    
-    const [rows] = await connection.execute(`
+    const rows = await db.query(`
       SELECT 
         id,
         name,
@@ -61,17 +45,11 @@ router.get('/', async (req, res) => {
       message: 'Erro interno do servidor',
       error: error.message
     });
-  } finally {
-    if (connection) {
-      await connection.end();
-    }
   }
 });
 
 // POST /api/systems-catalog - Criar novo sistema
 router.post('/', async (req, res) => {
-  let connection;
-  
   try {
     const { name, type, integration_type, auth_fields, description } = req.body;
     
@@ -103,11 +81,10 @@ router.post('/', async (req, res) => {
       authFieldsJson = auth_fields;
     }
     
-    connection = await mysql.createConnection(dbConfig);
-    
-    const [result] = await connection.execute(`
+    const result = await db.query(`
       INSERT INTO systems_catalog (name, type, integration_type, auth_fields, description)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id
     `, [
       name.trim(),
       type,
@@ -117,9 +94,9 @@ router.post('/', async (req, res) => {
     ]);
     
     // Buscar o registro criado
-    const [newSystem] = await connection.execute(`
-      SELECT * FROM systems_catalog WHERE id = ?
-    `, [result.insertId]);
+    const newSystem = await db.query(`
+      SELECT * FROM systems_catalog WHERE id = $1
+    `, [result[0].id]);
     
     const system = {
       ...newSystem[0],
@@ -135,7 +112,7 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error('❌ Erro ao criar sistema:', error);
     
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === '23505') { // PostgreSQL duplicate key error
       res.status(400).json({
         success: false,
         message: `Sistema "${req.body.name}" já existe`
@@ -147,17 +124,11 @@ router.post('/', async (req, res) => {
         error: error.message
       });
     }
-  } finally {
-    if (connection) {
-      await connection.end();
-    }
   }
 });
 
 // PUT /api/systems-catalog/:id - Atualizar sistema existente
 router.put('/:id', async (req, res) => {
-  let connection;
-  
   try {
     const { id } = req.params;
     const { name, type, integration_type, auth_fields, description, is_active } = req.body;
@@ -169,11 +140,9 @@ router.put('/:id', async (req, res) => {
       });
     }
     
-    connection = await mysql.createConnection(dbConfig);
-    
     // Verificar se sistema existe
-    const [existing] = await connection.execute(
-      'SELECT id FROM systems_catalog WHERE id = ?',
+    const existing = await db.query(
+      'SELECT id FROM systems_catalog WHERE id = $1',
       [id]
     );
     
@@ -187,10 +156,12 @@ router.put('/:id', async (req, res) => {
     // Construir query dinâmica apenas com campos fornecidos
     const updates = [];
     const values = [];
+    let paramIndex = 1;
     
     if (name !== undefined) {
-      updates.push('name = ?');
+      updates.push(`name = $${paramIndex}`);
       values.push(name.trim());
+      paramIndex++;
     }
     
     if (type !== undefined) {
@@ -200,8 +171,9 @@ router.put('/:id', async (req, res) => {
           message: 'Tipo deve ser: pms, motor ou channel'
         });
       }
-      updates.push('type = ?');
+      updates.push(`type = $${paramIndex}`);
       values.push(type);
+      paramIndex++;
     }
     
     if (integration_type !== undefined) {
@@ -211,23 +183,27 @@ router.put('/:id', async (req, res) => {
           message: 'Tipo de integração deve ser: api ou link'
         });
       }
-      updates.push('integration_type = ?');
+      updates.push(`integration_type = $${paramIndex}`);
       values.push(integration_type);
+      paramIndex++;
     }
     
     if (auth_fields !== undefined) {
-      updates.push('auth_fields = ?');
+      updates.push(`auth_fields = $${paramIndex}`);
       values.push(JSON.stringify(auth_fields || []));
+      paramIndex++;
     }
     
     if (description !== undefined) {
-      updates.push('description = ?');
+      updates.push(`description = $${paramIndex}`);
       values.push(description);
+      paramIndex++;
     }
     
     if (is_active !== undefined) {
-      updates.push('is_active = ?');
+      updates.push(`is_active = $${paramIndex}`);
       values.push(Boolean(is_active));
+      paramIndex++;
     }
     
     if (updates.length === 0) {
@@ -240,15 +216,15 @@ router.put('/:id', async (req, res) => {
     updates.push('updated_at = NOW()');
     values.push(id);
     
-    await connection.execute(`
+    await db.query(`
       UPDATE systems_catalog 
       SET ${updates.join(', ')}
-      WHERE id = ?
+      WHERE id = $${paramIndex}
     `, values);
     
     // Buscar sistema atualizado
-    const [updated] = await connection.execute(
-      'SELECT * FROM systems_catalog WHERE id = ?',
+    const updated = await db.query(
+      'SELECT * FROM systems_catalog WHERE id = $1',
       [id]
     );
     
@@ -266,7 +242,7 @@ router.put('/:id', async (req, res) => {
   } catch (error) {
     console.error('❌ Erro ao atualizar sistema:', error);
     
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error.code === '23505') { // PostgreSQL duplicate key error
       res.status(400).json({
         success: false,
         message: `Sistema "${req.body.name}" já existe`
@@ -278,17 +254,11 @@ router.put('/:id', async (req, res) => {
         error: error.message
       });
     }
-  } finally {
-    if (connection) {
-      await connection.end();
-    }
   }
 });
 
 // DELETE /api/systems-catalog/:id - Remover sistema (soft delete)
 router.delete('/:id', async (req, res) => {
-  let connection;
-  
   try {
     const { id } = req.params;
     
@@ -299,11 +269,9 @@ router.delete('/:id', async (req, res) => {
       });
     }
     
-    connection = await mysql.createConnection(dbConfig);
-    
     // Verificar se sistema existe
-    const [existing] = await connection.execute(
-      'SELECT id, name FROM systems_catalog WHERE id = ? AND is_active = TRUE',
+    const existing = await db.query(
+      'SELECT id, name FROM systems_catalog WHERE id = $1 AND is_active = TRUE',
       [id]
     );
     
@@ -315,8 +283,8 @@ router.delete('/:id', async (req, res) => {
     }
     
     // Verificar se existem integrações usando este sistema
-    const [integrations] = await connection.execute(
-      'SELECT COUNT(*) as count FROM pms_motor_channel WHERE system_id = ?',
+    const integrations = await db.query(
+      'SELECT COUNT(*) as count FROM pms_motor_channel WHERE system_id = $1',
       [id]
     );
     
@@ -328,8 +296,8 @@ router.delete('/:id', async (req, res) => {
     }
     
     // Soft delete
-    await connection.execute(
-      'UPDATE systems_catalog SET is_active = FALSE, updated_at = NOW() WHERE id = ?',
+    await db.query(
+      'UPDATE systems_catalog SET is_active = FALSE, updated_at = NOW() WHERE id = $1',
       [id]
     );
     
@@ -345,17 +313,11 @@ router.delete('/:id', async (req, res) => {
       message: 'Erro interno do servidor',
       error: error.message
     });
-  } finally {
-    if (connection) {
-      await connection.end();
-    }
   }
 });
 
 // GET /api/systems-catalog/types/:type - Listar sistemas por tipo
 router.get('/types/:type', async (req, res) => {
-  let connection;
-  
   try {
     const { type } = req.params;
     
@@ -366,9 +328,7 @@ router.get('/types/:type', async (req, res) => {
       });
     }
     
-    connection = await mysql.createConnection(dbConfig);
-    
-    const [rows] = await connection.execute(`
+    const rows = await db.query(`
       SELECT 
         id,
         name,
@@ -377,7 +337,7 @@ router.get('/types/:type', async (req, res) => {
         auth_fields,
         description
       FROM systems_catalog 
-      WHERE type = ? AND is_active = TRUE
+      WHERE type = $1 AND is_active = TRUE
       ORDER BY name
     `, [type]);
     
@@ -399,10 +359,6 @@ router.get('/types/:type', async (req, res) => {
       message: 'Erro interno do servidor',
       error: error.message
     });
-  } finally {
-    if (connection) {
-      await connection.end();
-    }
   }
 });
 

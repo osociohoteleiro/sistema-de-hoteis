@@ -26,42 +26,15 @@ const HotelIA = () => {
   const [editingMessage, setEditingMessage] = useState(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
-  const [mockStats] = useState({
-    totalInteractions: 1247,
-    satisfactionRate: 94.2,
-    responseTime: '1.2s',
-    resolvedQueries: 89.7
+  // Sistema de IA não implementado ainda - conectar à API quando disponível
+  const [stats] = useState({
+    totalInteractions: 0,
+    satisfactionRate: 0,
+    responseTime: '0s',
+    resolvedQueries: 0
   });
 
-  const mockConversations = [
-    {
-      id: 1,
-      guest: 'Ana Silva',
-      room: '205',
-      lastMessage: 'Como faço para pedir room service?',
-      time: '14:30',
-      status: 'ai-handled',
-      satisfaction: 5
-    },
-    {
-      id: 2,
-      guest: 'Carlos Santos',
-      room: '101',
-      lastMessage: 'Qual o horário da piscina?',
-      time: '13:15',
-      status: 'ai-handled',
-      satisfaction: 4
-    },
-    {
-      id: 3,
-      guest: 'Marina Costa',
-      room: '307',
-      lastMessage: 'Preciso de ajuda com o check-out',
-      time: '12:45',
-      status: 'escalated',
-      satisfaction: null
-    }
-  ];
+  const conversations = [];
 
   const handleSettingsChange = (setting, value) => {
     setIaSettings(prev => ({
@@ -230,7 +203,7 @@ const HotelIA = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard
               title="Interações Totais"
-              value={mockStats.totalInteractions.toLocaleString('pt-BR')}
+              value={stats.totalInteractions.toLocaleString('pt-BR')}
               color="blue"
               icon={
                 <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -241,7 +214,7 @@ const HotelIA = () => {
 
             <StatCard
               title="Satisfação"
-              value={mockStats.satisfactionRate}
+              value={stats.satisfactionRate}
               suffix="%"
               color="green"
               icon={
@@ -253,7 +226,7 @@ const HotelIA = () => {
 
             <StatCard
               title="Tempo de Resposta"
-              value={mockStats.responseTime}
+              value={stats.responseTime}
               color="purple"
               icon={
                 <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -264,7 +237,7 @@ const HotelIA = () => {
 
             <StatCard
               title="Resoluções"
-              value={mockStats.resolvedQueries}
+              value={stats.resolvedQueries}
               suffix="%"
               color="yellow"
               icon={
@@ -381,7 +354,7 @@ const HotelIA = () => {
             <h3 className="text-lg font-semibold text-white mb-6">Conversas Recentes com IA</h3>
             
             <div className="space-y-4">
-              {mockConversations.map((conversation) => (
+              {conversations.map((conversation) => (
                 <div key={conversation.id} className="p-4 border border-white/10 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-3">

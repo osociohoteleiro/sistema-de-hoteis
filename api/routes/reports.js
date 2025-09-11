@@ -408,7 +408,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
         FROM manual_reports r
         INNER JOIN hotels h ON r.hotel_uuid = h.hotel_uuid
         LEFT JOIN users u ON r.created_by = u.id
-        WHERE r.id = ? 
+        WHERE r.id = $1 
         AND r.status = 'ACTIVE'
       `;
       params = [reportId];
@@ -422,9 +422,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
         INNER JOIN hotels h ON r.hotel_uuid = h.hotel_uuid
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
         LEFT JOIN users u ON r.created_by = u.id
-        WHERE r.id = ? 
+        WHERE r.id = $1 
         AND r.status = 'ACTIVE'
-        AND uh.user_id = ? AND uh.active = true
+        AND uh.user_id = $2 AND uh.active = true
       `;
       params = [reportId, req.user.id];
     }
@@ -503,7 +503,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         SELECT r.id, r.hotel_uuid, h.hotel_nome
         FROM manual_reports r
         INNER JOIN hotels h ON r.hotel_uuid = h.hotel_uuid
-        WHERE r.id = ? 
+        WHERE r.id = $1 
         AND r.status = 'ACTIVE'
       `;
       params = [reportId];
@@ -513,9 +513,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         FROM manual_reports r
         INNER JOIN hotels h ON r.hotel_uuid = h.hotel_uuid
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
-        WHERE r.id = ? 
+        WHERE r.id = $1 
         AND r.status = 'ACTIVE'
-        AND uh.user_id = ? AND uh.active = true
+        AND uh.user_id = $2 AND uh.active = true
       `;
       params = [reportId, req.user.id];
     }
@@ -572,7 +572,7 @@ router.post('/:id/generate-pdf', authenticateToken, async (req, res) => {
         FROM manual_reports r
         INNER JOIN hotels h ON r.hotel_uuid = h.hotel_uuid
         LEFT JOIN users u ON r.created_by = u.id
-        WHERE r.id = ? 
+        WHERE r.id = $1 
         AND r.status = 'ACTIVE'
       `;
       params = [reportId];
@@ -586,9 +586,9 @@ router.post('/:id/generate-pdf', authenticateToken, async (req, res) => {
         INNER JOIN hotels h ON r.hotel_uuid = h.hotel_uuid
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
         LEFT JOIN users u ON r.created_by = u.id
-        WHERE r.id = ? 
+        WHERE r.id = $1 
         AND r.status = 'ACTIVE'
-        AND uh.user_id = ? AND uh.active = true
+        AND uh.user_id = $2 AND uh.active = true
       `;
       params = [reportId, req.user.id];
     }

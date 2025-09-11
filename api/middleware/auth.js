@@ -117,7 +117,11 @@ const requireRole = (roles) => {
 
     const userRoles = Array.isArray(roles) ? roles : [roles];
     
-    if (!userRoles.includes(req.user.user_type)) {
+    // Normalizar roles para uppercase para compatibilidade
+    const normalizedUserType = req.user.user_type ? req.user.user_type.toUpperCase() : '';
+    const normalizedRequiredRoles = userRoles.map(role => role.toUpperCase());
+    
+    if (!normalizedRequiredRoles.includes(normalizedUserType)) {
       return res.status(403).json({ 
         error: 'Permissão insuficiente' 
       });

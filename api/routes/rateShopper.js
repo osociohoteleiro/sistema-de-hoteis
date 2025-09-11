@@ -493,7 +493,7 @@ router.get('/check-dates-simple', async (req, res) => {
     // Buscar amostras básicas
     const samples = await db.query(`
       SELECT 
-        check_in,
+        check_in_date,
         price,
         search_id,
         id
@@ -528,14 +528,14 @@ router.get('/:hotel_uuid/check-dates', async (req, res) => {
     // Verificar todas as datas no banco
     const allDates = await db.query(`
       SELECT 
-        DATE(check_in) as date,
+        DATE(check_in_date) as date,
         COUNT(*) as count,
         MIN(price) as min_price,
         MAX(price) as max_price
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_searches rs ON rsp.search_id = rs.id  
       WHERE rs.hotel_id = $1
-      GROUP BY DATE(check_in)
+      GROUP BY DATE(check_in_date)
       ORDER BY date
     `, [hotel_id]);
     
@@ -700,11 +700,11 @@ router.get('/:hotel_id/price-history', async (req, res) => {
           rsp1.property_id,
           rsp1.check_in_date,
           rsp1.price as current_price,
-          rsp1.scraped_at as current_captured_at,
+          rsp1.scraped_at as current_scraped_at,
           rsp1.hotel_id,
           p.property_name,
           rsp2.price as previous_price,
-          rsp2.scraped_at as previous_captured_at,
+          rsp2.scraped_at as previous_scraped_at,
           CASE 
             WHEN rsp2.price IS NULL THEN 'NEW'
             WHEN rsp1.price > rsp2.price AND ((rsp1.price - rsp2.price) / rsp2.price * 100) > 1 THEN 'UP'
@@ -764,16 +764,16 @@ router.get('/:hotel_id/price-history', async (req, res) => {
     }
     
     if (start_date) {
-      query += ` AND check_in >= $${queryParams.length + 1}`;
+      query += ` AND check_in_date >= $${queryParams.length + 1}`;
       queryParams.push(start_date);
     }
     
     if (end_date) {
-      query += ` AND check_in <= $${queryParams.length + 1}`;
+      query += ` AND check_in_date <= $${queryParams.length + 1}`;
       queryParams.push(end_date);
     }
     
-    query += ` ORDER BY current_captured_at DESC, property_id, check_in LIMIT 500`;
+    query += ` ORDER BY current_scraped_at DESC, property_id, check_in_date LIMIT 500`;
     
     console.log('📊 API price-history: Query final:', query, queryParams);
 
@@ -853,7 +853,7 @@ router.get('/:hotel_id/property-history/:property_id', async (req, res) => {
       return {
         ...entry,
         price: parseFloat(entry.price),
-        captured_at: entry.captured_at,
+        scraped_at: entry.scraped_at,
         change: change ? parseFloat(change.toFixed(2)) : null,
         change_percent: changePercent ? parseFloat(changePercent.toFixed(2)) : null
       };
@@ -1325,7 +1325,7 @@ router.put('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req,
 
     const setClause = Object.keys(updateData)
       .filter(key => updateData[key] !== undefined)
-      .map(key => `${key} = ?`)
+      .map((key, index) => `${key} = $${index + 1}`)
       .join(', ');
 
     const values = Object.keys(updateData)
@@ -1335,7 +1335,7 @@ router.put('/:hotel_id/config', authenticateToken, checkHotelAccess, async (req,
     await db.query(`
       UPDATE rate_shopper_configs 
       SET ${setClause}, updated_at = CURRENT_TIMESTAMP
-      WHERE hotel_id = $1
+      WHERE hotel_id = $${values.length + 1}
     `, [...values, hotelId]);
 
     res.json({
@@ -1748,7 +1748,7 @@ router.get('/searches/:search_id/live-progress', async (req, res) => {
     // Últimos preços extraídos (top 10)
     const latestPrices = await db.query(`
       SELECT 
-        check_in,
+        check_in_date,
         price,
         room_type,
         scraped_at
@@ -2300,7 +2300,7 @@ router.get('/debug/date-distribution/:hotel_id', async (req, res) => {
         MIN(extracted_at) as primeira_extracao,
         MAX(extracted_at) as ultima_extracao
       FROM rate_shopper_prices 
-      WHERE hotel_id = ? 
+      WHERE hotel_id = $1 
       GROUP BY DATE(extracted_at) 
       ORDER BY data_extracao DESC 
       LIMIT 50
@@ -2315,7 +2315,7 @@ router.get('/debug/date-distribution/:hotel_id', async (req, res) => {
         MAX(DATE(extracted_at)) as ultima_data,
         COUNT(DISTINCT DATE(extracted_at)) as total_dias_com_dados
       FROM rate_shopper_prices 
-      WHERE hotel_id = ?
+      WHERE hotel_id = $1
     `, [hotelId]);
 
     res.json({

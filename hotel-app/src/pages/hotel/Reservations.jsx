@@ -3,38 +3,8 @@ import { useState } from 'react';
 const Reservations = () => {
   const [activeTab, setActiveTab] = useState('all');
 
-  const mockReservations = [
-    {
-      id: 1,
-      guest: 'João Silva',
-      email: 'joao@email.com',
-      checkIn: '2024-02-15',
-      checkOut: '2024-02-18',
-      room: '101',
-      status: 'confirmed',
-      total: 450.00
-    },
-    {
-      id: 2,
-      guest: 'Maria Santos',
-      email: 'maria@email.com',
-      checkIn: '2024-02-20',
-      checkOut: '2024-02-22',
-      room: '205',
-      status: 'pending',
-      total: 320.00
-    },
-    {
-      id: 3,
-      guest: 'Carlos Oliveira',
-      email: 'carlos@email.com',
-      checkIn: '2024-02-10',
-      checkOut: '2024-02-12',
-      room: '303',
-      status: 'completed',
-      total: 280.00
-    }
-  ];
+  // Sistema de reservas não implementado ainda - conectar à API quando disponível
+  const reservations = [];
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -52,7 +22,7 @@ const Reservations = () => {
     );
   };
 
-  const filteredReservations = mockReservations.filter(reservation => {
+  const filteredReservations = reservations.filter(reservation => {
     if (activeTab === 'all') return true;
     return reservation.status === activeTab;
   });
@@ -78,10 +48,10 @@ const Reservations = () => {
       <div className="bg-sidebar-800/50 backdrop-blur-sm rounded-lg border border-white/10 p-6">
         <div className="flex space-x-1 mb-6">
           {[
-            { key: 'all', label: 'Todas', count: mockReservations.length },
-            { key: 'confirmed', label: 'Confirmadas', count: mockReservations.filter(r => r.status === 'confirmed').length },
-            { key: 'pending', label: 'Pendentes', count: mockReservations.filter(r => r.status === 'pending').length },
-            { key: 'completed', label: 'Concluídas', count: mockReservations.filter(r => r.status === 'completed').length }
+            { key: 'all', label: 'Todas', count: reservations.length },
+            { key: 'confirmed', label: 'Confirmadas', count: reservations.filter(r => r.status === 'confirmed').length },
+            { key: 'pending', label: 'Pendentes', count: reservations.filter(r => r.status === 'pending').length },
+            { key: 'completed', label: 'Concluídas', count: reservations.filter(r => r.status === 'completed').length }
           ].map((tab) => (
             <button
               key={tab.key}

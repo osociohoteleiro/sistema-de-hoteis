@@ -5,6 +5,7 @@ import { useHotelList } from '../hooks/useHotelList';
 import MarketingMessageForm from '../components/MarketingMessageFormTest';
 import MarketingMessageList from '../components/MarketingMessageList';
 import KnowledgeModal from '../components/KnowledgeModal';
+import apiService from '../services/api';
 import toast from 'react-hot-toast';
 
 const AI = () => {
@@ -23,12 +24,26 @@ const AI = () => {
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
 
   useEffect(() => {
-    // TODO: Fetch real data from API
-    setAiStats({
-      connectedHotels: 0,
-      totalAttendances: 0,
-      totalReservations: 0
-    });
+    const loadAiStats = async () => {
+      try {
+        const data = await apiService.getAiStats();
+        setAiStats({
+          connectedHotels: data.connectedHotels || 0,
+          totalAttendances: data.totalAttendances || 0,
+          totalReservations: data.totalReservations || 0
+        });
+      } catch (error) {
+        console.error('Erro ao carregar estatísticas da IA:', error);
+        // Manter valores padrão em caso de erro
+        setAiStats({
+          connectedHotels: 0,
+          totalAttendances: 0,
+          totalReservations: 0
+        });
+      }
+    };
+
+    loadAiStats();
   }, []);
 
   // Buscar mensagens quando hotel for selecionado
@@ -103,10 +118,16 @@ const AI = () => {
   };
 
   // AI Training handlers
-  const handleToggleAI = () => {
-    setAiTrainingStatus(!aiTrainingStatus);
-    // TODO: Implement API call to toggle AI status
-    console.log(`AI ${aiTrainingStatus ? 'pausada' : 'ativada'}`);
+  const handleToggleAI = async () => {
+    try {
+      const newStatus = !aiTrainingStatus;
+      await apiService.toggleAiStatus(selectedHotelUuid, newStatus);
+      setAiTrainingStatus(newStatus);
+      toast.success(`IA ${newStatus ? 'ativada' : 'pausada'} com sucesso`);
+    } catch (error) {
+      console.error('Erro ao alternar status da IA:', error);
+      toast.error('Erro ao alterar status da IA');
+    }
   };
 
   const handleKnowledgeConfig = () => {
@@ -118,12 +139,22 @@ const AI = () => {
   };
 
   const handleSkillsManagement = () => {
+    if (!selectedHotelUuid) {
+      toast.error('Selecione um hotel primeiro');
+      return;
+    }
     // TODO: Open skills management modal/page
+    toast.info('Funcionalidade de habilidades será implementada em breve');
     console.log('Gerenciar Habilidades da IA');
   };
 
   const handleBehaviorAdjustment = () => {
+    if (!selectedHotelUuid) {
+      toast.error('Selecione um hotel primeiro');
+      return;
+    }
     // TODO: Open behavior adjustment modal/page
+    toast.info('Funcionalidade de comportamento será implementada em breve');
     console.log('Ajustar Comportamento da IA');
   };
 

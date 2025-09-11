@@ -122,7 +122,7 @@ const Header = () => {
                   {user?.name || 'Usuário'}
                 </p>
                 <p className="text-sidebar-300">
-                  {getUserTypeLabel(user?.type)}
+                  {getUserTypeLabel(user?.user_type)}
                 </p>
               </div>
               <svg className="w-4 h-4 text-sidebar-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +142,7 @@ const Header = () => {
                       {user?.email || 'email@exemplo.com'}
                     </p>
                     <p className="text-xs text-primary-400">
-                      {getUserTypeLabel(user?.type)}
+                      {getUserTypeLabel(user?.user_type)}
                     </p>
                   </div>
                   

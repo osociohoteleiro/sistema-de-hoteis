@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import HotelDrawer from '../components/HotelDrawer';
 import HotelForm from '../components/HotelForm';
+import apiService from '../services/api'; // ✅ CORREÇÃO: Usar apiService
 
 const Hotels = () => {
   const { config, loading, setLoading, selectedHotelUuid, selectHotel } = useApp();
@@ -19,82 +20,19 @@ const Hotels = () => {
     setError(null);
     
     try {
-      // Se não há endpoint configurado, usar dados de exemplo para desenvolvimento
-      if (!config.apiEndpoints.listHotels) {
-        console.log('📝 Nenhum endpoint de listagem configurado, usando dados de exemplo...');
-        
-        // Dados de exemplo para desenvolvimento
-        const exampleHotels = [
-          {
-            hotel_uuid: 'hotel-exemplo-1',
-            name: 'Hotel Exemplo 1',
-            checkin_time: '14:00:00',
-            checkout_time: '12:00:00',
-            cover_image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&h=300&fit=crop&crop=center'
-          },
-          {
-            hotel_uuid: 'hotel-exemplo-2', 
-            name: 'Hotel Exemplo 2',
-            checkin_time: '15:00:00',
-            checkout_time: '11:00:00',
-            cover_image: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400&h=300&fit=crop&crop=center'
-          },
-          {
-            hotel_uuid: 'hotel-exemplo-3',
-            name: 'Hotel Teste S3',
-            checkin_time: '16:00:00', 
-            checkout_time: '10:00:00',
-            cover_image: null // Para testar upload
-          }
-        ];
-        
-        // Simular delay da API
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setHotels(exampleHotels);
-        return;
-      }
-
-      // Usar endpoint configurado se disponível
-      console.log('🌐 Buscando hotéis da API:', config.apiEndpoints.listHotels);
+      console.log('🌐 Buscando hotéis usando apiService...');
       
-      // Preparar headers com autenticação se disponível
-      const headers = {
-        'Content-Type': 'application/json'
-      };
+      // ✅ CORREÇÃO: Usar apiService em vez de fetch manual
+      const response = await apiService.getHotels();
       
-      const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      // A API retorna { hotels: [...], pagination: {...} }
+      const hotelList = response.hotels || [];
+      console.log('✅ Hotéis carregados com sucesso:', hotelList.length, 'hotéis encontrados');
+      setHotels(hotelList);
       
-      const response = await fetch(config.apiEndpoints.listHotels, {
-        method: 'GET',
-        headers
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        // O endpoint /my-hotels retorna { success: true, hotels: [...] }
-        const hotelList = data.hotels || (Array.isArray(data) ? data : []);
-        console.log('✅ Hotéis carregados com sucesso:', hotelList.length, 'hotéis encontrados');
-        setHotels(hotelList);
-      } else {
-        const errorText = await response.text();
-        console.error('❌ Erro na resposta da API:', response.status, errorText);
-        
-        if (response.status === 401) {
-          throw new Error('Não autorizado. Faça login novamente.');
-        } else if (response.status === 404) {
-          throw new Error('Endpoint não encontrado. Verifique a configuração da API.');
-        } else {
-          throw new Error(`Falha ao carregar hotéis (${response.status}): ${response.statusText}`);
-        }
-      }
     } catch (error) {
       console.error('❌ Erro ao carregar hotéis:', error);
-      const errorMessage = error.message || 'Erro desconhecido ao carregar hotéis';
-      setError(errorMessage);
-      setHotels([]);
+      setError(`Erro ao carregar hotéis: ${error.message}`);
     } finally {
       setLoading(false);
       setInitialLoad(false);
@@ -102,35 +40,24 @@ const Hotels = () => {
   };
 
   useEffect(() => {
-    // Aguardar um pouco para garantir que o contexto esteja carregado
-    const timer = setTimeout(() => {
-      fetchHotels();
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }, [config.apiEndpoints.listHotels]);
+    // ✅ CORREÇÃO: Carregar hotéis diretamente sem dependência de config
+    fetchHotels();
+  }, []);
 
   const handleDeleteHotel = async (hotelId) => {
-    if (!config.apiEndpoints.deleteHotel) {
-      console.error('Endpoint de exclusão não configurado');
-      return;
-    }
-
     if (!confirm('Tem certeza que deseja excluir este hotel?')) return;
 
     try {
-      const response = await fetch(`${config.apiEndpoints.deleteHotel}/${hotelId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        console.log('Hotel excluído com sucesso!');
-        setHotels(hotels.filter(hotel => hotel.hotel_uuid !== hotelId));
-      } else {
-        throw new Error('Erro ao excluir hotel');
-      }
+      // ✅ CORREÇÃO: Usar apiService para deletar
+      await apiService.deleteHotel(hotelId);
+      
+      console.log('Hotel excluído com sucesso!');
+      // ✅ CORREÇÃO: Filtrar por id (numérico) em vez de hotel_uuid
+      setHotels(hotels.filter(hotel => hotel.id !== hotelId));
+      
     } catch (error) {
       console.error('Erro ao excluir hotel:', error);
+      setError('Erro ao excluir hotel. Tente novamente.');
     }
   };
 
@@ -152,8 +79,10 @@ const Hotels = () => {
     }, []);
 
     const handleCardClick = () => {
-      if (selectedHotelUuid !== hotel.hotel_uuid) {
-        selectHotel(hotel.hotel_uuid);
+      // ✅ CORREÇÃO: Usar hotel_uuid para compatibilidade com AppContext, fallback para id
+      const hotelIdentifier = hotel.hotel_uuid || hotel.id;
+      if (selectedHotelUuid !== hotelIdentifier) {
+        selectHotel(hotelIdentifier);
       }
     };
 
@@ -166,7 +95,7 @@ const Hotels = () => {
       <div 
         onClick={handleCardClick}
         className={`bg-white/10 backdrop-blur-sm rounded-xl border transition-all duration-200 cursor-pointer relative ${
-          selectedHotelUuid === hotel.hotel_uuid 
+          selectedHotelUuid === (hotel.hotel_uuid || hotel.id) 
             ? 'border-blue-400/50 bg-blue-500/10' 
             : 'border-white/20 hover:bg-white/15'
         }`}
@@ -219,7 +148,7 @@ const Hotels = () => {
               <div className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">
                 Ativo
               </div>
-              {selectedHotelUuid === hotel.hotel_uuid && (
+              {selectedHotelUuid === (hotel.hotel_uuid || hotel.id) && (
                 <div className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs flex items-center space-x-1">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -246,7 +175,7 @@ const Hotels = () => {
                 <div className="absolute right-0 mt-2 w-32 bg-sidebar-800 rounded-lg shadow-lg border border-white/10 z-50">
                   <div className="py-1">
                     <Link
-                      to={`/hoteis/editar/${hotel.hotel_uuid}`}
+                      to={`/hoteis/editar/${hotel.hotel_uuid || hotel.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowMenu(false);
@@ -259,6 +188,20 @@ const Hotels = () => {
                       </svg>
                       <span>Gerenciar</span>
                     </Link>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        // ✅ CORREÇÃO: Usar id para operações da API
+                        handleDeleteHotel(hotel.id);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center space-x-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>Excluir</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -371,7 +314,7 @@ const Hotels = () => {
       {!loading && !error && hotels.length > 0 && (
         <div className="space-y-4">
           {hotels.map((hotel, index) => (
-            <HotelCard key={hotel.hotel_uuid || index} hotel={hotel} />
+            <HotelCard key={hotel.id || hotel.hotel_uuid || index} hotel={hotel} />
           ))}
         </div>
       )}

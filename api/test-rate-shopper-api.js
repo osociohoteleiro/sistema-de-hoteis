@@ -57,15 +57,14 @@ async function testRateShopperAPI() {
         rs.id,
         rs.hotel_id,
         rs.property_id,
-        rs.check_in as start_date,
-        rs.check_out as end_date,
-        rs.search_status as status,
-        rs.total_results,
+        rs.start_date as start_date,
+        rs.end_date as end_date,
+        rs.status as status,
         rs.duration_seconds,
         rs.created_at,
         rs.updated_at,
         rsp.property_name,
-        rsp.booking_engine as platform
+        rsp.platform as platform
       FROM rate_shopper_searches rs
       LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       WHERE rs.hotel_id = $1
@@ -88,7 +87,7 @@ async function testRateShopperAPI() {
     
     const priceAnalysisQuery = `
       SELECT 
-        DATE(rsp.check_in) as date,
+        DATE(rsp.check_in_date) as date,
         COUNT(*) as total_prices,
         AVG(rsp.price) as avg_price,
         MIN(rsp.price) as min_price,
@@ -96,7 +95,7 @@ async function testRateShopperAPI() {
         COUNT(DISTINCT rsp.property_id) as properties_count
       FROM rate_shopper_prices rsp
       WHERE rsp.hotel_id = $1
-      GROUP BY DATE(rsp.check_in)
+      GROUP BY DATE(rsp.check_in_date)
       ORDER BY date DESC
       LIMIT 10
     `;
@@ -119,24 +118,24 @@ async function testRateShopperAPI() {
         p.id as property_id,
         p.property_name,
         p.hotel_id,
-        rsp.check_in,
-        rsp.check_out,
+        rsp.check_in_date,
+        rsp.check_out_date,
         rsp.price,
         rsp.currency,
         rsp.availability_status,
-        rsp.captured_at,
-        s.search_status
+        rsp.scraped_at,
+        s.status
       FROM rate_shopper_prices rsp
       JOIN rate_shopper_properties p ON rsp.property_id = p.id
       JOIN rate_shopper_searches s ON rsp.search_id = s.id
       WHERE rsp.hotel_id = $1
-        AND rsp.captured_at = (
-          SELECT MAX(rsp2.captured_at) 
+        AND rsp.scraped_at = (
+          SELECT MAX(rsp2.scraped_at) 
           FROM rate_shopper_prices rsp2 
           WHERE rsp2.property_id = rsp.property_id 
-            AND rsp2.check_in = rsp.check_in
+            AND rsp2.check_in_date = rsp.check_in_date
         )
-      ORDER BY rsp.captured_at DESC
+      ORDER BY rsp.scraped_at DESC
       LIMIT 10
     `;
     
@@ -156,10 +155,10 @@ async function testRateShopperAPI() {
     const dateFormatQuery = `
       SELECT 
         COUNT(*) as total,
-        COUNT(CASE WHEN check_in IS NULL THEN 1 END) as null_check_in,
-        COUNT(CASE WHEN captured_at IS NULL THEN 1 END) as null_captured_at,
-        MIN(captured_at) as oldest_capture,
-        MAX(captured_at) as newest_capture
+        COUNT(CASE WHEN check_in_date IS NULL THEN 1 END) as null_check_in,
+        COUNT(CASE WHEN scraped_at IS NULL THEN 1 END) as null_scraped_at,
+        MIN(scraped_at) as oldest_capture,
+        MAX(scraped_at) as newest_capture
       FROM rate_shopper_prices
       WHERE hotel_id = $1
     `;
@@ -169,7 +168,7 @@ async function testRateShopperAPI() {
     
     console.log(`   • Total de preços: ${dateStats.total}`);
     console.log(`   • Problemas com check_in: ${dateStats.null_check_in}`);
-    console.log(`   • Problemas com captured_at: ${dateStats.null_captured_at}`);
+    console.log(`   • Problemas com scraped_at: ${dateStats.null_scraped_at}`);
     console.log(`   • Período dos dados: ${dateStats.oldest_capture} a ${dateStats.newest_capture}`);
 
     // 6. Verificar queries que podem estar falhando na interface

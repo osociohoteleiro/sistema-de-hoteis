@@ -1,9 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(PGPASSWORD:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Read(//d/d/APPS-OSH/api/**)",
+      "Bash(psql:*)",
+      "Bash(node:*)",
+      "Bash(for file in bots.js workspaces.js flows.js folders.js sites.js hotel-sites.js)",
+      "Bash(do echo \"=== ANALISANDO $file ===\")",
+      "Bash(grep:*)",
+      "Bash(done)",
+      "Bash(for file in reports.js marketing-messages.js meta.js dataImport.js systems-catalog.js site-templates.js)",
+      "Bash(for:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

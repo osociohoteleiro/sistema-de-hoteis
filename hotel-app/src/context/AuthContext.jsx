@@ -169,21 +169,21 @@ const DEFAULT_USERS = {
     id: 1,
     email: 'superadmin@hotel.com',
     name: 'Super Administrador',
-    type: USER_TYPES.SUPER_ADMIN,
+    user_type: USER_TYPES.SUPER_ADMIN, // ✅ CORREÇÃO: user_type em vez de type
     permissions: DEFAULT_PERMISSIONS[USER_TYPES.SUPER_ADMIN]
   },
   'admin@hotel.com': {
     id: 2,
     email: 'admin@hotel.com',
     name: 'Administrador',
-    type: USER_TYPES.ADMIN,
+    user_type: USER_TYPES.ADMIN, // ✅ CORREÇÃO: user_type em vez de type
     permissions: DEFAULT_PERMISSIONS[USER_TYPES.ADMIN]
   },
   'hotel@hotel.com': {
     id: 3,
     email: 'hotel@hotel.com',
     name: 'Usuário Hotel',
-    type: USER_TYPES.HOTEL,
+    user_type: USER_TYPES.HOTEL, // ✅ CORREÇÃO: user_type em vez de type
     permissions: DEFAULT_PERMISSIONS[USER_TYPES.HOTEL]
   }
 };
@@ -258,7 +258,7 @@ export const AuthProvider = ({ children }) => {
           
           const userData = {
             ...apiResponse.user,
-            type: userType, // Manter compatibilidade
+            user_type: userType, // ✅ CORREÇÃO: Usar user_type (API) em vez de type
             permissions: permissions
           };
           
@@ -278,29 +278,8 @@ export const AuthProvider = ({ children }) => {
           return { success: true, user: userData, hotels: apiResponse.hotels };
         }
       } catch (apiError) {
-        console.log('⚠️ API indisponível, usando dados locais:', apiError.message);
-        
-        // Fallback para dados mockados
-        const userData = DEFAULT_USERS[email.toLowerCase()];
-        
-        if (!userData || password !== '123456') {
-          throw new Error('Email ou senha inválidos');
-        }
-
-        // Simular token JWT no formato esperado pela API de desenvolvimento
-        const token = `fake_token_${userData.id}_${Date.now()}`;
-        
-        // Salvar no localStorage
-        localStorage.setItem('authUser', JSON.stringify(userData));
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('auth_token', token);
-        localStorage.setItem('token', token);
-        
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        console.log('✅ Login realizado com dados mockados:', userData);
-        return { success: true, user: userData };
+        console.error('❌ API indisponível:', apiError.message);
+        throw new Error(`Erro de autenticação: ${apiError.message}`);
       }
       
     } catch (error) {
@@ -368,17 +347,17 @@ export const AuthProvider = ({ children }) => {
 
   // Verificar se é Super Admin
   const isSuperAdmin = () => {
-    return user?.type === USER_TYPES.SUPER_ADMIN;
+    return user?.user_type === USER_TYPES.SUPER_ADMIN;
   };
 
   // Verificar se é Admin
   const isAdmin = () => {
-    return user?.type === USER_TYPES.ADMIN;
+    return user?.user_type === USER_TYPES.ADMIN;
   };
 
   // Verificar se é usuário Hotel
   const isHotel = () => {
-    return user?.type === USER_TYPES.HOTEL;
+    return user?.user_type === USER_TYPES.HOTEL;
   };
 
   // Atualizar permissões de um usuário (apenas para Super Admin)
@@ -415,7 +394,7 @@ export const AuthProvider = ({ children }) => {
     try {
       // TODO: Implementar chamada para API
       // Por enquanto, retornar usuários mockados
-      const adminUsers = Object.values(DEFAULT_USERS).filter(u => u.type === USER_TYPES.ADMIN);
+      const adminUsers = Object.values(DEFAULT_USERS).filter(u => u.user_type === USER_TYPES.ADMIN); // ✅ CORREÇÃO: user_type
       return adminUsers;
     } catch (error) {
       console.error('❌ Erro ao listar usuários Admin:', error);
@@ -517,12 +496,12 @@ export const AuthProvider = ({ children }) => {
     if (!user) return false;
     
     // Super Admin pode editar qualquer usuário
-    if (user.type === USER_TYPES.SUPER_ADMIN) {
+    if (user.user_type === USER_TYPES.SUPER_ADMIN) {
       return true;
     }
     
     // Admin pode editar seu próprio perfil e usuários atribuídos
-    if (user.type === USER_TYPES.ADMIN) {
+    if (user.user_type === USER_TYPES.ADMIN) {
       // Pode editar a si mesmo
       if (targetUser.id === user.id) {
         return true;
@@ -532,7 +511,7 @@ export const AuthProvider = ({ children }) => {
     }
     
     // Hoteleiro só pode editar usuários da área do hotel (implementar futuramente)
-    if (user.type === USER_TYPES.HOTEL) {
+    if (user.user_type === USER_TYPES.HOTEL) {
       // Pode editar apenas a si mesmo por enquanto
       return targetUser.id === user.id;
     }
@@ -545,12 +524,12 @@ export const AuthProvider = ({ children }) => {
     if (!user) return false;
     
     // Super Admin pode excluir qualquer usuário (exceto a si mesmo)
-    if (user.type === USER_TYPES.SUPER_ADMIN) {
+    if (user.user_type === USER_TYPES.SUPER_ADMIN) {
       return targetUser.id !== user.id;
     }
     
     // Admin pode excluir usuários atribuídos (não a si mesmo)
-    if (user.type === USER_TYPES.ADMIN) {
+    if (user.user_type === USER_TYPES.ADMIN) {
       if (targetUser.id === user.id) {
         return false; // Não pode excluir a si mesmo
       }
@@ -567,7 +546,7 @@ export const AuthProvider = ({ children }) => {
     if (!user) return false;
     
     // Super Admin pode alterar senha de qualquer usuário
-    if (user.type === USER_TYPES.SUPER_ADMIN) {
+    if (user.user_type === USER_TYPES.SUPER_ADMIN) {
       return true;
     }
     

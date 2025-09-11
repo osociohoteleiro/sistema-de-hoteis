@@ -18,26 +18,7 @@ export const useHotel = () => {
 
     try {
       if (!config.apiEndpoints.getHotel) {
-        console.log('Endpoint não configurado, criando dados de exemplo para edição');
-        
-        // Criar dados de exemplo para permitir edição mesmo sem endpoint de busca
-        const mockHotel = {
-          hotel_uuid: hotelUuid,
-          hotel_nome: 'Hotel para Editar',
-          hora_checkin: '14:00',
-          hora_checkout: '12:00',
-          hotel_capa: '',
-          hotel_criado_em: new Date().toLocaleDateString('pt-BR'),
-          id: hotelUuid.slice(0, 8)
-        };
-
-        toast('ℹ️ Endpoint de busca não configurado. Usando dados em branco para edição.', { 
-          duration: 3000,
-          icon: 'ℹ️'
-        });
-        
-        setHotel(mockHotel);
-        return mockHotel;
+        throw new Error('Endpoint de busca de hotel não configurado. Configure em Configurações > Endpoints da API.');
       }
 
       // Substituir :id no endpoint com o UUID do hotel
@@ -95,11 +76,21 @@ export const useHotel = () => {
     try {
       // Mapear campos para o formato correto do N8N
       const payload = {
-        hotel_uuid: hotelUuid, // Adicionar UUID no payload
-        hotel_nome: hotelData.hotel_nome || hotelData.nome_hotel,
-        hora_checkin: hotelData.hora_checkin,
-        hora_checkout: hotelData.hora_checkout,
-        hotel_capa: hotelData.hotel_capa || hotelData.img_capa
+        hotel_uuid: hotelUuid,
+        name: hotelData.name || hotelData.hotel_nome || hotelData.nome_hotel,
+        checkin_time: hotelData.checkin_time + (hotelData.checkin_time.length === 5 ? ':00' : ''),
+        checkout_time: hotelData.checkout_time + (hotelData.checkout_time.length === 5 ? ':00' : ''),
+        cover_image: hotelData.cover_image || hotelData.hotel_capa || hotelData.img_capa || null,
+        description: hotelData.description || null,
+        address: hotelData.address || null,
+        phone: hotelData.phone || null,
+        email: hotelData.email || null,
+        website: hotelData.website || null,
+        // Manter compatibilidade com campos antigos
+        hotel_nome: hotelData.name || hotelData.hotel_nome || hotelData.nome_hotel,
+        hora_checkin: hotelData.checkin_time,
+        hora_checkout: hotelData.checkout_time,
+        hotel_capa: hotelData.cover_image || hotelData.hotel_capa || hotelData.img_capa
       };
 
       console.log('Payload enviado:', payload);

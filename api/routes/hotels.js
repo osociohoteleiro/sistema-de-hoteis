@@ -41,7 +41,7 @@ router.get('/', authenticateToken, async (req, res) => {
     let paramIndex = 1;
 
     // Filtro por usuário (apenas seus hotéis se não for admin)
-    if (req.user.user_type === 'HOTEL') {
+    if (req.user.user_type && req.user.user_type.toUpperCase() === 'HOTEL') {
       query += ` AND id IN (
         SELECT hotel_id FROM user_hotels 
         WHERE user_id = $${paramIndex} AND active = true
@@ -68,7 +68,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const countParams = [];
     let countParamIndex = 1;
 
-    if (req.user.user_type === 'HOTEL') {
+    if (req.user.user_type && req.user.user_type.toUpperCase() === 'HOTEL') {
       countQuery += ` AND id IN (
         SELECT hotel_id FROM user_hotels 
         WHERE user_id = $${countParamIndex} AND active = true
@@ -111,7 +111,7 @@ router.get('/my-hotels', authenticateToken, async (req, res) => {
     let query;
     let params = [];
 
-    if (req.user.user_type === 'SUPER_ADMIN' || req.user.user_type === 'ADMIN') {
+    if ((req.user.user_type && req.user.user_type.toUpperCase() === 'SUPER_ADMIN') || (req.user.user_type && req.user.user_type.toUpperCase() === 'ADMIN')) {
       // Admin vê todos os hotéis
       console.log('🏨 [my-hotels] Admin user - showing all hotels');
       query = 'SELECT * FROM hotels ORDER BY created_at DESC';
@@ -163,7 +163,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const params = [hotelId];
 
     // Se não for admin, verificar se o usuário tem acesso ao hotel
-    if (req.user.user_type === 'HOTEL') {
+    if (req.user.user_type && req.user.user_type.toUpperCase() === 'HOTEL') {
       query += ` AND id IN (
         SELECT hotel_id FROM user_hotels 
         WHERE user_id = $2 AND active = true
@@ -181,7 +181,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     }
 
     // Buscar usuários do hotel se for admin/proprietário
-    if (['SUPER_ADMIN', 'ADMIN'].includes(req.user.user_type)) {
+    if (req.user.user_type && ['SUPER_ADMIN', 'ADMIN'].includes(req.user.user_type.toUpperCase())) {
       const users = await db.query(`
         SELECT u.id, u.name, u.email, u.user_type, u.active,
                uh.role, uh.permissions, uh.created_at as joined_at
@@ -284,7 +284,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     let checkQuery = 'SELECT * FROM hotels WHERE id = $1';
     const checkParams = [hotelId];
 
-    if (req.user.user_type === 'HOTEL') {
+    if (req.user.user_type && req.user.user_type.toUpperCase() === 'HOTEL') {
       checkQuery += ` AND id IN (
         SELECT hotel_id FROM user_hotels 
         WHERE user_id = $2 AND active = true AND role IN ('OWNER', 'MANAGER')

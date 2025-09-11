@@ -8,6 +8,7 @@ import BotFieldsList from '../components/BotFieldsList';
 import QdrantCollectionModal from '../components/QdrantCollectionModal';
 import QdrantCreateCollectionModal from '../components/QdrantCreateCollectionModal';
 import QRCodeViewer from '../components/QRCodeViewer';
+import apiService from '../services/api';
 import toast from 'react-hot-toast';
 
 const AIConfiguracoes = () => {
@@ -207,21 +208,16 @@ const AIConfiguracoes = () => {
   // Função para buscar contagem de instâncias do Evolution
   const fetchEvolutionInstancesCount = async (hotelUuid) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/evolution/database?hotel_uuid=${hotelUuid}`);
-      const data = await response.json();
+      const data = await apiService.getEvolutionInstancesByHotel(hotelUuid);
       
-      if (data.success) {
-        setEvolutionInstancesCount(data.data.length);
-        
-        // Se há instâncias, verificar status da primeira
-        if (data.data.length > 0) {
-          const instance = data.data[0];
-          setSelectedEvolutionInstance(instance.instance_name);
-          checkEvolutionInstanceStatus(instance.instance_name);
-        }
-      } else {
-        setEvolutionInstancesCount(0);
-        setEvolutionInstanceStatus(null);
+      const instances = data.instances || data.data || [];
+      setEvolutionInstancesCount(instances.length);
+      
+      // Se há instâncias, verificar status da primeira
+      if (instances.length > 0) {
+        const instance = instances[0];
+        setSelectedEvolutionInstance(instance.instance_name);
+        checkEvolutionInstanceStatus(instance.instance_name);
       }
     } catch (error) {
       console.error('Erro ao buscar contagem de instâncias Evolution:', error);
@@ -233,13 +229,9 @@ const AIConfiguracoes = () => {
   // Função para verificar status da instância
   const checkEvolutionInstanceStatus = async (instanceName) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/evolution/status/${instanceName}`);
-      const data = await response.json();
-      
-      if (data.success) {
-        const status = data.data.instance?.state || 'disconnected';
-        setEvolutionInstanceStatus(status);
-      }
+      const data = await apiService.getEvolutionInstanceStatus(instanceName);
+      const status = data.instance?.state || data.status || 'disconnected';
+      setEvolutionInstanceStatus(status);
     } catch (error) {
       console.error('Erro ao verificar status da instância:', error);
       setEvolutionInstanceStatus('disconnected');
@@ -263,11 +255,11 @@ const AIConfiguracoes = () => {
 
     // Buscar a primeira instância do hotel para conectar
     try {
-      const response = await fetch(`http://localhost:3001/api/evolution/database?hotel_uuid=${selectedHotelUuid}`);
-      const data = await response.json();
+      const data = await apiService.getEvolutionInstancesByHotel(selectedHotelUuid);
+      const instances = data.instances || data.data || [];
       
-      if (data.success && data.data.length > 0) {
-        setSelectedEvolutionInstance(data.data[0].instance_name);
+      if (instances.length > 0) {
+        setSelectedEvolutionInstance(instances[0].instance_name);
         setShowEvolutionConnectModal(true);
       } else {
         toast.error('Nenhuma instância Evolution encontrada para este hotel');
@@ -305,29 +297,18 @@ const AIConfiguracoes = () => {
     try {
       toast.loading('Desconectando instância...', { id: 'disconnecting-evolution' });
       
-      const response = await fetch(`http://localhost:3001/api/evolution/logout/${selectedEvolutionInstance}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      await apiService.disconnectEvolutionInstance(selectedEvolutionInstance);
       
-      const data = await response.json();
-      
-      if (data.success) {
-        toast.success('Instância desconectada com sucesso!', { id: 'disconnecting-evolution' });
-        setShowEvolutionDisconnectModal(false);
-        setDisconnectConfirmText('');
-        // Atualizar status
-        if (selectedHotelUuid) {
-          fetchEvolutionInstancesCount(selectedHotelUuid);
-        }
-      } else {
-        toast.error('Erro ao desconectar: ' + (data.error?.message || 'Erro desconhecido'), { id: 'disconnecting-evolution' });
+      toast.success('Instância desconectada com sucesso!', { id: 'disconnecting-evolution' });
+      setShowEvolutionDisconnectModal(false);
+      setDisconnectConfirmText('');
+      // Atualizar status
+      if (selectedHotelUuid) {
+        fetchEvolutionInstancesCount(selectedHotelUuid);
       }
     } catch (error) {
       console.error('Erro ao desconectar instância:', error);
-      toast.error('Erro ao desconectar instância', { id: 'disconnecting-evolution' });
+      toast.error('Erro ao desconectar instância: ' + (error.message || 'Erro desconhecido'), { id: 'disconnecting-evolution' });
     }
   };
 
@@ -373,29 +354,17 @@ const AIConfiguracoes = () => {
     try {
       toast.loading('Criando instância Evolution...', { id: 'creating-evolution' });
       
-      const response = await fetch('http://localhost:3001/api/evolution/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          instanceName,
-          hotel_uuid: selectedHotelUuid,
-          integration: 'WHATSAPP-BAILEYS'
-        })
+      await apiService.createEvolutionInstance({
+        instanceName,
+        hotel_uuid: selectedHotelUuid,
+        integration: 'WHATSAPP-BAILEYS'
       });
       
-      const data = await response.json();
-      
-      if (data.success) {
-        toast.success('Instância Evolution criada com sucesso!', { id: 'creating-evolution' });
-        handleEvolutionInstanceCreated();
-      } else {
-        toast.error('Erro ao criar instância: ' + (data.error?.message || 'Erro desconhecido'), { id: 'creating-evolution' });
-      }
+      toast.success('Instância Evolution criada com sucesso!', { id: 'creating-evolution' });
+      handleEvolutionInstanceCreated();
     } catch (error) {
       console.error('Erro ao criar instância:', error);
-      toast.error('Erro ao criar instância Evolution', { id: 'creating-evolution' });
+      toast.error('Erro ao criar instância: ' + (error.message || 'Erro desconhecido'), { id: 'creating-evolution' });
     } finally {
       setCreatingEvolutionInstance(false);
     }

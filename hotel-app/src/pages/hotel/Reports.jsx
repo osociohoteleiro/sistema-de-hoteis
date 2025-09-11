@@ -45,14 +45,11 @@ const Reports = ({ reportType = 'financeiro' }) => {
   // Carregar lista de hotéis do usuário
   const loadUserHotels = async () => {
     try {
-      // Usar o token correto do localStorage ou fake para desenvolvimento
-      let token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
+      // Usar o token correto do localStorage
+      const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
       
       if (!token) {
-        // Para desenvolvimento, criar token fake
-        token = `fake_token_1_${Date.now()}`;
-        localStorage.setItem('authToken', token);
-        console.log('🔧 [DEV] Usando token fake para desenvolvimento');
+        throw new Error('Token de autenticação não encontrado. Faça login novamente.');
       }
       
       const response = await fetch('http://localhost:3001/api/hotels/my-hotels', {

@@ -89,11 +89,9 @@ const Marketing = () => {
       console.log('⚠️ Erro ao buscar dados do usuário:', error);
     }
     
-    // Fallback: Se não conseguir obter hotel válido, usar um hotel padrão que sabemos ter dados Meta
-    const fallbackHotel = '0cf84cb8-82cb-11f0-bd40-02420a0b00b1'; // Hotel com Meta conectado
-    console.log('⚠️ getCurrentHotelUuid: Usando hotel padrão para desenvolvimento:', fallbackHotel);
-    localStorage.setItem('selectedHotelUuid', fallbackHotel);
-    return fallbackHotel;
+    // Se não há hotel selecionado, retornar null
+    console.error('❌ Nenhum hotel selecionado. Selecione um hotel para continuar.');
+    return null;
   };
 
   // Verificar status da conexão Meta

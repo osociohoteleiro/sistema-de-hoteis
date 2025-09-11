@@ -11,17 +11,33 @@ const HotelDashboard = () => {
     revenue: 0
   });
 
-  // Mock data para desenvolvimento
+  // Carregar dados reais da API
   useEffect(() => {
-    // Simular carregamento de dados
-    setTimeout(() => {
-      setStats({
-        totalReservations: 147,
-        activeReservations: 23,
-        occupancyRate: 78.5,
-        revenue: 28450.00
-      });
-    }, 1000);
+    const loadStats = async () => {
+      try {
+        // TODO: Implementar chamadas reais para API quando endpoints estiverem prontos
+        // const reservationsData = await apiService.getReservations();
+        // const revenueData = await apiService.getRevenue();
+        
+        console.log('⚠️ Dashboard de estatísticas: APIs não implementadas ainda');
+        setStats({
+          totalReservations: 0,
+          activeReservations: 0,
+          occupancyRate: 0,
+          revenue: 0
+        });
+      } catch (error) {
+        console.error('Erro ao carregar estatísticas:', error.message);
+        setStats({
+          totalReservations: 0,
+          activeReservations: 0,
+          occupancyRate: 0,
+          revenue: 0
+        });
+      }
+    };
+
+    loadStats();
   }, []);
 
   const quickActionItems = [

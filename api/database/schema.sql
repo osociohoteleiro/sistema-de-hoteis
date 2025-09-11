@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS evolution_instances (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    FOREIGN KEY (hotel_uuid) REFERENCES hotels(uuid) ON DELETE CASCADE,
+    FOREIGN KEY (hotel_uuid) REFERENCES hotels(hotel_uuid) ON DELETE CASCADE,
     UNIQUE KEY unique_hotel_instance (hotel_uuid, instance_name),
     INDEX idx_hotel_uuid (hotel_uuid),
     INDEX idx_instance_name (instance_name),

@@ -3,62 +3,10 @@ import { useState } from 'react';
 const CustomerService = () => {
   const [activeConversation, setActiveConversation] = useState(null);
 
-  const mockConversations = [
-    {
-      id: 1,
-      guest: 'João Silva',
-      room: '101',
-      lastMessage: 'Preciso de toalhas extras no quarto.',
-      time: '14:30',
-      unread: 2,
-      status: 'active',
-      avatar: 'JS'
-    },
-    {
-      id: 2,
-      guest: 'Maria Santos',
-      room: '205',
-      lastMessage: 'O ar condicionado não está funcionando.',
-      time: '13:45',
-      unread: 1,
-      status: 'pending',
-      avatar: 'MS'
-    },
-    {
-      id: 3,
-      guest: 'Carlos Oliveira',
-      room: '303',
-      lastMessage: 'Obrigado pelo excelente atendimento!',
-      time: '12:15',
-      unread: 0,
-      status: 'resolved',
-      avatar: 'CO'
-    }
-  ];
+  // Sistema de atendimento não implementado ainda - conectar à API quando disponível
+  const conversations = [];
 
-  const mockMessages = [
-    {
-      id: 1,
-      sender: 'guest',
-      message: 'Olá, preciso de toalhas extras no quarto 101.',
-      time: '14:25',
-      read: true
-    },
-    {
-      id: 2,
-      sender: 'hotel',
-      message: 'Olá Sr. João! Claro, vou providenciar as toalhas extras imediatamente.',
-      time: '14:27',
-      read: true
-    },
-    {
-      id: 3,
-      sender: 'guest',
-      message: 'Perfeito, obrigado! E seria possível também um travesseiro extra?',
-      time: '14:30',
-      read: false
-    }
-  ];
+  const messages = [];
 
   const getStatusColor = (status) => {
     const colors = {
@@ -95,7 +43,7 @@ const CustomerService = () => {
             <h3 className="text-lg font-semibold text-white mb-4">Conversas Ativas</h3>
             
             <div className="flex-1 overflow-y-auto space-y-3">
-              {mockConversations.map((conversation) => (
+              {conversations.map((conversation) => (
                 <div
                   key={conversation.id}
                   onClick={() => setActiveConversation(conversation)}
@@ -176,7 +124,7 @@ const CustomerService = () => {
 
               {/* Mensagens */}
               <div className="flex-1 overflow-y-auto py-4 space-y-4">
-                {mockMessages.map((message) => (
+                {messages.map((message) => (
                   <div
                     key={message.id}
                     className={`flex ${message.sender === 'hotel' ? 'justify-end' : 'justify-start'}`}
