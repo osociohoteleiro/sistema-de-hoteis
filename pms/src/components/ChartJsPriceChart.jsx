@@ -365,9 +365,24 @@ const ChartJsPriceChart = ({
     // Detectar propriedades únicas (colunas que não são 'date' ou campos meta)
     const propertiesSet = new Set();
     
+    // DEBUG: Log the first record to see what keys we have
+    console.log('🔍 GRÁFICO: Primeiro registro completo:', apiData[0]);
+    console.log('🔍 GRÁFICO: Keys do primeiro registro:', Object.keys(apiData[0] || {}));
+    
     apiData.forEach(record => {
       Object.keys(record).forEach(key => {
         const trimmedKey = key.trim();
+        
+        // Log each key being processed
+        console.log('🔍 GRÁFICO: Processando key:', { 
+          key: trimmedKey, 
+          isDate: trimmedKey === 'date',
+          isEmpty: trimmedKey === '',
+          isFuture: trimmedKey === 'isFuture',
+          hasUnderscore: trimmedKey.includes('_'),
+          value: record[key]
+        });
+        
         // Filtrar apenas nomes de propriedades válidos (excluir campos meta e bundle)
         if (trimmedKey !== 'date' && 
             trimmedKey !== '' &&
@@ -386,7 +401,10 @@ const ChartJsPriceChart = ({
             !trimmedKey.includes('_is_main_property') &&
             !trimmedKey.includes('created_at') &&
             !trimmedKey.includes('updated_at')) {
+          console.log('✅ GRÁFICO: Adding property:', trimmedKey);
           propertiesSet.add(trimmedKey);
+        } else {
+          console.log('❌ GRÁFICO: Filtering out key:', trimmedKey);
         }
       });
     });
@@ -394,7 +412,8 @@ const ChartJsPriceChart = ({
     const propertiesList = Array.from(propertiesSet).sort();
     
     // Log para debug
-    console.log('🏨 Propriedades detectadas:', propertiesList);
+    console.log('🏨 GRÁFICO: Propriedades detectadas FINAL:', propertiesList);
+    console.log('🏨 GRÁFICO: Total propriedades encontradas:', propertiesList.length);
     
     setPropertyNames(propertiesList);
 
