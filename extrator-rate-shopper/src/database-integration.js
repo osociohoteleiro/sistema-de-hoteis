@@ -233,10 +233,13 @@ class DatabaseIntegration {
 
     } catch (error) {
       // Log do erro mas não falhar o processo principal
+      console.log(`❌ Erro na notificação de conclusão: ${error.message}`);
+      console.log(`🔍 Stack trace:`, error.stack);
       logger.error('Failed to notify API about extraction completion', {
         searchId,
         status,
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
     }
   }
