@@ -37,8 +37,8 @@ ENV NODE_ENV=production
 # Switch to non-root user
 USER nodejs
 
-# Expose port (EasyPanel will map this to 80 internally)
-EXPOSE 80
+# Expose port (use PORT environment variable or default to 3001)
+EXPOSE 3001
 
 # Health check (use PORT environment variable)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

@@ -190,13 +190,10 @@
       "Bash(rm:*)",
       "Bash(git rm:*)",
       "Bash(mv:*)",
-      "Read(//d/d/APPS-OSH/api/**)",
-      "Read(//d/d/APPS-OSH/**)",
-      "Bash(copy:*)",
-      "Bash(PORT=3002 npm run dev)",
-      "Bash(python:*)",
-      "WebFetch(domain:api.osociohoteleiro.com.br)",
-      "WebFetch(domain:osh-sistemas-api-backend.d32pnk.easypanel.host)"
+      "Bash(PGPASSWORD=osh_password_2024 psql -h localhost -p 5432 -U osh_user -d osh_db -c \"\\dt\")",
+      "Bash(PGPASSWORD=osh_password_2024 psql -h localhost -p 5432 -U osh_user -d osh_db -c \"SELECT table_name FROM information_schema.tables WHERE table_schema = ''public'' ORDER BY table_name;\")",
+      "Bash(docker build:*)",
+      "Bash(docker rmi:*)"
     ],
     "deny": [],
     "ask": []

@@ -143,9 +143,9 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         FROM rate_shopper_prices rsp
         JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
         LEFT JOIN rate_shopper_prices rsp2 ON rsp.property_id = rsp2.property_id 
-          AND rsp2.captured_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+          AND rsp2.scraped_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
         WHERE rsp.scraped_at = (
-          SELECT MAX(rsp3.captured_at)
+          SELECT MAX(rsp3.scraped_at)
           FROM rate_shopper_prices rsp3
           JOIN rate_shopper_searches rs3 ON rsp3.search_id = rs3.id
           WHERE rsp3.property_id = rsp.property_id AND rs3.search_status = 'COMPLETED'
@@ -331,10 +331,10 @@ router.get('/:hotel_id/price-trends', async (req, res) => {
         FROM rate_shopper_prices rsp
         JOIN rate_shopper_searches rs ON rsp.search_id = rs.id
         WHERE rs.hotel_id = $1
-          AND DATE(rsp.check_in_date_date) >= $2 
-          AND DATE(rsp.check_in_date_date) <= $3
+          AND DATE(rsp.check_in_date) >= $2 
+          AND DATE(rsp.check_in_date) <= $3
           AND rs.status IN ('COMPLETED', 'CANCELLED')
-        GROUP BY DATE(rsp.check_in_date_date), rsp.property_id
+        GROUP BY DATE(rsp.check_in_date), rsp.property_id
       )
       SELECT 
         latest.date,
@@ -704,7 +704,7 @@ router.get('/:hotel_id/price-history', async (req, res) => {
           rsp1.hotel_id,
           p.property_name,
           rsp2.price as previous_price,
-          rsp2.captured_at as previous_captured_at,
+          rsp2.scraped_at as previous_captured_at,
           CASE 
             WHEN rsp2.price IS NULL THEN 'NEW'
             WHEN rsp1.price > rsp2.price AND ((rsp1.price - rsp2.price) / rsp2.price * 100) > 1 THEN 'UP'
@@ -725,14 +725,14 @@ router.get('/:hotel_id/price-history', async (req, res) => {
           rsp1.property_id = rsp2.property_id 
           AND rsp1.check_in_date = rsp2.check_in_date
           AND rsp1.hotel_id = rsp2.hotel_id
-          AND rsp2.captured_at < rsp1.scraped_at
-          AND rsp2.captured_at = (
-            SELECT MAX(captured_at) 
+          AND rsp2.scraped_at < rsp1.scraped_at
+          AND rsp2.scraped_at = (
+            SELECT MAX(scraped_at) 
             FROM rate_shopper_prices rsp3 
             WHERE rsp3.property_id = rsp1.property_id 
               AND rsp3.check_in_date = rsp1.check_in_date
               AND rsp3.hotel_id = rsp1.hotel_id
-              AND rsp3.captured_at < rsp1.scraped_at
+              AND rsp3.scraped_at < rsp1.scraped_at
           )
         )
         WHERE rsp1.hotel_id = $1
@@ -1751,10 +1751,10 @@ router.get('/searches/:search_id/live-progress', async (req, res) => {
         check_in,
         price,
         room_type,
-        captured_at
+        scraped_at
       FROM rate_shopper_prices 
       WHERE search_id = $1 
-      ORDER BY captured_at DESC 
+      ORDER BY scraped_at DESC 
       LIMIT 10
     `, [searchId]);
 
@@ -2240,7 +2240,7 @@ router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
         rs.updated_at,
         COUNT(rsp.id) as prices_found
       FROM rate_shopper_searches rs
-      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id AND rsp.check_in_date_date::date = $2::date
+      LEFT JOIN rate_shopper_prices rsp ON rs.id = rsp.search_id AND rsp.check_in_date::date = $2::date
       WHERE rs.hotel_id = $1 
       AND rs.check_in_date <= $2::date 
       AND rs.check_out_date >= $2::date
