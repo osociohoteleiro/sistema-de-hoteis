@@ -60,3 +60,10 @@ $RECYCLE.BIN/
 # Temporary files
 *.tmp
 *.temp
+
+# SQL backup files (temporary)
+api/backup_completo_local.sql
+api/backup-*.sql
+
+# Claude Code settings (local only)
+.claude/settings.local.json
