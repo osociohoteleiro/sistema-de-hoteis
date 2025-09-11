@@ -1,19 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl:*)",
-      "Bash(npm run dev:*)",
-      "Read(//d/d/APPS-OSH/api/**)",
-      "Bash(psql:*)",
-      "Bash(node:*)",
-      "Bash(for file in bots.js workspaces.js flows.js folders.js sites.js hotel-sites.js)",
-      "Bash(do echo \"=== ANALISANDO $file ===\")",
-      "Bash(grep:*)",
-      "Bash(done)",
-      "Bash(for file in reports.js marketing-messages.js meta.js dataImport.js systems-catalog.js site-templates.js)",
-      "Bash(for:*)",
-      "Bash(find:*)",
-      "Bash(start http://localhost:5173/configuracoes)"
+      "Bash(git add:*)",
+      "Read(//d/d/APPS-OSH/**)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(pkill:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd /c:*)",
+      "Bash(PORT=3002 npm run dev)"
     ],
     "deny": [],
     "ask": []
