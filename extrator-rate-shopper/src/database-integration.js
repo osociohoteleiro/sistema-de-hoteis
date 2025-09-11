@@ -7,6 +7,29 @@ const axios = require('axios');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 /**
+ * Função para detectar ambiente e retornar URL da API
+ * Baseada no mesmo padrão usado no PMS para detecção automática
+ */
+function getApiUrl() {
+  // Detectar se está em produção baseado em NODE_ENV específico
+  // Em EasyPanel, NODE_ENV será 'production'
+  // Em desenvolvimento local, será 'development' ou undefined
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  const baseApiUrl = isProduction 
+    ? 'https://osh-sistemas-api-backend.d32pnk.easypanel.host'
+    : 'http://localhost:3001';
+  
+  console.log(`🔍 Environment Detection:`);
+  console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`   HOSTNAME: ${process.env.HOSTNAME}`);
+  console.log(`   Is Production: ${isProduction}`);
+  console.log(`   Base API URL: ${baseApiUrl}`);
+  
+  return baseApiUrl;
+}
+
+/**
  * Classe para integrar o extrator com o banco de dados da API (PostgreSQL)
  */
 class DatabaseIntegration {
@@ -211,10 +234,10 @@ class DatabaseIntegration {
 
       // Fazer chamada HTTP para a API
       const axios = require('axios');
-      const baseApiUrl = process.env.API_URL || 'http://localhost:3001';
+      const baseApiUrl = getApiUrl();
       const apiUrl = `${baseApiUrl}/api/rate-shopper/${hotelUuid}/searches/${searchId}/complete`;
       
-      console.log(`🔍 Notifying completion to API:`);
+      console.log(`🔍 Notifying completion to API: [v2.1]`);
       console.log(`   API URL: ${baseApiUrl}`);
       console.log(`   Full URL: ${apiUrl}`);
       
@@ -400,7 +423,7 @@ class DatabaseIntegration {
    */
   async updateExtractionProgress(searchId, hotelId, processedDates, totalDates, totalPricesFound = null) {
     try {
-      const apiUrl = process.env.API_URL || 'http://localhost:3001';
+      const apiUrl = getApiUrl();
       const progressData = {
         processed_dates: processedDates
       };
