@@ -211,7 +211,8 @@ class DatabaseIntegration {
 
       // Fazer chamada HTTP para a API
       const axios = require('axios');
-      const apiUrl = `http://localhost:3001/api/rate-shopper/${hotelUuid}/searches/${searchId}/complete`;
+      const baseApiUrl = process.env.API_URL || 'http://localhost:3001';
+      const apiUrl = `${baseApiUrl}/api/rate-shopper/${hotelUuid}/searches/${searchId}/complete`;
       
       await axios.put(apiUrl, notificationData, {
         timeout: 5000,
