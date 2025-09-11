@@ -1348,7 +1348,12 @@ const RateShopperDashboard = () => {
                   // Mostrar apenas buscas em andamento ou concluídas há menos de 1 hora
                   if (search.status === 'RUNNING' || search.status === 'PENDING') return true;
                   if (search.status === 'COMPLETED' || search.status === 'FAILED' || search.status === 'CANCELLED') {
-                    const completedAt = new Date(search.completed_at || search.started_at);
+                    const dateValue = search.completed_at || search.started_at;
+                    if (!dateValue) return false; // Se não há data, não mostrar
+                    
+                    const completedAt = new Date(dateValue);
+                    if (isNaN(completedAt.getTime())) return false; // Se data é inválida, não mostrar
+                    
                     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
                     const isRecent = completedAt > oneHourAgo;
                     console.log('🕐 Filtro 1 hora:', {
