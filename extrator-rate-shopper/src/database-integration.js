@@ -214,6 +214,10 @@ class DatabaseIntegration {
       const baseApiUrl = process.env.API_URL || 'http://localhost:3001';
       const apiUrl = `${baseApiUrl}/api/rate-shopper/${hotelUuid}/searches/${searchId}/complete`;
       
+      console.log(`🔍 Notifying completion to API:`);
+      console.log(`   API URL: ${baseApiUrl}`);
+      console.log(`   Full URL: ${apiUrl}`);
+      
       await axios.put(apiUrl, notificationData, {
         timeout: 5000,
         headers: {
