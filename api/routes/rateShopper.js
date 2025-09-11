@@ -80,6 +80,9 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         rs.hotel_id,
         rs.property_id,
         rs.status,
+        rs.start_date,
+        rs.end_date,
+        rs.total_prices_found,
         rs.created_at,
         rs.updated_at,
         rsp.property_name
