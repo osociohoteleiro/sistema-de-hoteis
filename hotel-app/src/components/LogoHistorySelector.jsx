@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
+import { API_CONFIG } from '../config/api.js';
 
 const LogoHistorySelector = ({ onLogoSelect, className = '' }) => {
   const { selectedHotelUuid } = useApp();
@@ -29,7 +30,7 @@ const LogoHistorySelector = ({ onLogoSelect, className = '' }) => {
       console.log('📸 Carregando logotipos para hotel:', selectedHotelUuid);
       console.log('📸 Token disponível:', token ? 'sim' : 'não');
       
-      const response = await fetch(`http://localhost:3001/api/logos?hotel_id=${selectedHotelUuid}`, {
+      const response = await fetch(`${API_CONFIG.baseURLWithPath}/logos?hotel_id=${selectedHotelUuid}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -65,7 +66,7 @@ const LogoHistorySelector = ({ onLogoSelect, className = '' }) => {
     setActivatingId(logoId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/logos/${logoId}/activate?hotel_id=${selectedHotelUuid}`, {
+      const response = await fetch(`${API_CONFIG.baseURLWithPath}/logos/${logoId}/activate?hotel_id=${selectedHotelUuid}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -106,7 +107,7 @@ const LogoHistorySelector = ({ onLogoSelect, className = '' }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3001/api/logos/${logoId}`, {
+      const response = await fetch(`${API_CONFIG.baseURLWithPath}/logos/${logoId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

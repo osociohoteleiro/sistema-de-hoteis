@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_CONFIG } from '../config/api.js';
 import toast from 'react-hot-toast';
 
 const QdrantCollectionModal = ({ isOpen, onClose, selectedHotelUuid, onCollectionRelated }) => {
@@ -21,7 +22,7 @@ const QdrantCollectionModal = ({ isOpen, onClose, selectedHotelUuid, onCollectio
     try {
       console.log('🔍 Buscando collections disponíveis...');
       
-      const response = await fetch('http://localhost:3001/api/qdrant/collections/available');
+      const response = await fetch('${API_CONFIG.baseURLWithPath}/qdrant/collections/available');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -58,7 +59,7 @@ const QdrantCollectionModal = ({ isOpen, onClose, selectedHotelUuid, onCollectio
     try {
       console.log('🔗 Relacionando collection:', { selectedCollection, selectedHotelUuid });
       
-      const response = await fetch('http://localhost:3001/api/qdrant/collections/relate', {
+      const response = await fetch('${API_CONFIG.baseURLWithPath}/qdrant/collections/relate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +111,7 @@ const QdrantCollectionModal = ({ isOpen, onClose, selectedHotelUuid, onCollectio
     try {
       console.log('🔓 Desrelacionando collection:', { collectionName, selectedHotelUuid });
       
-      const response = await fetch('http://localhost:3001/api/qdrant/collections/unrelate', {
+      const response = await fetch('${API_CONFIG.baseURLWithPath}/qdrant/collections/unrelate', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

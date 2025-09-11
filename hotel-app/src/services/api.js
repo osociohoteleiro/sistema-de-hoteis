@@ -1,5 +1,10 @@
 // Serviço de API para comunicação com o backend
-const API_BASE_URL = 'http://localhost:3001/api';
+import { API_CONFIG } from '../config/api.js';
+
+const API_BASE_URL = API_CONFIG.baseURLWithPath;
+
+console.log('🚨 HOTEL-APP ApiService DEBUG - API_BASE_URL:', API_BASE_URL);
+console.log('🚨 HOTEL-APP ApiService DEBUG - hostname:', window.location.hostname);
 
 class ApiService {
   constructor() {

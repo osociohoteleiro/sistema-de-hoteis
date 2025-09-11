@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { metaApi } from '../services/metaApi';
+import { API_CONFIG } from '../config/api.js';
 import toast from 'react-hot-toast';
 
 const MetaConnectModal = ({ isOpen, onClose, hotelUuid, onConnectionUpdate }) => {
@@ -47,7 +48,7 @@ const MetaConnectModal = ({ isOpen, onClose, hotelUuid, onConnectionUpdate }) =>
       // Verificar contas disponíveis (após OAuth mas não conectadas)
       try {
         const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-        const availableResponse = await fetch(`http://localhost:3001/api/meta/oauth/available-accounts/${hotelUuid}`, {
+        const availableResponse = await fetch(`${API_CONFIG.baseURLWithPath}/meta/oauth/available-accounts/${hotelUuid}`, {
           headers: { 
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -88,7 +89,7 @@ const MetaConnectModal = ({ isOpen, onClose, hotelUuid, onConnectionUpdate }) =>
         return;
       }
       
-      const response = await fetch(`http://localhost:3001/api/meta/oauth/available-accounts/${hotelUuid}`, {
+      const response = await fetch(`${API_CONFIG.baseURLWithPath}/meta/oauth/available-accounts/${hotelUuid}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -148,7 +149,7 @@ const MetaConnectModal = ({ isOpen, onClose, hotelUuid, onConnectionUpdate }) =>
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:3001/api/meta/oauth/connect-accounts/${hotelUuid}`, {
+      const response = await fetch(`${API_CONFIG.baseURLWithPath}/meta/oauth/connect-accounts/${hotelUuid}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -177,7 +178,7 @@ const MetaConnectModal = ({ isOpen, onClose, hotelUuid, onConnectionUpdate }) =>
     try {
       setLoading(true);
       const token = localStorage.getItem('authToken') || localStorage.getItem('auth_token');
-      const response = await fetch(`http://localhost:3001/api/meta/oauth/disconnect-account/${hotelUuid}`, {
+      const response = await fetch(`${API_CONFIG.baseURLWithPath}/meta/oauth/disconnect-account/${hotelUuid}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

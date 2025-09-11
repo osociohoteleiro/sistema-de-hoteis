@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_CONFIG } from '../config/api.js';
 
 const QRCodeViewer = ({ instanceName, onStatusChange }) => {
   const [qrData, setQrData] = useState(null);
@@ -6,7 +7,7 @@ const QRCodeViewer = ({ instanceName, onStatusChange }) => {
   const [error, setError] = useState(null);
   const [status, setStatus] = useState('disconnected');
   
-  const API_BASE_URL = 'http://localhost:3001';
+  const API_BASE_URL = API_CONFIG.baseURL;
 
   // Buscar QR Code
   const fetchQRCode = async () => {

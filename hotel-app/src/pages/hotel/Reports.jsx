@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { API_CONFIG } from '../../config/api.js';
 import toast from 'react-hot-toast';
 
 /**
@@ -52,7 +53,7 @@ const Reports = ({ reportType = 'financeiro' }) => {
         throw new Error('Token de autenticação não encontrado. Faça login novamente.');
       }
       
-      const response = await fetch('http://localhost:3001/api/hotels/my-hotels', {
+      const response = await fetch('${API_CONFIG.baseURLWithPath}/hotels/my-hotels', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',

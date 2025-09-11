@@ -7,13 +7,13 @@ const DEFAULT_CONFIG = {
   logo: null,
   companyName: 'Sistema de Hotéis',
   appDescription: 'Plataforma completa para gestão hoteleira com inteligência artificial integrada. Gerencie reservas, atendimento ao cliente e operações de forma eficiente e moderna.',
-  apiBaseUrl: 'http://localhost:3001',
+  apiBaseUrl: API_CONFIG.baseURL,
   apiEndpoints: {
-    listHotels: 'http://localhost:3001/api/hotels/my-hotels',
-    createHotel: 'http://localhost:3001/api/hotels',
-    getHotel: 'http://localhost:3001/api/hotels', // GET /hotel/{uuid}
-    updateHotel: 'http://localhost:3001/api/hotels', // PUT /hotel/{uuid}
-    deleteHotel: 'http://localhost:3001/api/hotels' // DELETE /hotel/{uuid}
+    listHotels: `${API_CONFIG.baseURLWithPath}/hotels/my-hotels`,
+    createHotel: `${API_CONFIG.baseURLWithPath}/hotels`,
+    getHotel: `${API_CONFIG.baseURLWithPath}/hotels`, // GET /hotel/{uuid}
+    updateHotel: `${API_CONFIG.baseURLWithPath}/hotels`, // PUT /hotel/{uuid}
+    deleteHotel: `${API_CONFIG.baseURLWithPath}/hotels` // DELETE /hotel/{uuid}
   },
   aiEndpoints: {
     createIntegration: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/create_integration',
@@ -277,7 +277,7 @@ export const AppProvider = ({ children }) => {
       }
 
       const params = hotelUuid ? `?hotel_id=${hotelUuid}` : '';
-      const response = await fetch(`http://localhost:3001/api/logos/active${params}`, {
+      const response = await fetch(`${API_CONFIG.baseURLWithPath}/logos/active${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -447,7 +447,7 @@ export const AppProvider = ({ children }) => {
       console.log('🔢 Buscando contagem de collections do Qdrant para hotel:', hotelUuid);
       
       // Usar o endereço completo da API local
-      const apiUrl = `http://localhost:3001/api/qdrant/collections/count/${hotelUuid}`;
+      const apiUrl = `${API_CONFIG.baseURLWithPath}/qdrant/collections/count/${hotelUuid}`;
       console.log('🌐 URL da requisição:', apiUrl);
       
       const response = await fetch(apiUrl);

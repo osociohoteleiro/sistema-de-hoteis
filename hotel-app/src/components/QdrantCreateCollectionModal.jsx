@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_CONFIG } from '../config/api.js';
 import toast from 'react-hot-toast';
 import { useHotelList } from '../hooks/useHotelList';
 
@@ -56,7 +57,7 @@ const QdrantCreateCollectionModal = ({ isOpen, onClose, selectedHotelUuid, onCol
     try {
       console.log('🚀 Criando collection:', { collectionName, vectorSize, selectedHotelUuid });
       
-      const response = await fetch('http://localhost:3001/api/qdrant/collections', {
+      const response = await fetch('${API_CONFIG.baseURLWithPath}/qdrant/collections', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
