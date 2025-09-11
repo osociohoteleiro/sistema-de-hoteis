@@ -134,9 +134,9 @@ const ManageUserHotelsModal = ({ isOpen, onClose, user }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-sidebar-800/95 border border-white/10 rounded-lg max-w-lg w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
+      <div className="bg-sidebar-800/95 border border-white/10 rounded-lg max-w-lg w-full h-[90vh] flex flex-col overflow-hidden">
+        {/* Header - Fixo */}
+        <div className="flex items-center justify-between p-6 border-b border-white/10 flex-shrink-0">
           <div>
             <h2 className="text-xl font-semibold text-white">Gerenciar Hotéis</h2>
             <p className="text-sidebar-400 text-sm mt-1">
@@ -154,8 +154,8 @@ const ManageUserHotelsModal = ({ isOpen, onClose, user }) => {
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6">
+        {/* Content - Com scroll independente */}
+        <div className="flex-1 overflow-y-auto p-6">
           {/* Info do usuário */}
           <div className="mb-6 p-4 bg-white/5 border border-white/10 rounded-lg">
             <div className="flex items-center space-x-3">
@@ -326,8 +326,8 @@ const ManageUserHotelsModal = ({ isOpen, onClose, user }) => {
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex gap-3 p-6 border-t border-white/10">
+        {/* Actions - Fixas na parte inferior */}
+        <div className="flex gap-3 p-6 border-t border-white/10 flex-shrink-0 bg-sidebar-800/95">
           <button
             type="button"
             onClick={handleClose}

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PermissionWrapper from './components/PermissionWrapper';
+import SmartRedirect from './components/SmartRedirect';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Reservas from './pages/Reservas';
@@ -37,8 +38,8 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      // Redirecionar root para dashboard
-      { index: true, element: <Navigate to="/dashboard" replace /> },
+      // Redirecionar root para primeira página com permissão
+      { index: true, element: <SmartRedirect /> },
       
       // Dashboard
       { 

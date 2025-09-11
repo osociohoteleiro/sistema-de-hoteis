@@ -111,13 +111,13 @@ router.get('/my-hotels', authenticateToken, async (req, res) => {
     let query;
     let params = [];
 
-    if ((req.user.user_type && req.user.user_type.toUpperCase() === 'SUPER_ADMIN') || (req.user.user_type && req.user.user_type.toUpperCase() === 'ADMIN')) {
-      // Admin vê todos os hotéis
-      console.log('🏨 [my-hotels] Admin user - showing all hotels');
+    if (req.user.user_type && req.user.user_type.toUpperCase() === 'SUPER_ADMIN') {
+      // Apenas Super Admin vê todos os hotéis
+      console.log('🏨 [my-hotels] Super Admin user - showing all hotels');
       query = 'SELECT * FROM hotels ORDER BY created_at DESC';
     } else {
-      // Usuário comum vê apenas seus hotéis
-      console.log('🏨 [my-hotels] Regular user - showing user hotels for user ID:', req.user.id);
+      // Admin e usuários comuns veem apenas hotéis aos quais foram vinculados
+      console.log('🏨 [my-hotels] Admin/Regular user - showing user hotels for user ID:', req.user.id);
       query = `
         SELECT h.* FROM hotels h
         INNER JOIN user_hotels uh ON h.id = uh.hotel_id
