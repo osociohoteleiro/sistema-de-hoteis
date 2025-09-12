@@ -1581,8 +1581,8 @@ router.get('/:hotel_id/scheduler/logs', authenticateToken, checkHotelAccess, asy
 // REAL-TIME PROGRESS TRACKING
 // ============================================
 
-// GET /api/rate-shopper/:hotel_id/searches/progress (DISABLED - Schema issues)
-router.get('/:hotel_id/searches/progress_disabled', async (req, res) => {
+// GET /api/rate-shopper/:hotel_id/searches/progress
+router.get('/:hotel_id/searches/progress', async (req, res) => {
   try {
     const hotel_id = req.params.hotel_id;
     
@@ -1605,45 +1605,69 @@ router.get('/:hotel_id/searches/progress_disabled', async (req, res) => {
     const runningSearches = await db.query(`
       SELECT 
         rs.id,
-        rs.search_status,
+        rs.uuid,
+        rs.status,
+        rs.processed_dates,
+        rs.total_dates,
+        rs.total_prices_found,
+        rs.started_at,
+        rs.error_log,
         rsp.property_name,
+        rsp.platform,
+        EXTRACT(EPOCH FROM (NOW() - rs.started_at))::int as elapsed_seconds,
+        CASE 
+          WHEN rs.processed_dates > 0 AND rs.total_dates > 0 
+          THEN ROUND((rs.processed_dates::numeric / rs.total_dates::numeric) * 100, 1)
+          ELSE 0 
+        END as progress_percent,
+        CASE 
+          WHEN rs.processed_dates > 0 AND rs.started_at IS NOT NULL
+          THEN (EXTRACT(EPOCH FROM (NOW() - rs.started_at))::numeric / rs.processed_dates::numeric * (rs.total_dates - rs.processed_dates)::numeric)::int
+          ELSE NULL
+        END as eta_seconds,
         -- Contagem real de preços salvos
         COUNT(rsp_prices.id) as actual_prices_count
       FROM rate_shopper_searches rs
       JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       LEFT JOIN rate_shopper_prices rsp_prices ON rs.id = rsp_prices.search_id
       WHERE rs.hotel_id = $1 
-        AND rs.search_status IN ('RUNNING', 'PENDING')
-      GROUP BY rs.id, rs.search_status, rsp.property_name
+        AND rs.status IN ('RUNNING', 'PENDING')
+      GROUP BY rs.id, rs.uuid, rs.status, rs.processed_dates, rs.total_dates, rs.total_prices_found, rs.started_at, rs.error_log, rsp.property_name, rsp.platform
       ORDER BY rs.created_at DESC
     `, [hotelId]);
 
-    // Buscar searches recém-completadas nas últimas 2 horas
+    // Buscar searches recém-completadas nas últimas 2 horas (mas não as completadas há mais de 1 minuto)
     const recentCompleted = await db.query(`
       SELECT 
         rs.id,
-        rs.search_status,
-        rs.updated_at,
+        rs.status,
+        rs.completed_at,
+        rs.duration_seconds,
+        rs.total_dates,
         rsp.property_name,
         COUNT(rsp_prices.id) as actual_prices_count
       FROM rate_shopper_searches rs
       JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       LEFT JOIN rate_shopper_prices rsp_prices ON rs.id = rsp_prices.search_id
       WHERE rs.hotel_id = $1 
-        AND rs.search_status IN ('COMPLETED', 'FAILED', 'CANCELLED')
-        AND rs.updated_at >= NOW() - INTERVAL '2 hours'
-      GROUP BY rs.id, rs.search_status, rs.updated_at, rsp.property_name
-      ORDER BY rs.updated_at DESC
+        AND rs.status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+        AND rs.completed_at >= NOW() - INTERVAL '2 hours'
+        AND (
+          rs.status != 'COMPLETED' 
+          OR rs.completed_at >= NOW() - INTERVAL '1 minute'
+        )
+      GROUP BY rs.id, rs.status, rs.completed_at, rs.duration_seconds, rs.total_dates, rsp.property_name
+      ORDER BY rs.completed_at DESC
       LIMIT 5
     `, [hotelId]);
 
     // Estatísticas gerais do hotel
     const stats = await db.query(`
       SELECT 
-        COUNT(CASE WHEN search_status = 'RUNNING' THEN 1 END) as running_count,
-        COUNT(CASE WHEN search_status = 'PENDING' THEN 1 END) as pending_count,
-        COUNT(CASE WHEN search_status = 'COMPLETED' AND DATE(updated_at) = CURRENT_DATE THEN 1 END) as completed_today,
-        COUNT(CASE WHEN search_status = 'FAILED' AND DATE(updated_at) = CURRENT_DATE THEN 1 END) as failed_today
+        COUNT(CASE WHEN status = 'RUNNING' THEN 1 END) as running_count,
+        COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_count,
+        COUNT(CASE WHEN status = 'COMPLETED' AND DATE(completed_at) = CURRENT_DATE THEN 1 END) as completed_today,
+        COUNT(CASE WHEN status = 'FAILED' AND DATE(completed_at) = CURRENT_DATE THEN 1 END) as failed_today
       FROM rate_shopper_searches 
       WHERE hotel_id = $1
     `, [hotelId]);
@@ -1653,7 +1677,7 @@ router.get('/:hotel_id/searches/progress_disabled', async (req, res) => {
       data: {
         running_searches: runningSearches,
         recent_completed: recentCompleted,
-        stats: stats.rows[0] || { running_count: 0, pending_count: 0, completed_today: 0, failed_today: 0 },
+        stats: (stats.rows || stats)[0] || { running_count: 0, pending_count: 0, completed_today: 0, failed_today: 0 },
         timestamp: new Date()
       }
     });
@@ -2115,13 +2139,15 @@ router.put('/:hotel_id/searches/:search_id/complete', async (req, res) => {
     // Emitir evento Socket.io para clientes conectados
     const io = req.app.get('socketio');
     if (io) {
+      const progress_percentage = status === 'COMPLETED' ? 100 : (processed_dates && total_dates ? Math.round((processed_dates / total_dates) * 100) : 0);
+      
       emitExtractionProgress(io, hotelUuid, {
         searchId: search_id,
         id: search.id,
         status,
         processed_dates,
         total_dates,
-        progress_percentage: status === 'COMPLETED' ? 100 : (processed_dates && total_dates ? Math.round((processed_dates / total_dates) * 100) : 0),
+        progress_percentage,
         total_prices_found,
         duration_seconds: search.duration_seconds,
         started_at,
@@ -2131,6 +2157,20 @@ router.put('/:hotel_id/searches/:search_id/complete', async (req, res) => {
       });
 
       console.log(`📡 Evento Socket.io emitido para hotel ${hotelUuid}: ${status}`);
+      
+      // Se a extração foi completada (100%), aguardar um pouco e depois limpar da sessão
+      if (status === 'COMPLETED' || progress_percentage >= 100) {
+        console.log(`🧹 Extração ${search_id} completada (${progress_percentage}%). Iniciando limpeza automática em 5 segundos...`);
+        
+        setTimeout(() => {
+          io.to(`hotel_${hotelUuid}`).emit('extraction_cleanup', {
+            searchId: search_id,
+            status: 'CLEANED',
+            message: 'Extração concluída e removida da lista automaticamente'
+          });
+          console.log(`✅ Limpeza automática concluída para extração ${search_id}`);
+        }, 5000); // 5 segundos de delay para dar tempo do frontend mostrar o 100%
+      }
     }
     
     res.json({
