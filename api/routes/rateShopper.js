@@ -2128,7 +2128,7 @@ router.put('/:hotel_id/searches/:search_id/complete', async (req, res) => {
     if (!hotel_id.includes('-')) {
       // Se for ID numérico, buscar UUID
       const hotelData = await db.query('SELECT hotel_uuid FROM hotels WHERE id = $1', [hotel_id]);
-      if (hotelData.length > 0) {
+      if (hotelData.rows.length > 0) {
         hotelUuid = hotelData.rows[0].hotel_uuid;
       }
     }

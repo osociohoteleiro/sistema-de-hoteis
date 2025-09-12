@@ -39,6 +39,16 @@ class DatabaseIntegration {
   }
 
   /**
+   * Verifica e garante que a conexão está ativa
+   */
+  async ensureConnection() {
+    if (!this.pool || !this.isConnected) {
+      console.log('⚠️ Reconectando ao banco de dados...');
+      await this.connect();
+    }
+  }
+
+  /**
    * Conecta ao banco de dados PostgreSQL
    */
   async connect() {
@@ -84,6 +94,7 @@ class DatabaseIntegration {
    */
   async getPendingSearches(hotelId = null, searchIds = null) {
     try {
+      await this.ensureConnection();
       let whereConditions = ["rs.status = 'PENDING'"];
       let queryParams = [];
       let paramCounter = 1;
@@ -140,6 +151,9 @@ class DatabaseIntegration {
    */
   async updateSearchStatus(searchId, status, additionalData = {}) {
     try {
+      // Verificar e garantir conexão
+      await this.ensureConnection();
+
       let query = 'UPDATE rate_shopper_searches SET status = $1, updated_at = NOW()';
       const params = [status];
       let paramCounter = 2;
@@ -195,6 +209,9 @@ class DatabaseIntegration {
    */
   async notifyExtractionComplete(searchId, status, additionalData = {}) {
     try {
+      // Verificar e garantir conexão
+      await this.ensureConnection();
+
       // Buscar dados da busca para obter hotel_id
       const searchResult = await this.pool.query(`
         SELECT rs.*, rsp.property_name 
@@ -307,6 +324,9 @@ class DatabaseIntegration {
    */
   async savePrice(searchId, propertyId, priceData) {
     try {
+      // Verificar e garantir conexão
+      await this.ensureConnection();
+
       // Obter hotel_id da busca
       const searchResult = await this.pool.query('SELECT hotel_id FROM rate_shopper_searches WHERE id = $1', [searchId]);
       if (searchResult.rows.length === 0) {
@@ -370,6 +390,9 @@ class DatabaseIntegration {
    */
   async getSearchPricesCount(searchId) {
     try {
+      // Verificar e garantir conexão
+      await this.ensureConnection();
+
       const result = await this.pool.query('SELECT COUNT(*) as count FROM rate_shopper_prices WHERE search_id = $1', [searchId]);
       return parseInt(result.rows[0]?.count || 0);
     } catch (error) {
