@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import HotelModal from '../components/HotelModal';
 import HotelForm from '../components/HotelForm';
+import ConfirmModal from '../components/ConfirmModal';
 import apiService from '../services/api'; // ✅ CORREÇÃO: Usar apiService
 
 const Hotels = () => {
@@ -11,6 +12,8 @@ const Hotels = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [hotelToDelete, setHotelToDelete] = useState(null);
 
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
@@ -44,20 +47,31 @@ const Hotels = () => {
     fetchHotels();
   }, []);
 
-  const handleDeleteHotel = async (hotelId) => {
-    if (!confirm('Tem certeza que deseja excluir este hotel?')) return;
+  const handleDeleteHotel = (hotel) => {
+    setHotelToDelete(hotel);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDeleteHotel = async () => {
+    if (!hotelToDelete) return;
 
     try {
       // ✅ CORREÇÃO: Usar apiService para deletar
-      await apiService.deleteHotel(hotelId);
+      await apiService.deleteHotel(hotelToDelete.id);
       
       console.log('Hotel excluído com sucesso!');
       // ✅ CORREÇÃO: Filtrar por id (numérico) em vez de hotel_uuid
-      setHotels(hotels.filter(hotel => hotel.id !== hotelId));
+      setHotels(hotels.filter(hotel => hotel.id !== hotelToDelete.id));
+      
+      // Fechar modal e limpar estado
+      setShowConfirmModal(false);
+      setHotelToDelete(null);
       
     } catch (error) {
       console.error('Erro ao excluir hotel:', error);
       setError('Erro ao excluir hotel. Tente novamente.');
+      setShowConfirmModal(false);
+      setHotelToDelete(null);
     }
   };
 
@@ -94,56 +108,104 @@ const Hotels = () => {
     return (
       <div 
         onClick={handleCardClick}
-        className={`bg-white/10 backdrop-blur-sm rounded-xl border transition-all duration-200 cursor-pointer relative ${
+        className={`bg-white/10 backdrop-blur-sm rounded-xl border transition-all duration-200 cursor-pointer relative overflow-hidden ${
           selectedHotelUuid === (hotel.hotel_uuid || hotel.id) 
             ? 'border-blue-400/50 bg-blue-500/10' 
             : 'border-white/20 hover:bg-white/15'
         }`}
       >
-        <div className="flex items-center p-4">
-          {/* Hotel Image */}
-          <div className="w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-sidebar-600">
-            {hotel.cover_image ? (
-              <img 
-                src={hotel.cover_image} 
-                alt={hotel.name || 'Hotel'} 
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <svg className="w-8 h-8 text-sidebar-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+        {/* Hotel Image */}
+        <div className="w-full h-48 bg-sidebar-600 relative">
+          {hotel.cover_image ? (
+            <img 
+              src={hotel.cover_image} 
+              alt={hotel.name || 'Hotel'} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg className="w-16 h-16 text-sidebar-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+          )}
+          
+          {/* Three dots menu - posicionado sobre a imagem */}
+          <div className="absolute top-3 right-3" ref={menuRef}>
+            <button
+              onClick={handleMenuClick}
+              className="p-2 bg-black/50 backdrop-blur-sm text-white hover:bg-black/70 rounded-lg transition-colors"
+              title="Mais opções"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+
+            {/* Dropdown Menu */}
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-32 bg-sidebar-800 rounded-lg shadow-lg border border-white/10 z-50">
+                <div className="py-1">
+                  <Link
+                    to={`/hoteis/editar/${hotel.hotel_uuid || hotel.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMenu(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-sidebar-200 hover:bg-white/5 transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Gerenciar</span>
+                  </Link>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowMenu(false);
+                      handleDeleteHotel(hotel);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Excluir</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
+        </div>
+        
+        {/* Hotel Info */}
+        <div className="p-4">
+          <h3 className="text-lg font-bold text-white mb-2 truncate">
+            {hotel.name || 'Hotel sem nome'}
+          </h3>
           
-          {/* Hotel Info */}
-          <div className="flex-1 ml-4">
-            <h3 className="text-lg font-bold text-white mb-1">
-              {hotel.name || 'Hotel sem nome'}
-            </h3>
-            <div className="flex items-center space-x-6 text-sm text-sidebar-300">
-              <div className="flex items-center space-x-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Check-in: {hotel.checkin_time || 'N/A'}</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Check-out: {hotel.checkout_time || 'N/A'}</span>
-              </div>
+          {/* Check-in and Check-out Times */}
+          <div className="space-y-2 text-sm text-sidebar-300 mb-4">
+            <div className="flex items-center space-x-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Check-in: {hotel.checkin_time || 'N/A'}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Check-out: {hotel.checkout_time || 'N/A'}</span>
             </div>
           </div>
 
-          {/* Status and Menu */}
-          <div className="flex items-center space-x-3">
+          {/* Status */}
+          <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">
                 Ativo
@@ -154,55 +216,6 @@ const Hotels = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span>Selecionado</span>
-                </div>
-              )}
-            </div>
-            
-            {/* Three dots menu */}
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={handleMenuClick}
-                className="p-2 text-sidebar-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                title="Mais opções"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                </svg>
-              </button>
-
-              {/* Dropdown Menu */}
-              {showMenu && (
-                <div className="absolute right-0 mt-2 w-32 bg-sidebar-800 rounded-lg shadow-lg border border-white/10 z-50">
-                  <div className="py-1">
-                    <Link
-                      to={`/hoteis/editar/${hotel.hotel_uuid || hotel.id}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowMenu(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm text-sidebar-200 hover:bg-white/5 transition-colors flex items-center space-x-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span>Gerenciar</span>
-                    </Link>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowMenu(false);
-                        // ✅ CORREÇÃO: Usar id para operações da API
-                        handleDeleteHotel(hotel.id);
-                      }}
-                      className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center space-x-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      <span>Excluir</span>
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
@@ -312,7 +325,7 @@ const Hotels = () => {
 
       {/* Hotels List - Só mostra se não há erro */}
       {!loading && !error && hotels.length > 0 && (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {hotels.map((hotel, index) => (
             <HotelCard key={hotel.id || hotel.hotel_uuid || index} hotel={hotel} />
           ))}
@@ -329,6 +342,21 @@ const Hotels = () => {
           }}
         />
       </HotelModal>
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={showConfirmModal}
+        onClose={() => {
+          setShowConfirmModal(false);
+          setHotelToDelete(null);
+        }}
+        onConfirm={confirmDeleteHotel}
+        type="danger"
+        title="Excluir Hotel"
+        message={`Tem certeza que deseja excluir o hotel "${hotelToDelete?.name || 'selecionado'}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+      />
     </div>
   );
 };

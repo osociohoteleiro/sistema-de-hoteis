@@ -148,31 +148,50 @@ router.get('/my-hotels', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/hotels/:id - Buscar hotel por ID
+// GET /api/hotels/:id - Buscar hotel por ID ou UUID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
-    const hotelId = parseInt(req.params.id);
+    const identifier = req.params.id;
     
-    if (isNaN(hotelId)) {
+    // Verificar se é um UUID ou um ID numérico
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+    const hotelId = isUUID ? null : parseInt(identifier);
+    
+    if (!isUUID && isNaN(hotelId)) {
       return res.status(400).json({
-        error: 'ID do hotel inválido'
+        error: 'ID ou UUID do hotel inválido'
       });
     }
 
-    let query = 'SELECT * FROM hotels WHERE id = $1';
-    const params = [hotelId];
+    let query = isUUID ? 
+      'SELECT * FROM hotels WHERE hotel_uuid = $1' : 
+      'SELECT * FROM hotels WHERE id = $1';
+    const params = [isUUID ? identifier : hotelId];
 
     // Se não for admin, verificar se o usuário tem acesso ao hotel
     if (req.user.user_type && req.user.user_type.toUpperCase() === 'HOTEL') {
-      query += ` AND id IN (
-        SELECT hotel_id FROM user_hotels 
-        WHERE user_id = $2 AND active = true
-      )`;
+      if (isUUID) {
+        query += ` AND id IN (
+          SELECT hotel_id FROM user_hotels 
+          WHERE user_id = $2 AND active = true
+        )`;
+      } else {
+        query += ` AND id IN (
+          SELECT hotel_id FROM user_hotels 
+          WHERE user_id = $2 AND active = true
+        )`;
+      }
       params.push(req.user.id);
     }
 
     const hotels = await db.query(query, params);
     const hotel = hotels[0];
+    
+    console.log('🏨 [GET hotel] Hotel found:', hotel ? 'YES' : 'NO');
+    if (hotel) {
+      console.log('🏨 [GET hotel] Hotel name:', hotel.name);
+      console.log('🏨 [GET hotel] Hotel UUID:', hotel.hotel_uuid);
+    }
 
     if (!hotel) {
       return res.status(404).json({
@@ -257,14 +276,18 @@ router.post('/', authenticateToken, requireRole(['SUPER_ADMIN', 'ADMIN']), async
   }
 });
 
-// PUT /api/hotels/:id - Atualizar hotel
+// PUT /api/hotels/:id - Atualizar hotel por ID ou UUID
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
-    const hotelId = parseInt(req.params.id);
+    const identifier = req.params.id;
     
-    if (isNaN(hotelId)) {
+    // Verificar se é um UUID ou um ID numérico
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+    const hotelId = isUUID ? null : parseInt(identifier);
+    
+    if (!isUUID && isNaN(hotelId)) {
       return res.status(400).json({
-        error: 'ID do hotel inválido'
+        error: 'ID ou UUID do hotel inválido'
       });
     }
 
@@ -281,8 +304,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     // Verificar se hotel existe e se usuário tem acesso
-    let checkQuery = 'SELECT * FROM hotels WHERE id = $1';
-    const checkParams = [hotelId];
+    let checkQuery = isUUID ? 
+      'SELECT * FROM hotels WHERE hotel_uuid = $1' : 
+      'SELECT * FROM hotels WHERE id = $1';
+    const checkParams = [isUUID ? identifier : hotelId];
 
     if (req.user.user_type && req.user.user_type.toUpperCase() === 'HOTEL') {
       checkQuery += ` AND id IN (
@@ -304,7 +329,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (value.name && value.name !== existingHotel.name) {
       const duplicateHotel = await db.query(
         'SELECT id FROM hotels WHERE name = $1 AND id != $2',
-        [value.name, hotelId]
+        [value.name, existingHotel.id]
       );
 
       if (duplicateHotel.length > 0) {
@@ -331,7 +356,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    updateParams.push(hotelId);
+    updateParams.push(existingHotel.id);
 
     await db.query(`
       UPDATE hotels SET ${updateFields.join(', ')} 
@@ -354,19 +379,26 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/hotels/:id - Excluir hotel
+// DELETE /api/hotels/:id - Excluir hotel por ID ou UUID
 router.delete('/:id', authenticateToken, requireRole(['SUPER_ADMIN', 'ADMIN']), async (req, res) => {
   try {
-    const hotelId = parseInt(req.params.id);
+    const identifier = req.params.id;
     
-    if (isNaN(hotelId)) {
+    // Verificar se é um UUID ou um ID numérico
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+    const hotelId = isUUID ? null : parseInt(identifier);
+    
+    if (!isUUID && isNaN(hotelId)) {
       return res.status(400).json({
-        error: 'ID do hotel inválido'
+        error: 'ID ou UUID do hotel inválido'
       });
     }
 
     // Verificar se hotel existe
-    const [existingHotel] = await db.query('SELECT * FROM hotels WHERE id = $1', [hotelId]);
+    const query = isUUID ? 
+      'SELECT * FROM hotels WHERE hotel_uuid = $1' : 
+      'SELECT * FROM hotels WHERE id = $1';
+    const [existingHotel] = await db.query(query, [isUUID ? identifier : hotelId]);
 
     if (!existingHotel) {
       return res.status(404).json({
@@ -375,7 +407,7 @@ router.delete('/:id', authenticateToken, requireRole(['SUPER_ADMIN', 'ADMIN']), 
     }
 
     // Excluir hotel (as FK constraints cuidarão das relações)
-    await db.query('DELETE FROM hotels WHERE id = $1', [hotelId]);
+    await db.query('DELETE FROM hotels WHERE id = $1', [existingHotel.id]);
 
     res.json({
       message: 'Hotel excluído com sucesso'

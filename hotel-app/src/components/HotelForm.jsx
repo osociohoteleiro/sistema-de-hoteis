@@ -98,7 +98,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
           name="name"
           value={formData.name}
           onChange={handleChange}
-          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
           placeholder="Digite o nome do hotel"
           required
         />
@@ -152,7 +152,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
           value={formData.description}
           onChange={handleChange}
           rows={3}
-          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
           placeholder="Descreva o hotel..."
         />
       </div>
@@ -167,7 +167,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
           name="address"
           value={formData.address}
           onChange={handleChange}
-          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
           placeholder="Endereço completo do hotel"
         />
       </div>
@@ -183,7 +183,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
             name="phone"
             value={formData.phone}
             onChange={handleChange}
-            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
             placeholder="(11) 99999-9999"
           />
         </div>
@@ -197,7 +197,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
             name="email"
             value={formData.email}
             onChange={handleChange}
-            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
             placeholder="contato@hotel.com"
           />
         </div>
@@ -213,7 +213,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
           name="website"
           value={formData.website}
           onChange={handleChange}
-          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-colors"
           placeholder="https://www.hotel.com"
         />
       </div>

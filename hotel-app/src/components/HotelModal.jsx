@@ -27,14 +27,14 @@ const HotelModal = ({ isOpen, onClose, title = 'Cadastrar Hotel', children }) =>
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Overlay */}
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300"
         onClick={onClose}
       />
       
       {/* Modal Container */}
       <div className="flex items-center justify-center min-h-screen px-4 py-8">
         <div 
-          className="relative bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-8 w-full max-w-2xl transform transition-all duration-300 ease-in-out shadow-2xl"
+          className="relative bg-sidebar-800/95 border border-white/10 rounded-lg p-8 w-full max-w-2xl transform transition-all duration-300 ease-in-out shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}

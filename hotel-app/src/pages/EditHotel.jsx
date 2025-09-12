@@ -40,24 +40,26 @@ const EditHotel = () => {
         return time.substring(0, 5); // Pega apenas HH:MM
       };
       
-      setFormData({
-        name: hotel.name || hotel.hotel_nome === 'Hotel para Editar' ? '' : hotel.hotel_nome || '',
-        checkin_time: formatTimeForInput(hotel.checkin_time || hotel.hora_checkin),
-        checkout_time: formatTimeForInput(hotel.checkout_time || hotel.hora_checkout),
-        cover_image: hotel.cover_image || hotel.hotel_capa || '',
+      console.log('✅ Before setFormData - hotel.name:', hotel.name);
+      console.log('✅ Before setFormData - hotel.checkin_time:', hotel.checkin_time);
+      
+      const newFormData = {
+        name: hotel.name || '',
+        checkin_time: formatTimeForInput(hotel.checkin_time),
+        checkout_time: formatTimeForInput(hotel.checkout_time),
+        cover_image: hotel.cover_image || '',
         description: hotel.description || '',
         address: hotel.address || '',
         phone: hotel.phone || '',
         email: hotel.email || '',
         website: hotel.website || ''
-      });
+      };
       
-      console.log('Form data definido:', {
-        name: hotel.name || hotel.hotel_nome,
-        checkin_time: formatTimeForInput(hotel.checkin_time || hotel.hora_checkin),
-        checkout_time: formatTimeForInput(hotel.checkout_time || hotel.hora_checkout),
-        cover_image: hotel.cover_image || hotel.hotel_capa
-      });
+      console.log('✅ New form data:', newFormData);
+      
+      setFormData(newFormData);
+      
+      console.log('✅ setFormData called successfully');
     }
   }, [hotel]);
 
@@ -156,10 +158,10 @@ const EditHotel = () => {
             <span>›</span>
             <Link to="/hoteis" className="hover:text-white transition-colors">Hotéis</Link>
             <span>›</span>
-            <span className="text-white">Editar Hotel</span>
+            <span className="text-white">Gerenciar Hotel</span>
           </div>
-          <h1 className="text-2xl font-bold text-white">
-            {hotel?.name || hotel?.hotel_nome || 'Editar Hotel'}
+          <h1 className="text-3xl font-bold text-white">
+            Gerenciar Hotel: {hotel?.name || 'Carregando...'}
           </h1>
         </div>
 
@@ -188,7 +190,7 @@ const EditHotel = () => {
             value={formData.cover_image}
             onChange={handleImageChange}
             label="Imagem de Capa do Hotel"
-            hotelName={formData.name || hotel?.name || hotel?.hotel_nome}
+            hotelName={formData.name || hotel?.name}
             acceptFiles="image/*"
           />
 
