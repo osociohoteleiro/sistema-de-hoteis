@@ -89,7 +89,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="name" className="block text-sm font-medium text-white mb-2">
           Nome do Hotel *
         </label>
         <input
@@ -98,40 +98,42 @@ const HotelForm = ({ onClose, onSuccess }) => {
           name="name"
           value={formData.name}
           onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           placeholder="Digite o nome do hotel"
           required
         />
       </div>
 
-      <div>
-        <label htmlFor="checkin_time" className="block text-sm font-medium text-gray-700 mb-2">
-          Horário de Check-in
-        </label>
-        <input
-          type="time"
-          id="checkin_time"
-          name="checkin_time"
-          value={formData.checkin_time.substring(0, 5)}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          required
-        />
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label htmlFor="checkin_time" className="block text-sm font-medium text-white mb-2">
+            Horário de Check-in
+          </label>
+          <input
+            type="time"
+            id="checkin_time"
+            name="checkin_time"
+            value={formData.checkin_time.substring(0, 5)}
+            onChange={handleChange}
+            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            required
+          />
+        </div>
 
-      <div>
-        <label htmlFor="checkout_time" className="block text-sm font-medium text-gray-700 mb-2">
-          Horário de Check-out
-        </label>
-        <input
-          type="time"
-          id="checkout_time"
-          name="checkout_time"
-          value={formData.checkout_time.substring(0, 5)}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          required
-        />
+        <div>
+          <label htmlFor="checkout_time" className="block text-sm font-medium text-white mb-2">
+            Horário de Check-out
+          </label>
+          <input
+            type="time"
+            id="checkout_time"
+            name="checkout_time"
+            value={formData.checkout_time.substring(0, 5)}
+            onChange={handleChange}
+            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            required
+          />
+        </div>
       </div>
 
       <ImageUpload
@@ -141,7 +143,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
       />
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="description" className="block text-sm font-medium text-white mb-2">
           Descrição do Hotel
         </label>
         <textarea
@@ -150,13 +152,13 @@ const HotelForm = ({ onClose, onSuccess }) => {
           value={formData.description}
           onChange={handleChange}
           rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           placeholder="Descreva o hotel..."
         />
       </div>
 
       <div>
-        <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="address" className="block text-sm font-medium text-white mb-2">
           Endereço
         </label>
         <input
@@ -165,14 +167,14 @@ const HotelForm = ({ onClose, onSuccess }) => {
           name="address"
           value={formData.address}
           onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           placeholder="Endereço completo do hotel"
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="phone" className="block text-sm font-medium text-white mb-2">
             Telefone
           </label>
           <input
@@ -181,12 +183,12 @@ const HotelForm = ({ onClose, onSuccess }) => {
             name="phone"
             value={formData.phone}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             placeholder="(11) 99999-9999"
           />
         </div>
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
             E-mail
           </label>
           <input
@@ -195,14 +197,14 @@ const HotelForm = ({ onClose, onSuccess }) => {
             name="email"
             value={formData.email}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             placeholder="contato@hotel.com"
           />
         </div>
       </div>
 
       <div>
-        <label htmlFor="website" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="website" className="block text-sm font-medium text-white mb-2">
           Website
         </label>
         <input
@@ -211,16 +213,16 @@ const HotelForm = ({ onClose, onSuccess }) => {
           name="website"
           value={formData.website}
           onChange={handleChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-sidebar-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           placeholder="https://www.hotel.com"
         />
       </div>
 
-      <div className="flex gap-3 pt-4">
+      <div className="flex gap-4 pt-4">
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="flex-1 px-6 py-3 text-center text-sidebar-300 hover:text-white border border-sidebar-600 hover:border-sidebar-500 rounded-lg transition-colors"
           disabled={isSubmitting}
         >
           Cancelar
@@ -228,7 +230,7 @@ const HotelForm = ({ onClose, onSuccess }) => {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-500 border border-transparent rounded-md shadow-sm hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Cadastrando...' : 'Cadastrar'}
         </button>

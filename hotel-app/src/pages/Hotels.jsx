@@ -1,19 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import HotelDrawer from '../components/HotelDrawer';
+import HotelModal from '../components/HotelModal';
 import HotelForm from '../components/HotelForm';
 import apiService from '../services/api'; // ✅ CORREÇÃO: Usar apiService
 
 const Hotels = () => {
   const { config, loading, setLoading, selectedHotelUuid, selectHotel } = useApp();
   const [hotels, setHotels] = useState([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState(null);
   const [initialLoad, setInitialLoad] = useState(true);
 
-  const openDrawer = () => setIsDrawerOpen(true);
-  const closeDrawer = () => setIsDrawerOpen(false);
+  const openModal = () => setIsModalOpen(true);
+  const closeModal = () => setIsModalOpen(false);
 
   const fetchHotels = async () => {
     setLoading(true);
@@ -227,7 +227,7 @@ const Hotels = () => {
         </div>
         
         <button
-          onClick={openDrawer}
+          onClick={openModal}
           className="flex items-center space-x-2 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -269,7 +269,7 @@ const Hotels = () => {
               <span>Tentar Novamente</span>
             </button>
             <button
-              onClick={openDrawer}
+              onClick={openModal}
               className="bg-sidebar-600 hover:bg-sidebar-500 text-white px-6 py-2 rounded-lg transition-colors flex items-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -302,7 +302,7 @@ const Hotels = () => {
             Comece cadastrando seu primeiro hotel ou configure o endpoint de listagem nas configurações.
           </p>
           <button
-            onClick={openDrawer}
+            onClick={openModal}
             className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg transition-colors"
           >
             Cadastrar Primeiro Hotel
@@ -319,16 +319,16 @@ const Hotels = () => {
         </div>
       )}
 
-      {/* Hotel Form Drawer */}
-      <HotelDrawer isOpen={isDrawerOpen} onClose={closeDrawer}>
+      {/* Hotel Form Modal */}
+      <HotelModal isOpen={isModalOpen} onClose={closeModal}>
         <HotelForm 
-          onClose={closeDrawer} 
+          onClose={closeModal} 
           onSuccess={() => {
-            closeDrawer();
+            closeModal();
             fetchHotels();
           }}
         />
-      </HotelDrawer>
+      </HotelModal>
     </div>
   );
 };
