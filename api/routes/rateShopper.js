@@ -1636,7 +1636,7 @@ router.get('/:hotel_id/searches/progress', async (req, res) => {
       ORDER BY rs.created_at DESC
     `, [hotelId]);
 
-    // Buscar searches recém-completadas nas últimas 2 horas (mas não as completadas há mais de 1 minuto)
+    // Buscar searches recém-completadas (apenas FAILED e CANCELLED, excluindo COMPLETED para simular limpeza imediata)
     const recentCompleted = await db.query(`
       SELECT 
         rs.id,
@@ -1650,12 +1650,8 @@ router.get('/:hotel_id/searches/progress', async (req, res) => {
       JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       LEFT JOIN rate_shopper_prices rsp_prices ON rs.id = rsp_prices.search_id
       WHERE rs.hotel_id = $1 
-        AND rs.status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+        AND rs.status IN ('FAILED', 'CANCELLED')
         AND rs.completed_at >= NOW() - INTERVAL '2 hours'
-        AND (
-          rs.status != 'COMPLETED' 
-          OR rs.completed_at >= NOW() - INTERVAL '1 minute'
-        )
       GROUP BY rs.id, rs.status, rs.completed_at, rs.duration_seconds, rs.total_dates, rsp.property_name
       ORDER BY rs.completed_at DESC
       LIMIT 5
