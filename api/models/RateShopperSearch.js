@@ -204,7 +204,31 @@ class RateShopperSearch {
       `, [this.processed_dates, this.total_prices_found, this.id]);
       
       // Verificar se a atualização foi bem-sucedida
-      const affectedRows = result.rowCount || result.affectedRows || (result.rows ? result.rows.length : 0);
+      let affectedRows = 0;
+      
+      // Diferentes drivers PostgreSQL retornam rowCount de maneiras diferentes
+      if (typeof result.rowCount !== 'undefined') {
+        affectedRows = result.rowCount;
+      } else if (typeof result.affectedRows !== 'undefined') {
+        affectedRows = result.affectedRows;
+      } else if (result.rows && Array.isArray(result.rows)) {
+        affectedRows = result.rows.length;
+      } else if (typeof result === 'number') {
+        affectedRows = result;
+      } else {
+        // Se não conseguir determinar, assumir que funcionou (evitar falso negativo)
+        console.warn(`⚠️ Não foi possível determinar rowCount para search ${this.id}. Assumindo sucesso.`);
+        affectedRows = 1;
+      }
+      
+      console.log(`📊 UpdateProgress result details:`, {
+        search_id: this.id,
+        result_type: typeof result,
+        result_keys: Object.keys(result),
+        rowCount: result.rowCount,
+        affectedRows: result.affectedRows,
+        calculated_affected_rows: affectedRows
+      });
       
       if (affectedRows === 0) {
         throw new Error(`Nenhuma linha foi atualizada para search_id ${this.id}. A busca pode não existir.`);

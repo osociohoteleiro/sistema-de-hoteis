@@ -2277,6 +2277,58 @@ router.get('/:hotel_id/debug-properties', async (req, res) => {
   }
 });
 
+// ROTA TEMPORÁRIA PARA VERIFICAR SCHEMA DA TABELA
+router.get('/debug/schema-check/:table_name', async (req, res) => {
+  try {
+    const tableName = req.params.table_name;
+    
+    // Verificar colunas da tabela
+    const columns = await db.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = $1
+      ORDER BY ordinal_position
+    `, [tableName]);
+
+    // Testar se colunas específicas existem
+    const testQueries = {};
+    
+    if (tableName === 'rate_shopper_searches') {
+      // Testar se as colunas problemáticas existem
+      try {
+        await db.query('SELECT processed_dates, total_prices_found FROM rate_shopper_searches LIMIT 1');
+        testQueries.progress_columns = { exists: true, error: null };
+      } catch (error) {
+        testQueries.progress_columns = { exists: false, error: error.message };
+      }
+      
+      // Verificar dados de exemplo
+      try {
+        const sampleData = await db.query('SELECT * FROM rate_shopper_searches ORDER BY id DESC LIMIT 3');
+        testQueries.sample_data = sampleData.length > 0 ? sampleData : 'Nenhum dado encontrado';
+      } catch (error) {
+        testQueries.sample_data = { error: error.message };
+      }
+    }
+
+    res.json({
+      success: true,
+      table_name: tableName,
+      columns: columns,
+      test_queries: testQueries,
+      total_columns: columns.length
+    });
+
+  } catch (error) {
+    console.error(`Schema check error for ${req.params.table_name}:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to check schema', 
+      message: error.message 
+    });
+  }
+});
+
 // ROTA TEMPORÁRIA PARA INVESTIGAR DATA ESPECÍFICA
 router.get('/:hotel_id/debug-specific-date/:date', async (req, res) => {
   try {
