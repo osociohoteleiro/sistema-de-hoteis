@@ -13,7 +13,10 @@
       "Bash(npm run dev:*)",
       "Bash(node:*)",
       "Bash(find:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(npx pg_dump:*)",
+      "Bash(psql:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
