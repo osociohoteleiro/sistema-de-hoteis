@@ -73,7 +73,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       hotelId = parseInt(hotel_id);
     }
 
-    // Recent searches (versão local - usa nomes de colunas do ambiente local)
+    // Recent searches (filtrar COMPLETED para simular comportamento local de limpeza imediata)
     const recentSearches = await db.query(`
       SELECT 
         rs.id,
@@ -89,6 +89,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
       FROM rate_shopper_searches rs
       LEFT JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
       WHERE rs.hotel_id = $1
+        AND rs.status != 'COMPLETED'
       ORDER BY rs.created_at DESC
       LIMIT 10
     `, [hotelId]);
