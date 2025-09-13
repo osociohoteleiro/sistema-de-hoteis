@@ -497,7 +497,7 @@ const Calendario = () => {
                                   : 'hover:bg-blue-200/40'
                               }`}
                               onClick={() => {
-                                console.log(`Criar reserva para quarto ${quarto.numero} em ${formatDate(date)}`);
+                                // Create reservation for room on selected date
                               }}
                               onDragOver={(e) => handleDragOver(e, quarto.id, date)}
                               onDragLeave={handleDragLeave}

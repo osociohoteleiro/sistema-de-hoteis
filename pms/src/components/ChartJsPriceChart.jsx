@@ -54,7 +54,6 @@ const ChartJsPriceChart = ({
   const [internalStartDate, setInternalStartDate] = useState(() => {
     // Iniciar na data atual
     const today = startOfDay(new Date());
-    console.log('📅 GRÁFICO: Data inicial calculada:', today.toISOString(), 'iniciando na data atual');
     return today;
   });
   const [internalPeriodDays, setInternalPeriodDays] = useState(30);
@@ -302,10 +301,8 @@ const ChartJsPriceChart = ({
   }, [selectedHotelUuid, currentStartDate, periodDays]);
 
   const loadPriceData = async () => {
-    console.log('🚀 GRÁFICO: loadPriceData called with selectedHotelUuid:', selectedHotelUuid);
     
     if (!selectedHotelUuid) {
-      console.log('❌ GRÁFICO: No hotel UUID, returning early');
       return;
     }
     
@@ -317,28 +314,15 @@ const ChartJsPriceChart = ({
       const startDateStr = format(currentStartDate, 'yyyy-MM-dd');
       const endDateStr = format(endDate, 'yyyy-MM-dd');
       
-      console.log('📅 GRÁFICO: Date range:', { startDateStr, endDateStr, periodDays });
       
       const apiUrl = `/rate-shopper/${selectedHotelUuid}/price-trends?start_date=${startDateStr}&end_date=${endDateStr}&future_days=${periodDays}`;
-      console.log('🌐 GRÁFICO: Making API call to:', apiUrl);
       
       const response = await apiService.request(apiUrl);
       
-      console.log('📡 GRÁFICO: API response received:', {
-        success: response.success,
-        hasData: !!response.data,
-        hasChartData: !!response.data?.chart_data,
-        chartDataLength: response.data?.chart_data?.length,
-        mainProperties: response.data?.main_properties
-      });
       
       if (response.success && response.data.chart_data) {
-        console.log('✅ GRÁFICO: Usando DADOS REAIS da API');
-        console.log('🏆 GRÁFICO: Propriedades principais:', response.data.main_properties);
-        console.log('📊 GRÁFICO: Primeiro registro de dados:', response.data.chart_data[0]);
         processRealData(response.data.chart_data, currentStartDate, endDate, response.data.main_properties);
       } else {
-        console.log('⚠️ GRÁFICO: Usando DADOS MOCKADOS - response:', response);
         processMockData(currentStartDate, endDate);
       }
     } catch (err) {
@@ -347,22 +331,11 @@ const ChartJsPriceChart = ({
       setError('Erro ao carregar dados do gráfico: ' + err.message);
       processMockData(currentStartDate, endDate);
     } finally {
-      console.log('✅ GRÁFICO: loadPriceData finished, setting loading to false');
       setLoading(false);
     }
   };
 
   const processRealData = (apiData, startDate, endDate, mainProperties = []) => {
-    // Log inicial para debug
-    console.log('🔧 GRÁFICO: processRealData called with:', {
-      apiDataLength: apiData.length,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      mainProperties
-    });
-    console.log('📊 GRÁFICO: API Data recebida:', apiData.length, 'registros');
-    console.log('📊 GRÁFICO: Primeiros 3 registros:', apiData.slice(0, 3));
-    console.log('📊 GRÁFICO: Últimos 3 registros:', apiData.slice(-3));
     
     // A API retorna dados já processados no formato: [{ date: '2025-01-01', 'Hotel A': 280, 'Hotel B': 250, ... }]
     // Cada objeto representa uma data com todos os preços das propriedades para aquela data
@@ -370,22 +343,11 @@ const ChartJsPriceChart = ({
     // Detectar propriedades únicas (colunas que não são 'date' ou campos meta)
     const propertiesSet = new Set();
     
-    // DEBUG: Log the first record to see what keys we have
-    console.log('🔍 GRÁFICO: Primeiro registro completo:', apiData[0]);
-    console.log('🔍 GRÁFICO: Keys do primeiro registro:', Object.keys(apiData[0] || {}));
     
     apiData.forEach(record => {
       Object.keys(record).forEach(key => {
         const trimmedKey = key.trim();
         
-        // Log somente se não for date ou isFuture para evitar spam
-        if (trimmedKey !== 'date' && trimmedKey !== 'isFuture') {
-          console.log('🔍 GRÁFICO: Processando key:', { 
-            key: trimmedKey, 
-            hasUnderscore: trimmedKey.includes('_'),
-            value: record[key]
-          });
-        }
         
         // Filtrar apenas nomes de propriedades válidos (excluir campos meta e bundle)
         if (trimmedKey !== 'date' && 
@@ -405,19 +367,13 @@ const ChartJsPriceChart = ({
             !trimmedKey.includes('_is_main_property') &&
             !trimmedKey.includes('created_at') &&
             !trimmedKey.includes('updated_at')) {
-          console.log('✅ GRÁFICO: Adding property:', trimmedKey);
           propertiesSet.add(trimmedKey);
-        } else {
-          console.log('❌ GRÁFICO: Filtering out key:', trimmedKey);
         }
       });
     });
     
     const propertiesList = Array.from(propertiesSet).sort();
     
-    // Log para debug
-    console.log('🏨 GRÁFICO: Propriedades detectadas FINAL:', propertiesList);
-    console.log('🏨 GRÁFICO: Total propriedades encontradas:', propertiesList.length);
     
     setPropertyNames(propertiesList);
 
@@ -455,9 +411,6 @@ const ChartJsPriceChart = ({
             dayData[propertyName] = price;
           } else {
             dayData[propertyName] = null;
-            if (dayApiData[propertyName] !== null) {
-              console.log(`⚠️ Preço inválido para ${propertyName} em ${dateKey}:`, price, 'tipo:', typeof price);
-            }
           }
         } else {
           dayData[propertyName] = null; // Sem dados para esta data/propriedade
@@ -473,16 +426,11 @@ const ChartJsPriceChart = ({
       return dayData;
     });
 
-    // Log final para debug
-    console.log('📈 Dados processados:', processedData.length, 'dias');
-    console.log('📈 Propriedades encontradas:', propertiesList.length, ':', propertiesList);
-    console.log('📈 Primeiros 3 dias processados:', processedData.slice(0, 3));
 
     createChartData(processedData, propertiesList, mainProperties);
   };
 
   const processMockData = (startDate, endDate) => {
-    console.log('⚠️ Usando dados mock para demonstração');
     
     const mockProperties = ['Hotel Maranduba', 'Pousada Kaliman', 'Eco Encanto'];
     setPropertyNames(mockProperties);
@@ -520,13 +468,10 @@ const ChartJsPriceChart = ({
     // Garantir que não há duplicação de propriedades
     const uniqueProperties = [...new Set(propertiesList)].filter(prop => prop && prop.trim() !== '');
     
-    console.log('📊 Criando chart com', labels.length, 'labels e', uniqueProperties.length, 'propriedades únicas');
-    console.log('🏆 Propriedades principais recebidas:', mainProperties);
     
     const datasets = uniqueProperties.map((propertyName, index) => {
       // Verificar se é propriedade principal
       const isMainProperty = mainProperties && mainProperties.includes(propertyName);
-      console.log(`🎨 ${propertyName} é principal:`, isMainProperty);
       
       // Usar cores especiais para propriedades principais
       let colors;
@@ -546,11 +491,9 @@ const ChartJsPriceChart = ({
       // Contar quantos pontos válidos existem
       const validPoints = data.filter(point => point !== null).length;
       
-      console.log(`📈 Dataset "${propertyName}": ${validPoints} pontos válidos de ${data.length} total`);
       
       // Só incluir dataset se tiver pelo menos 1 ponto válido
       if (validPoints === 0) {
-        console.log(`⚠️ Removendo dataset "${propertyName}" - sem pontos válidos`);
         return null;
       }
       
@@ -639,29 +582,14 @@ const ChartJsPriceChart = ({
       processedData
     };
     
-    console.log('🎯 GRÁFICO: Setting chart data with:', {
-      labelsCount: labels.length,
-      datasetsCount: datasets.length,
-      firstLabel: labels[0],
-      lastLabel: labels[labels.length - 1],
-      datasetsInfo: datasets.map(d => ({ label: d.label, dataCount: d.data.length }))
-    });
     
     setChartData(newChartData);
     
     // Informar ao Dashboard sobre mudança de dados
     if (onDataChange) {
-      console.log('📞 GRÁFICO: Calling onDataChange callback');
       onDataChange(newChartData, propertiesList);
     }
 
-    console.log('✅ Chart.js finalizado:', {
-      labels: labels.length,
-      datasets: datasets.length,
-      properties: uniqueProperties,
-      firstLabels: labels.slice(0, 5),
-      datasetNames: datasets.map(d => d.label)
-    });
   };
 
   // Funções de navegação
@@ -853,13 +781,6 @@ const ChartJsPriceChart = ({
       
       {/* Gráfico Chart.js */}
       <div className="p-6">
-        {(() => {
-          console.log('🖼️ GRÁFICO: Render check - chartData exists:', !!chartData);
-          console.log('🖼️ GRÁFICO: Render check - datasets length:', chartData?.datasets?.length || 0);
-          console.log('🖼️ GRÁFICO: Render check - loading:', loading);
-          console.log('🖼️ GRÁFICO: Render check - error:', error);
-          return null;
-        })()}
         
         {chartData && chartData.datasets.length > 0 ? (
           <div className="h-96">

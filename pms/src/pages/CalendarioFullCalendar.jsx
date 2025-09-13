@@ -434,18 +434,18 @@ const CalendarioFullCalendar = () => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log(`🔧 RESIZE CLICK: ${type} para ${reserva.hospede}`);
+    // Handle resize click functionality
     
     if (resizeMode && resizeMode.reservaId === reserva.id && resizeMode.type === type) {
       // Cancelar modo resize se clicar novamente na mesma alça
       setResizeMode(null);
-      console.log('❌ Cancelando modo resize');
+      // Cancel resize mode
       return;
     }
     
     // Ativar modo resize
     setResizeMode({ reservaId: reserva.id, type: type });
-    console.log(`✅ Ativado modo resize ${type} para ${reserva.hospede}`);
+    // Activate resize mode
   };
 
   // Função para alternar Early Check-in e Late Check-out
@@ -494,7 +494,7 @@ const CalendarioFullCalendar = () => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log(`📍 RESIZE CELL CLICK: dayIndex=${dayIndex}, quartoId=${quartoId}`);
+    // Handle resize cell click
     
     const reserva = reservas.find(r => r.id === resizeMode.reservaId);
     if (!reserva) return;
@@ -606,7 +606,7 @@ const CalendarioFullCalendar = () => {
         : r
     ));
     
-    console.log(`✅ Redimensionamento aplicado: ${resizeMode.type}`);
+    // Resize applied successfully
     setResizeMode(null);
   };
 
@@ -652,7 +652,7 @@ const CalendarioFullCalendar = () => {
         : r
     ));
     
-    console.log(`✅ Redimensionamento confirmado: ${resizeConfirmData.type}`);
+    // Resize confirmed successfully
     
     // Aplicar animação shake na reserva
     setShakeReservaId(reserva.id);

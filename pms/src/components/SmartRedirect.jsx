@@ -22,19 +22,15 @@ const SmartRedirect = () => {
     { path: '/relatorios', permission: PERMISSIONS.VIEW_PMS_REPORTS },
   ];
 
-  console.log('🔍 SmartRedirect - Usuário:', user?.name, user?.user_type);
-  console.log('🔍 SmartRedirect - Permissões:', user?.permissions);
 
   // Encontrar a primeira rota que o usuário tem permissão
   for (const route of routePriority) {
     if (hasPermission(route.permission)) {
-      console.log(`✅ SmartRedirect - Redirecionando para: ${route.path} (permissão: ${route.permission})`);
       return <Navigate to={route.path} replace />;
     }
   }
 
   // Se não tem permissão para nada específico, mostrar erro
-  console.log('❌ SmartRedirect - Nenhuma permissão encontrada, mostrando erro');
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full text-center">

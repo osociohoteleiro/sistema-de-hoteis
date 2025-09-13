@@ -10,7 +10,6 @@ const PriceHistoryTooltip = ({ children, propertyName, propertyId, date, hotelUu
   const timerRef = useRef(null);
 
   const handleMouseEnter = (e) => {
-    console.log('🔍 Tooltip handleMouseEnter TRIGGERED:', { propertyName, propertyId, date, hotelUuid });
     
     // Cancelar timer de hide se existir
     if (timerRef.current) {
@@ -43,8 +42,7 @@ const PriceHistoryTooltip = ({ children, propertyName, propertyId, date, hotelUu
     setPosition({ x, y, showBelow });
     setIsVisible(true);
 
-    // SEMPRE buscar dados para teste
-    console.log('🔍 ALWAYS Calling fetchPriceHistory with:', { propertyId, date, hotelUuid });
+    // Buscar dados do histórico
     fetchPriceHistory();
   };
 
@@ -69,17 +67,8 @@ const PriceHistoryTooltip = ({ children, propertyName, propertyId, date, hotelUu
 
   const fetchPriceHistory = async () => {
     setLoading(true);
-    console.log('🔍 Frontend Tooltip fetchPriceHistory called with:', { 
-      propertyName, 
-      propertyId, 
-      date, 
-      hotelUuid,
-      dateType: typeof date,
-      dateValue: date
-    });
     
     if (!date) {
-      console.error('❌ Date is null/undefined, cannot fetch history');
       setLoading(false);
       return;
     }
@@ -87,7 +76,6 @@ const PriceHistoryTooltip = ({ children, propertyName, propertyId, date, hotelUu
     try {
       const url = `/rate-shopper/${hotelUuid}/property-history/${propertyId}`;
       const params = { date };
-      console.log('🔍 Making API request:', { url, params });
       
       const response = await apiService.request(url, {
         params: params
@@ -96,7 +84,6 @@ const PriceHistoryTooltip = ({ children, propertyName, propertyId, date, hotelUu
       if (response.success) {
         setHistory(response.data);
       } else {
-        console.warn('Falha ao carregar histórico detalhado');
         setHistory(null);
       }
     } catch (error) {

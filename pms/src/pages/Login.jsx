@@ -47,7 +47,7 @@ const Login = () => {
           }
         }
       } catch (error) {
-        console.error('Erro ao buscar configurações da aplicação:', error);
+        // Error fetching app configuration - silently handle
       }
     };
 
@@ -103,7 +103,7 @@ const Login = () => {
       }
     } catch (error) {
       toast.error('Erro inesperado ao fazer login');
-      console.error('Login error:', error);
+      // Login error handled by toast
     } finally {
       setIsSubmitting(false);
     }

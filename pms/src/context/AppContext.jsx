@@ -31,7 +31,6 @@ export const AppProvider = ({ children }) => {
       favicon.href = faviconUrl;
       
       document.head.appendChild(favicon);
-      console.log('🔸 PMS Favicon atualizado para:', faviconUrl);
     } catch (error) {
       console.error('❌ Erro ao atualizar favicon do PMS:', error);
     }
@@ -41,7 +40,6 @@ export const AppProvider = ({ children }) => {
   const updatePageTitle = (title) => {
     try {
       document.title = title;
-      console.log('📋 PMS Título atualizado para:', title);
     } catch (error) {
       console.error('❌ Erro ao atualizar título da página do PMS:', error);
     }
@@ -109,7 +107,6 @@ export const AppProvider = ({ children }) => {
 
   // Função para selecionar um hotel
   const selectHotel = (hotelUuid) => {
-    console.log('Hotel selecionado no PMS:', hotelUuid);
     setSelectedHotelUuid(hotelUuid);
     
     // Persistir no localStorage (compartilhado com hotel-app)

@@ -29,10 +29,8 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
       if (selectedHotel) {
         const hotelName = selectedHotel.hotel_nome || selectedHotel.name;
         setSelectedHotelName(hotelName);
-        console.log('🏨 Hotel selecionado na tabela:', hotelName);
       } else {
         setSelectedHotelName(null);
-        console.log('❌ Hotel não encontrado:', contextHotelUuid);
       }
     } catch (error) {
       console.error('Erro ao buscar hotel selecionado:', error);
@@ -45,7 +43,6 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
     if (!selectedHotelUuid) return;
 
     try {
-      console.log('🔍 Buscando histórico de preços:', { selectedHotelUuid, startDate, endDate });
       
       const params = {};
       if (startDate) params.start_date = startDate;
@@ -56,14 +53,11 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
       });
 
       if (response.success) {
-        console.log('📈 Histórico de preços carregado:', response.data);
         setPriceHistory(response.data);
       } else {
-        console.warn('⚠️ Falha ao carregar histórico de preços');
         setPriceHistory(null);
       }
     } catch (error) {
-      console.error('❌ Erro ao buscar histórico de preços:', error);
       setPriceHistory(null);
     }
   };
@@ -186,12 +180,8 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
 
   // Função para obter indicador de tendência de preço para uma propriedade e data específica
   const getPriceTrend = (propertyName, date) => {
-    console.log('🔍 getPriceTrend called:', { propertyName, date });
-    console.log('🔍 priceHistory available:', !!priceHistory);
-    console.log('🔍 priceHistory data:', priceHistory);
     
     if (!priceHistory || !priceHistory.price_history) {
-      console.log('🔍 No price history available');
       return { indicator: '', color: '', hasChange: false };
     }
 
@@ -205,22 +195,14 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
     const historyEntry = priceHistory.price_history.find(entry => {
       const entryDate = normalizeDate(entry.check_in_date);
       const targetDate = normalizeDate(date);
-      console.log('🔍 Comparing dates:', { entryDate, targetDate, entryProperty: entry.property_name, targetProperty: propertyName });
       return entry.property_name === propertyName && entryDate === targetDate;
     });
 
-    console.log('🔍 Found history entry:', historyEntry);
 
     if (!historyEntry) {
-      console.log('🔍 No history entry found for:', { propertyName, date });
       return { indicator: '', color: '', hasChange: false };
     }
 
-    console.log('🔍 Returning trend:', {
-      indicator: historyEntry.trend_indicator,
-      color: historyEntry.trend_color,
-      hasChange: true
-    });
 
     return {
       indicator: historyEntry.trend_indicator || '',
@@ -232,16 +214,9 @@ const PriceDebugTable = ({ selectedHotelUuid, startDate, endDate, chartData, pro
   // Função auxiliar para encontrar property_id pelo nome
   const getPropertyIdByName = (propertyName) => {
     if (!priceHistory?.price_history) {
-      console.log('🔍 getPropertyIdByName: No price history data available');
       return null;
     }
     const entry = priceHistory.price_history.find(entry => entry.property_name === propertyName);
-    console.log('🔍 getPropertyIdByName:', { 
-      propertyName, 
-      availableProperties: priceHistory.price_history.map(p => p.property_name),
-      foundEntry: entry, 
-      propertyId: entry?.property_id 
-    });
     return entry?.property_id || null;
   };
 

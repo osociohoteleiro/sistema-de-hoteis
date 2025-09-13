@@ -72,7 +72,7 @@ const PriceTrendChart = ({ selectedHotelUuid, selectedProperty = 'all' }) => {
         setVisibleProperties(new Set(props));
       }
     } catch (error) {
-      console.error('Erro ao carregar tendência de preços:', error);
+      // Error loading price trends - handled in UI
     } finally {
       setLoading(false);
     }

@@ -46,7 +46,6 @@ const SimplePriceChart = ({ selectedHotelUuid }) => {
         }));
         
         setChartData(processedData);
-        console.log('✅ Chart data loaded:', processedData.length, 'records');
       } else {
         setError('Falha ao carregar dados do gráfico');
       }

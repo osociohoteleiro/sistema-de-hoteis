@@ -34,22 +34,17 @@ const ProtectedRoute = ({ children, requiredPermissions = [], requireAll = false
 
   // Verificar permissões se fornecidas
   if (requiredPermissions.length > 0) {
-    console.log('🔍 ProtectedRoute PMS - requiredPermissions:', requiredPermissions);
-    console.log('🔍 ProtectedRoute PMS - requireAll:', requireAll);
     
     let hasAccess = false;
 
     if (requireAll) {
       // Usuário deve ter TODAS as permissões
       hasAccess = hasAllPermissions(requiredPermissions);
-      console.log('🔍 ProtectedRoute PMS - hasAllPermissions result:', hasAccess);
     } else {
       // Usuário deve ter PELO MENOS UMA das permissões
       hasAccess = hasAnyPermission(requiredPermissions);
-      console.log('🔍 ProtectedRoute PMS - hasAnyPermission result:', hasAccess);
     }
 
-    console.log('🔍 ProtectedRoute PMS - final hasAccess:', hasAccess);
 
     if (!hasAccess) {
       // Se foi fornecido um componente de fallback, mostrar ele

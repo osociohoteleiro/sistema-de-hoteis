@@ -152,13 +152,6 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
 
     setLoading(true);
     try {
-      console.log('Creating searches for:', {
-        hotelUuid: selectedHotelUuid,
-        selectedCompetitors: formData.selectedCompetitors,
-        start_date: formData.start_date?.toISOString().split('T')[0],
-        end_date: formData.end_date?.toISOString().split('T')[0],
-        max_bundle_size: formData.max_bundle_size
-      });
       
       // Criar buscas reais na API
       const searchPromises = [];
@@ -171,7 +164,6 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
           max_bundle_size: formData.max_bundle_size
         };
 
-        console.log('Creating search:', searchData);
         
         searchPromises.push(
           apiService.request(`/rate-shopper/${selectedHotelUuid}/searches`, {
@@ -182,7 +174,6 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
       }
 
       const results = await Promise.all(searchPromises);
-      console.log('Search creation results:', results);
 
       setNotification({
         type: 'success',
@@ -199,7 +190,6 @@ const NewSearchModal = ({ isOpen, onClose, onSubmit }) => {
 
     } catch (error) {
       console.error('Error creating searches:', error);
-      console.error('Error details:', error.response?.data);
       setNotification({
         type: 'error',
         message: 'Erro ao criar buscas: ' + (error.response?.data?.error || error.response?.data?.message || error.message)

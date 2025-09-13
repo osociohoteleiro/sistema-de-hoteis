@@ -138,7 +138,6 @@ const RateShopperDashboard = () => {
   const [chartStartDate, setChartStartDate] = useState(() => {
     // Iniciar na data atual (igual ao gráfico)
     const today = startOfDay(new Date());
-    console.log('🚀 Dashboard: Inicializando com data:', format(today, 'yyyy-MM-dd'), 'iniciando na data atual');
     return today;
   });
   const [chartPeriodDays, setChartPeriodDays] = useState(30);
@@ -148,24 +147,17 @@ const RateShopperDashboard = () => {
   const [sharedPropertyNames, setSharedPropertyNames] = useState([]);
   const [chartBasedAverage, setChartBasedAverage] = useState(null);
   
-  // Debug: Log das mudanças de estado
+  // Estados sincronizados
   useEffect(() => {
     const endDate = addDays(chartStartDate, chartPeriodDays - 1);
-    console.log('📊 Dashboard: Estados sincronizados atualizados:', {
-      startDate: format(chartStartDate, 'yyyy-MM-dd'),
-      endDate: format(endDate, 'yyyy-MM-dd'),
-      periodDays: chartPeriodDays
-    });
   }, [chartStartDate, chartPeriodDays]);
   
   // Callbacks com useCallback para evitar re-renderizações
   const handleStartDateChange = useCallback((newDate) => {
-    console.log('📊 Dashboard: Recebendo mudança de data do gráfico:', format(newDate, 'yyyy-MM-dd'));
     setChartStartDate(newDate);
   }, []);
   
   const handlePeriodDaysChange = useCallback((newDays) => {
-    console.log('📊 Dashboard: Recebendo mudança de período do gráfico:', newDays, 'dias');
     setChartPeriodDays(newDays);
   }, []);
 
@@ -196,13 +188,6 @@ const RateShopperDashboard = () => {
     const min = Math.min(...allPrices);
     const max = Math.max(...allPrices);
 
-    console.log('📊 Dashboard: Média calculada do gráfico:', {
-      average: average.toFixed(2),
-      min: min.toFixed(2),
-      max: max.toFixed(2),
-      totalPrices: allPrices.length,
-      periodDays: chartData.processedData.length
-    });
 
     return {
       avg_price: average,
@@ -215,10 +200,6 @@ const RateShopperDashboard = () => {
 
   // Callback para receber dados do gráfico
   const handleDataChange = useCallback((chartData, propertyNames) => {
-    console.log('📊 Dashboard: Recebendo dados do gráfico:', {
-      processedData: chartData?.processedData?.length,
-      properties: propertyNames?.length
-    });
     setSharedChartData(chartData);
     setSharedPropertyNames(propertyNames || []);
     
@@ -231,7 +212,6 @@ const RateShopperDashboard = () => {
   const tableDateRange = useMemo(() => {
     const startDateStr = format(chartStartDate, 'yyyy-MM-dd');
     const endDateStr = format(addDays(chartStartDate, chartPeriodDays - 1), 'yyyy-MM-dd');
-    console.log('📅 Dashboard: Calculando range da tabela:', { startDateStr, endDateStr });
     return { startDateStr, endDateStr };
   }, [chartStartDate, chartPeriodDays]);
   const [startingExtractions, setStartingExtractions] = useState(new Set());
@@ -283,7 +263,6 @@ const RateShopperDashboard = () => {
     });
     
     newSocket.on('connect', () => {
-      console.log('🔌 Conectado ao Socket.io:', newSocket.id);
       
       // Entrar na sala do hotel
       if (selectedHotelUuid) {
@@ -298,50 +277,34 @@ const RateShopperDashboard = () => {
     });
     
     newSocket.on('disconnect', (reason) => {
-      console.log('🔌 Desconectado do Socket.io:', reason);
     });
     
     // Listener para atualizações de progresso em tempo real
     newSocket.on('extraction-progress', (data) => {
-      console.log('📡 Progresso recebido via Socket.io:', data);
-      console.log('🏃 Estado do Modo Preguiça:', lazyModeActive);
-      
       const { searchId, progress } = data;
-      console.log('🔍 Buscando searchId:', searchId, 'tipo:', typeof searchId);
       
       // Atualizar o estado do dashboard em tempo real
       setDashboardData(prevData => {
-        console.log('📊 Searches disponíveis:', prevData.recent_searches?.map(s => ({ id: s.id, tipo: typeof s.id })));
-        
         return {
           ...prevData,
           recent_searches: prevData.recent_searches?.map(search => {
-            console.log('🔍 Comparando:', search.id, '==', searchId, ':', search.id == searchId);
             if (search.id == searchId) {
-              console.log('✅ Atualizando search:', search.id, 'com progress:', progress);
-              console.log('📊 Status recebido:', progress.status, 'Status anterior:', search.status);
-              
               const calculatedProgress = progress.progress_percentage || 
                 (progress.processed_dates && progress.total_dates ? 
                   Math.round((progress.processed_dates / progress.total_dates) * 100) : 0);
-              console.log('📊 Progress calculado:', calculatedProgress, 'de', progress.processed_dates, '/', progress.total_dates);
               
               // Se progresso chegou a 100% mas status ainda não é COMPLETED/FAILED, configurar fallback
               if (calculatedProgress >= 100 && 
                   progress.status === 'RUNNING' && 
                   search.status === 'RUNNING') {
-                console.log('⏰ Progresso 100% mas ainda RUNNING - configurando fallback de verificação');
-                
                 setTimeout(async () => {
                   try {
-                    console.log('🔍 Verificando status final da busca', searchId);
                     const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/dashboard`);
                     
                     if (response.success) {
                       const updatedSearch = response.data.recent_searches?.find(s => s.id == searchId);
                       
                       if (updatedSearch && (updatedSearch.status === 'COMPLETED' || updatedSearch.status === 'FAILED')) {
-                        console.log('✅ Status final obtido via fallback:', updatedSearch.status);
                         
                         // Atualizar dados com status final
                         setDashboardData(prevData => ({
@@ -413,7 +376,6 @@ const RateShopperDashboard = () => {
         // Se Modo Preguiça estiver ativo, iniciar próxima extração
         setTimeout(() => {
           if (lazyModeRef.current) {
-            console.log('✅ Extração concluída - chamando próxima no Modo Preguiça');
             lazyModeRef.current();
           }
         }, 2000); // Aguardar 2 segundos para garantir que backend liberou o hotel
@@ -435,7 +397,6 @@ const RateShopperDashboard = () => {
         // Se Modo Preguiça estiver ativo, continuar com próxima mesmo se falhou
         setTimeout(() => {
           if (lazyModeRef.current) {
-            console.log('❌ Extração falhou - tentando próxima no Modo Preguiça');
             lazyModeRef.current();
           }
         }, 2000); // Aguardar 2 segundos para garantir que backend liberou o hotel
@@ -451,7 +412,6 @@ const RateShopperDashboard = () => {
     
     // Listener para status de extração
     newSocket.on('extraction-status', (data) => {
-      console.log('📡 Status recebido via Socket.io:', data);
       
       if (data.message) {
         setNotification({
@@ -465,7 +425,6 @@ const RateShopperDashboard = () => {
     setSocket(newSocket);
     
     return () => {
-      console.log('🔌 Limpando conexão Socket.io');
       newSocket.disconnect();
     };
   }, []);
@@ -571,10 +530,7 @@ const RateShopperDashboard = () => {
   }, [notification]);
 
   const loadDashboardData = async () => {
-    console.log('🔄 loadDashboardData called with:', { selectedHotelUuid });
-    
     if (!selectedHotelUuid) {
-      console.warn('❌ No hotel selected');
       setLoading(false);
       return;
     }
@@ -582,21 +538,11 @@ const RateShopperDashboard = () => {
     try {
       setLoading(true);
       
-      console.log('📡 Making dashboard API call to:', `/api/rate-shopper/${selectedHotelUuid}/dashboard`);
-      
       const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/dashboard`);
       
-      console.log('📈 API response:', response);
-      
       if (response.success) {
-        console.log('✅ Dashboard data loaded successfully:', response.data);
-        console.log('🏨 Properties count:', response.data.properties?.length || 0);
-        console.log('🔍 Recent searches count:', response.data.recent_searches?.length || 0);
-        
-        
         setDashboardData(response.data);
       } else {
-        console.error('❌ Failed to load dashboard data - response not successful');
         // Fallback para dados mock
         setDashboardData(mockData);
       }
@@ -648,10 +594,7 @@ const RateShopperDashboard = () => {
         // Se Socket.io estiver conectado, usar apenas Socket.io
         // Caso contrário, usar polling como fallback
         if (!socket || socket.disconnected) {
-          console.log('⚠️ Socket.io não conectado, usando polling como fallback');
           startExtractionPolling(searchId);
-        } else {
-          console.log('✅ Socket.io conectado, aguardando updates em tempo real');
         }
         
         // Não precisamos recarregar dados - Socket.io ou polling vai atualizar
@@ -781,10 +724,7 @@ const RateShopperDashboard = () => {
   
   // Função para iniciar próxima extração no Modo Preguiça
   const startNextLazyExtraction = useCallback(async () => {
-    console.log('🔄 startNextLazyExtraction chamada - lazyModeActive:', lazyModeActive);
-    
     if (!lazyModeActive) {
-      console.log('❌ Modo Preguiça não ativo, ignorando');
       return;
     }
     
@@ -793,11 +733,8 @@ const RateShopperDashboard = () => {
       search.status === 'PENDING'
     ) || [];
     
-    console.log('📋 Extrações pendentes encontradas:', pendingSearches.length);
-    
     if (pendingSearches.length === 0) {
       // Não há mais extrações pendentes - finalizar Modo Preguiça
-      console.log('✅ Modo Preguiça concluído - sem extrações pendentes');
       setLazyModeActive(false);
       setNotification({
         type: 'success',
@@ -810,7 +747,6 @@ const RateShopperDashboard = () => {
     // Iniciar próxima extração
     const nextSearch = pendingSearches[0];
     try {
-      console.log(`🚀 Modo Preguiça: Iniciando próxima extração - ${nextSearch.property_name}`);
       await handleStartExtraction(nextSearch);
       
       setNotification({
@@ -829,7 +765,6 @@ const RateShopperDashboard = () => {
       // Tentar a próxima após um delay
       setTimeout(() => {
         if (lazyModeRef.current) {
-          console.log('🔄 Tentando próxima extração após erro...');
           lazyModeRef.current();
         }
       }, 2000);
@@ -864,7 +799,6 @@ const RateShopperDashboard = () => {
     if (!confirmed) return;
 
     try {
-      console.log('🗑️ Deleting search:', search.id, 'for hotel:', selectedHotelUuid);
       const response = await apiService.request(`/rate-shopper/${selectedHotelUuid}/searches/${search.id}`, {
         method: 'DELETE'
       });
@@ -956,7 +890,6 @@ const RateShopperDashboard = () => {
     // As próximas serão iniciadas automaticamente via Socket.io quando as anteriores terminarem
     try {
       const firstSearch = pendingSearches[0];
-      console.log(`Modo Preguiça: Iniciando primeira extração - ${firstSearch.property_name}`);
       await handleStartExtraction(firstSearch);
     } catch (error) {
       console.error('Erro ao iniciar primeira extração do Modo Preguiça:', error);
@@ -1339,7 +1272,6 @@ const RateShopperDashboard = () => {
             <div className="mb-8">
               {tableDateRange.startDateStr && tableDateRange.endDateStr ? (
                 <>
-                  {console.log('🎯 Dashboard: Renderizando tabela com datas:', tableDateRange)}
                   <PriceDebugTable 
                     selectedHotelUuid={selectedHotelUuid}
                     startDate={tableDateRange.startDateStr}
@@ -1350,7 +1282,6 @@ const RateShopperDashboard = () => {
                 </>
               ) : (
                 <>
-                  {console.log('⏳ Dashboard: Aguardando datas para tabela:', { chartStartDate, chartPeriodDays, tableDateRange })}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-2 p-6">
                     <p className="text-gray-600">Aguardando sincronização com o gráfico...</p>
                   </div>
@@ -1424,13 +1355,6 @@ const RateShopperDashboard = () => {
                     
                     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
                     const isRecent = completedAt > oneHourAgo;
-                    console.log('🕐 Filtro 1 hora:', {
-                      searchId: search.id,
-                      status: search.status,
-                      completedAt: completedAt.toISOString(),
-                      oneHourAgo: oneHourAgo.toISOString(),
-                      isRecent
-                    });
                     return isRecent;
                   }
                   return false;
@@ -1442,14 +1366,6 @@ const RateShopperDashboard = () => {
                   return b.id - a.id;
                 })
                 .map((search, index) => {
-                  // TEMP DEBUG: Ver se is_main_property está chegando na seção "Em Andamento"
-                  console.log('🔍 PROGRESS RENDER:', {
-                    id: search.id,
-                    name: search.property_name,
-                    is_main_property: search.is_main_property,
-                    willHighlight: search.is_main_property ? 'SIM' : 'NÃO'
-                  });
-                  
                   return (
                 <div 
                   key={`${search.id}-${index}`} 
@@ -1798,7 +1714,6 @@ const RateShopperDashboard = () => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('🗑️ Delete button clicked for search:', search.id);
                         handleDeleteSearch(search);
                       }}
                       className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"

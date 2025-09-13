@@ -196,7 +196,6 @@ export const AuthProvider = ({ children }) => {
         const userData = JSON.parse(savedUser);
         setUser(userData);
         setIsAuthenticated(true);
-        console.log('✅ Usuário carregado do localStorage:', userData);
       } catch (error) {
         console.error('Erro ao carregar dados do usuário:', error);
         localStorage.removeItem('authUser');
@@ -211,11 +210,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setLoading(true);
     try {
-      console.log('🔐 Tentativa de login:', { email });
       
       // Tentar API primeiro se disponível
       try {
-        console.log('🔄 Tentando login via API...');
         const apiResponse = await apiService.login(email, password);
         
         if (apiResponse && apiResponse.user) {
@@ -252,11 +249,9 @@ export const AuthProvider = ({ children }) => {
           setUser(userData);
           setIsAuthenticated(true);
           
-          console.log('✅ Login realizado com sucesso via API:', userData);
           return { success: true, user: userData, hotels: apiResponse.hotels };
         }
       } catch (apiError) {
-        console.log('⚠️ API indisponível, usando dados locais:', apiError.message);
         
         // Fallback para dados mockados
         const userData = DEFAULT_USERS[email.toLowerCase()];
@@ -281,7 +276,6 @@ export const AuthProvider = ({ children }) => {
         setUser(fallbackUser);
         setIsAuthenticated(true);
         
-        console.log('✅ Login realizado com dados mockados:', fallbackUser);
         return { success: true, user: fallbackUser };
       }
       
@@ -295,13 +289,11 @@ export const AuthProvider = ({ children }) => {
 
   // Função de logout
   const logout = () => {
-    console.log('🚪 Realizando logout...');
     
     // Tentar logout da API (não crítico se falhar)
     try {
       apiService.logout();
     } catch (error) {
-      console.log('⚠️ Erro no logout da API:', error.message);
     }
     
     // Limpar dados locais sempre
@@ -357,7 +349,6 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      console.log('🔧 Atualizando permissões do usuário:', { userId, newPermissions });
       
       // TODO: Implementar chamada para API
       // Por enquanto, apenas log para desenvolvimento
