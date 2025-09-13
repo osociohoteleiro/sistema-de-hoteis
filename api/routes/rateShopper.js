@@ -82,6 +82,7 @@ router.get('/:hotel_id/dashboard', async (req, res) => {
         rs.status,
         rs.start_date,
         rs.end_date,
+        rs.total_dates,
         rs.total_prices_found,
         rs.created_at,
         rs.updated_at,

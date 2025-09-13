@@ -57,5 +57,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD node -e "console.log('Health check passed')"
 
 # Start application with dumb-init
+# Não rodar auto-processador - extrações são controladas manualmente via PMS
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "src/auto-processor.js"]
+CMD ["node", "-e", "console.log('Rate Shopper Extrator ready - Aguardando comandos da API'); setInterval(() => {}, 1000)"]
