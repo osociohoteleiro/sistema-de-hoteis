@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import HotelModal from '../components/HotelModal';
 import HotelForm from '../components/HotelForm';
 import ConfirmModal from '../components/ConfirmModal';
+import { CardSkeleton, PageSkeleton } from '../components/skeletons';
 import apiService from '../services/api'; // ✅ CORREÇÃO: Usar apiService
 
 const Hotels = () => {
@@ -207,8 +208,12 @@ const Hotels = () => {
           {/* Status */}
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="px-2 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">
-                Ativo
+              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                (hotel.status || 'ACTIVE') === 'ACTIVE'
+                  ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                  : 'bg-red-500/20 text-red-300 border border-red-500/30'
+              }`}>
+                {(hotel.status || 'ACTIVE') === 'ACTIVE' ? 'Ativo' : 'Inativo'}
               </div>
               {selectedHotelUuid === (hotel.hotel_uuid || hotel.id) && (
                 <div className="px-2 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs flex items-center space-x-1">
@@ -250,15 +255,15 @@ const Hotels = () => {
         </button>
       </div>
 
-      {/* Initial Loading State - Bloqueia tela até carregar */}
+      {/* Initial Loading State - Skeleton ao invés de overlay */}
       {initialLoad && loading && (
-        <div className="fixed inset-0 bg-gradient-main/95 flex items-center justify-center z-50">
-          <div className="bg-sidebar-800/80 backdrop-blur-sm rounded-xl border border-white/20 p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
-            <h3 className="text-lg font-semibold text-white mb-2">Carregando Sistema</h3>
-            <p className="text-sidebar-300">Aguarde enquanto buscamos seus hotéis...</p>
+        <PageSkeleton showHeader={false}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, index) => (
+              <CardSkeleton key={index} />
+            ))}
           </div>
-        </div>
+        </PageSkeleton>
       )}
 
       {/* Error State - Mostra erro se API falhar */}
@@ -294,11 +299,12 @@ const Hotels = () => {
         </div>
       )}
 
-      {/* Subsequent Loading State - Loading mais sutil para recarregamentos */}
-      {!initialLoad && loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
-          <span className="ml-3 text-sidebar-300">Recarregando hotéis...</span>
+      {/* Subsequent Loading State - Skeleton sutil para recarregamentos */}
+      {!initialLoad && loading && hotels.length === 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, index) => (
+            <CardSkeleton key={index} />
+          ))}
         </div>
       )}
 

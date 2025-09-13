@@ -515,4 +515,60 @@ router.delete('/:id/users/:userId', authenticateToken, requireRole(['SUPER_ADMIN
   }
 });
 
+// PATCH /api/hotels/:id/status - Alterar status do hotel (ativar/inativar)
+router.patch('/:id/status', authenticateToken, requireRole(['SUPER_ADMIN', 'ADMIN']), async (req, res) => {
+  try {
+    const identifier = req.params.id;
+    const { status } = req.body;
+    
+    // Verificar se é um UUID ou um ID numérico
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(identifier);
+    const hotelId = isUUID ? null : parseInt(identifier);
+    
+    if (!isUUID && isNaN(hotelId)) {
+      return res.status(400).json({
+        error: 'ID ou UUID do hotel inválido'
+      });
+    }
+
+    // Validar status
+    if (!status || !['ACTIVE', 'INACTIVE'].includes(status.toUpperCase())) {
+      return res.status(400).json({
+        error: 'Status deve ser ACTIVE ou INACTIVE'
+      });
+    }
+
+    // Verificar se hotel existe
+    const query = isUUID ? 
+      'SELECT * FROM hotels WHERE hotel_uuid = $1' : 
+      'SELECT * FROM hotels WHERE id = $1';
+    const [existingHotel] = await db.query(query, [isUUID ? identifier : hotelId]);
+
+    if (!existingHotel) {
+      return res.status(404).json({
+        error: 'Hotel não encontrado'
+      });
+    }
+
+    // Atualizar status
+    const normalizedStatus = status.toUpperCase();
+    await db.query('UPDATE hotels SET status = $1, updated_at = NOW() WHERE id = $2', 
+                   [normalizedStatus, existingHotel.id]);
+
+    // Buscar hotel atualizado
+    const [updatedHotel] = await db.query('SELECT * FROM hotels WHERE id = $1', [existingHotel.id]);
+
+    res.json({
+      message: `Hotel ${normalizedStatus === 'ACTIVE' ? 'ativado' : 'inativado'} com sucesso`,
+      hotel: updatedHotel
+    });
+
+  } catch (error) {
+    console.error('Erro ao alterar status do hotel:', error);
+    res.status(500).json({
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
 module.exports = router;

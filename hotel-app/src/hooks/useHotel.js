@@ -68,7 +68,36 @@ export const useHotel = () => {
     }
   }, []);
 
-  // Excluir hotel
+  // Alternar status do hotel (ativar/inativar)
+  const toggleHotelStatus = useCallback(async (hotelUuid, newStatus) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('🔄 Alterando status do hotel UUID:', hotelUuid, 'para:', newStatus);
+      const result = await apiService.toggleHotelStatus(hotelUuid, newStatus);
+      console.log('✅ Status do hotel alterado com sucesso:', result);
+      
+      // Atualizar o hotel local com os novos dados
+      if (result.hotel) {
+        setHotel(result.hotel);
+      }
+      
+      const statusText = newStatus === 'ACTIVE' ? 'ativado' : 'inativado';
+      toast.success(`Hotel ${statusText} com sucesso!`);
+      return true;
+    } catch (err) {
+      const errorMessage = err.message || 'Erro ao alterar status do hotel';
+      console.error('❌ Erro ao alterar status do hotel:', err);
+      setError(errorMessage);
+      toast.error(errorMessage);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Excluir hotel (mantido para compatibilidade, mas não recomendado)
   const deleteHotel = useCallback(async (hotelUuid) => {
     setLoading(true);
     setError(null);
@@ -104,6 +133,7 @@ export const useHotel = () => {
     fetchHotel,
     updateHotel,
     deleteHotel,
+    toggleHotelStatus,
     clearHotel
   };
 };

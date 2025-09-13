@@ -180,6 +180,13 @@ class ApiService {
     });
   }
 
+  async toggleHotelStatus(id, status) {
+    return await this.request(`/hotels/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
   // Config endpoints
   async getConfigs(params = {}) {
     const searchParams = new URLSearchParams(params);

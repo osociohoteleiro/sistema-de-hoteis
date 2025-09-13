@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { API_CONFIG } from '../../config/api.js';
+import { ReportSkeleton } from '../../components/skeletons';
 import toast from 'react-hot-toast';
 
 /**
@@ -154,6 +155,11 @@ const Reports = ({ reportType = 'financeiro' }) => {
       </div>
     </div>
   );
+
+  // Mostrar skeleton durante carregamento
+  if (loading) {
+    return <ReportSkeleton />;
+  }
 
   return (
     <div className="space-y-6">

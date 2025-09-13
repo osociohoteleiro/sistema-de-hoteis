@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 const EditHotel = () => {
   const { hotelUuid } = useParams();
   const navigate = useNavigate();
-  const { hotel, loading, fetchHotel, updateHotel, deleteHotel } = useHotel();
+  const { hotel, loading, fetchHotel, updateHotel, toggleHotelStatus } = useHotel();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -104,13 +104,27 @@ const EditHotel = () => {
     setIsSubmitting(false);
   };
 
-  const handleDelete = async () => {
-    const success = await deleteHotel(hotelUuid);
+  const handleStatusToggle = async () => {
+    if (!hotel) return;
+    
+    const currentStatus = hotel.status || 'ACTIVE';
+    const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    const actionText = newStatus === 'ACTIVE' ? 'ativar' : 'inativar';
+    
+    const confirm = window.confirm(
+      `Tem certeza que deseja ${actionText} o hotel "${hotel.name}"?\n\n` +
+      `${newStatus === 'INACTIVE' ? 
+        'O hotel ficará inativo e não aparecerá nas listagens principais.' : 
+        'O hotel voltará a ficar ativo e aparecerá nas listagens.'}`
+    );
+    
+    if (!confirm) return;
+    
+    const success = await toggleHotelStatus(hotelUuid, newStatus);
     
     if (success) {
-      setTimeout(() => {
-        navigate('/hoteis');
-      }, 1500);
+      // Não redirecionar, apenas atualizar a interface
+      console.log('✅ Status alterado com sucesso');
     }
   };
 
@@ -165,20 +179,49 @@ const EditHotel = () => {
           </h1>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-4">
+          {/* Status Badge */}
+          {hotel && (
+            <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+              (hotel.status || 'ACTIVE') === 'ACTIVE' 
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+            }`}>
+              {(hotel.status || 'ACTIVE') === 'ACTIVE' ? 'Ativo' : 'Inativo'}
+            </div>
+          )}
+          
+          {/* Status Toggle Switch */}
+          {hotel && (
+            <div className="flex items-center space-x-3">
+              <span className="text-sidebar-300 text-sm">Status:</span>
+              <button
+                onClick={handleStatusToggle}
+                disabled={loading}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+                  (hotel.status || 'ACTIVE') === 'ACTIVE'
+                    ? 'bg-green-500'
+                    : 'bg-red-500'
+                } disabled:opacity-50`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    (hotel.status || 'ACTIVE') === 'ACTIVE' ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-sidebar-300 text-sm">
+                {(hotel.status || 'ACTIVE') === 'ACTIVE' ? 'Ativo' : 'Inativo'}
+              </span>
+            </div>
+          )}
+          
           <Link
             to="/hoteis"
             className="px-4 py-2 text-sidebar-300 hover:text-white border border-sidebar-600 hover:border-sidebar-500 rounded-lg transition-colors"
           >
             Voltar
           </Link>
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-            disabled={loading}
-          >
-            Excluir Hotel
-          </button>
         </div>
       </div>
 
@@ -344,7 +387,18 @@ const EditHotel = () => {
       {hotel && (
         <div className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
           <h3 className="text-lg font-semibold text-white mb-4">Informações do Hotel</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-sidebar-400">Status:</span>
+              <div className="flex items-center space-x-2 mt-1">
+                <div className={`w-2 h-2 rounded-full ${
+                  (hotel.status || 'ACTIVE') === 'ACTIVE' ? 'bg-green-400' : 'bg-red-400'
+                }`}></div>
+                <p className="text-white font-medium">
+                  {(hotel.status || 'ACTIVE') === 'ACTIVE' ? 'Ativo' : 'Inativo'}
+                </p>
+              </div>
+            </div>
             <div>
               <span className="text-sidebar-400">UUID:</span>
               <p className="text-white font-mono break-all">{hotel.hotel_uuid}</p>
@@ -356,6 +410,27 @@ const EditHotel = () => {
             <div>
               <span className="text-sidebar-400">ID:</span>
               <p className="text-white">{hotel.id || 'N/A'}</p>
+            </div>
+          </div>
+          
+          {/* Status Description */}
+          <div className="mt-4 p-4 bg-white/5 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="text-sm">
+                <p className="text-white font-medium mb-1">Sobre o Status do Hotel</p>
+                <p className="text-sidebar-300">
+                  {(hotel.status || 'ACTIVE') === 'ACTIVE' ? (
+                    'Hotel ativo: Aparece nas listagens e pode receber reservas normalmente.'
+                  ) : (
+                    'Hotel inativo: Não aparece nas listagens principais e não recebe novas reservas. Os dados são mantidos para consulta.'
+                  )}
+                </p>
+              </div>
             </div>
           </div>
         </div>

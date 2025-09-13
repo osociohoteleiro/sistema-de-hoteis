@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { DashboardSkeleton } from '../components/skeletons';
 import apiService from '../services/api'; // ✅ CORREÇÃO: Usar apiService
 
 const Dashboard = () => {
@@ -146,6 +147,11 @@ const Dashboard = () => {
       color: 'bg-purple-500 hover:bg-purple-600'
     }
   ];
+
+  // Mostrar skeleton durante carregamento inicial
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="space-y-6">
