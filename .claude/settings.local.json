@@ -19,7 +19,8 @@
       "Bash(curl:*)",
       "Bash(start http://localhost:5174/hoteis/editar/3e74f4e5-8763-11f0-bd40-02420a0b00b1)",
       "Bash(start http://localhost:5174/hoteis)",
-      "Bash(start http://localhost:5174)"
+      "Bash(start http://localhost:5174)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []
