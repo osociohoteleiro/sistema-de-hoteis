@@ -19,9 +19,10 @@ const io = new Server(server, {
       const allowedOrigins = [
         // Desenvolvimento local
         'http://localhost:3000',
-        'http://localhost:5173', 
+        'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:5175',
+        'http://localhost:5176', // PMS atualizado
         // EasyPanel domains (usar variável de ambiente se configurada)
         ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()) : [])
       ];
@@ -65,9 +66,10 @@ app.use(cors({
     const allowedOrigins = [
       // Desenvolvimento local
       'http://localhost:3000',
-      'http://localhost:5173', 
+      'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:5175',
+      'http://localhost:5176', // PMS atualizado
       // EasyPanel domains (usar variável de ambiente se configurada)
       ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()) : [])
     ];

@@ -26,11 +26,19 @@ class ProcessManager {
 
     console.log(`🚀 Spawning process - Platform: ${os.platform()}, Command: ${actualCommand}, Args: ${actualArgs.join(' ')}`);
 
-    return spawn(actualCommand, actualArgs, {
+    const childProcess = spawn(actualCommand, actualArgs, {
       ...options,
       shell: false,
       stdio: options.stdio || ['ignore', 'pipe', 'pipe']
     });
+
+    console.log(`✅ Process spawned successfully - PID: ${childProcess.pid}`);
+
+    childProcess.on('error', (error) => {
+      console.error(`❌ Process spawn error - PID: ${childProcess.pid}:`, error.message);
+    });
+
+    return childProcess;
   }
 
   /**

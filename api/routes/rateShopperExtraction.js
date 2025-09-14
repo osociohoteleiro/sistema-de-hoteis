@@ -55,7 +55,6 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
       cwd: path.join(process.cwd(), '..', 'extrator-rate-shopper'),
       env: {
         ...process.env,
-        NODE_ENV: 'production',
         HEADLESS: 'true',
         HOTEL_ID: hotelId,
         SEARCH_IDS: search_ids?.join(',') || ''
