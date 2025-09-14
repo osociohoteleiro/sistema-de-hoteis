@@ -8,6 +8,7 @@ import BotFlows from './pages/BotFlows';
 import WhatsAppCloud from './pages/WhatsAppCloudOAuth';
 import WhatsAppOAuthCallback from './pages/WhatsAppOAuthCallback';
 import WhatsAppApp from './pages/WhatsAppApp';
+import FlowiseManagement from './pages/FlowiseManagement';
 
 const Settings = () => (
   <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-8 shadow-blue-elegant">
@@ -42,6 +43,9 @@ function App() {
           
           {/* WhatsApp App (Evolution API) */}
           <Route path="workspace/:workspaceUuid/whatsapp-app" element={<WhatsAppApp />} />
+
+          {/* Flowise Management */}
+          <Route path="flowise" element={<FlowiseManagement />} />
 
           {/* Configurações */}
           <Route path="settings" element={<Settings />} />

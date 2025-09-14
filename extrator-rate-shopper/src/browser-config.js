@@ -8,7 +8,8 @@ function getBrowserConfig() {
   const isCI = process.env.CI === 'true';
   const forceHeadless = process.env.HEADLESS === 'true';
   const isDebug = process.env.DEBUG === 'true';
-  
+  const isProduction = process.env.NODE_ENV === 'production';
+
   // Configuração base
   const config = {
     headless: true, // Default para headless
@@ -25,17 +26,27 @@ function getBrowserConfig() {
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
+      '--disable-ipc-flooding-protection'
     ]
   };
 
-  // Configurações específicas para Linux/VPS
-  if (isLinux || isCI || forceHeadless) {
+  // Configurações específicas para Linux/VPS/Produção
+  if (isLinux || isCI || forceHeadless || isProduction) {
     config.args.push(
       '--headless=new',
       '--disable-web-security',
       '--disable-xss-auditor',
-      '--disable-features=VizDisplayCompositor'
+      '--disable-features=VizDisplayCompositor',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage',
+      '--disable-infobars',
+      '--single-process'
     );
+
+    // Especificar executablePath em produção Linux (Docker)
+    if (isLinux && isProduction) {
+      config.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser';
+    }
   }
 
   // Configurações para debug (Windows apenas)
@@ -45,19 +56,30 @@ function getBrowserConfig() {
     config.slowMo = 100; // Mais lento para debug
   }
 
-  // Configurações para baixo consumo de memória (VPS)
-  if (isLinux || isCI) {
+  // Configurações para baixo consumo de memória (VPS/Produção)
+  if (isLinux || isCI || isProduction) {
     config.args.push(
       '--memory-pressure-off',
-      '--max_old_space_size=4096',
+      '--max_old_space_size=2048',
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding'
+      '--disable-renderer-backgrounding',
+      '--disable-component-update',
+      '--disable-extensions-http-throttling',
+      '--disable-client-side-phishing-detection'
     );
+
+    // Timeout mais generoso para ambientes lentos
+    config.timeout = 60000;
+    config.defaultNavigationTimeout = 60000;
+    config.defaultTimeout = 60000;
   }
 
-  console.log(`🌐 Browser config - Platform: ${os.platform()}, Headless: ${config.headless}`);
-  
+  console.log(`🌐 Browser config - Platform: ${os.platform()}, Headless: ${config.headless}, Production: ${isProduction}`);
+  if (config.executablePath) {
+    console.log(`🔧 Using Chromium at: ${config.executablePath}`);
+  }
+
   return config;
 }
 

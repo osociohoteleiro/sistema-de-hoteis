@@ -19,33 +19,52 @@ class DatabaseProcessor {
    */
   async start() {
     try {
+      const startTime = Date.now();
+      const platform = process.platform;
+      const nodeEnv = process.env.NODE_ENV || 'development';
+
+      console.log('🚀 INICIANDO DATABASE PROCESSOR');
+      console.log(`📋 Plataforma: ${platform}, Ambiente: ${nodeEnv}, PID: ${process.pid}`);
+      console.log(`🕐 Timestamp: ${new Date().toISOString()}`);
+
       console.log('🔄 Conectando ao banco de dados...');
       await this.db.connect();
+      console.log('✅ Conexão com banco estabelecida');
 
       console.log('📊 Buscando searches pendentes...');
-      
+
       // Suporte a filtros via variáveis de ambiente
       const hotelId = process.env.HOTEL_ID || null;
       const searchIds = process.env.SEARCH_IDS || null;
-      
+
+      console.log(`🔍 Filtros aplicados - Hotel ID: ${hotelId}, Search IDs: ${searchIds}`);
+
       const pendingSearches = await this.db.getPendingSearches(hotelId, searchIds);
 
       if (pendingSearches.length === 0) {
         console.log('✅ Nenhuma busca pendente encontrada!');
+        console.log(`⏱️  Tempo total: ${Date.now() - startTime}ms`);
         return;
       }
 
       console.log(`🎯 Encontradas ${pendingSearches.length} searches pendentes:`);
       pendingSearches.forEach((search, index) => {
-        console.log(`${index + 1}. ${search.property_name} (${search.start_date} → ${search.end_date})`);
+        console.log(`   ${index + 1}. ID:${search.id} | ${search.property_name} | ${search.start_date} → ${search.end_date} | Platform: ${search.platform || 'booking'}`);
       });
 
+      console.log('🏁 Iniciando processamento das searches...');
+
       // Processar cada busca
-      for (const search of pendingSearches) {
+      for (let i = 0; i < pendingSearches.length; i++) {
+        const search = pendingSearches[i];
+        console.log(`\n📊 Progresso: ${i + 1}/${pendingSearches.length} searches processadas`);
         await this.processSearch(search);
       }
 
-      console.log('🎉 Processamento concluído!');
+      const totalTime = Date.now() - startTime;
+      console.log('\n🎉 PROCESSAMENTO CONCLUÍDO!');
+      console.log(`⏱️  Tempo total: ${totalTime}ms (${Math.round(totalTime/1000)}s)`);
+      console.log(`📈 Média por search: ${Math.round(totalTime/pendingSearches.length)}ms`);
 
     } catch (error) {
       logger.error('Database processor error', { error: error.message });
@@ -61,37 +80,54 @@ class DatabaseProcessor {
   async processSearch(dbSearch) {
     const searchId = dbSearch.id;
     const propertyId = dbSearch.property_id;
+    const searchStartTime = Date.now();
 
     try {
-      console.log(`\n🏨 Processando: ${dbSearch.property_name}`);
-      
+      console.log(`\n🏨 PROCESSANDO SEARCH ID ${searchId}: ${dbSearch.property_name}`);
+      console.log(`📋 Detalhes: Property ID ${propertyId}, Hotel ID ${dbSearch.hotel_id}`);
+
       // Atualizar status para RUNNING
+      console.log('🔄 Atualizando status para RUNNING...');
       await this.db.updateSearchStatus(searchId, 'RUNNING');
+      console.log('✅ Status atualizado no banco');
 
       // Converter para formato do extrator
       const extractorSearch = this.db.searchToExtractorFormat(dbSearch);
-      
+
       // Debug: mostrar dados que serão enviados
-      console.log('🔧 Dados enviados para extrator:', JSON.stringify(extractorSearch, null, 2));
+      console.log('🔧 Dados enviados para extrator:');
+      console.log(`   - Nome: ${extractorSearch.name}`);
+      console.log(`   - URL: ${extractorSearch.url}`);
+      console.log(`   - Data início: ${extractorSearch.start_date}`);
+      console.log(`   - Data fim: ${extractorSearch.end_date}`);
+      console.log(`   - Bundle size: ${extractorSearch.max_bundle_size || 7}`);
 
       // Preparar parâmetros para o extrator
       const startDate = new Date(extractorSearch.start_date);
       const endDate = new Date(extractorSearch.end_date);
-      
+      const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+      console.log(`📅 Período: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()} (${daysDiff} dias)`);
+
       // Usar timestamp para nome do arquivo (mesmo padrão do extrator original)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const resultsFile = path.join(process.cwd(), 'results', 'extracted-data', 'csv', 
+      const resultsFile = path.join(process.cwd(), 'results', 'extracted-data', 'csv',
         `${extractorSearch.name}_${timestamp}_from_${extractorSearch.start_date}_to_${extractorSearch.end_date}.csv`);
 
+      console.log(`📁 Arquivo de resultado: ${resultsFile}`);
+
       // Garantir que o diretório existe
+      console.log('📂 Criando diretórios necessários...');
       await fs.mkdir(path.dirname(resultsFile), { recursive: true });
+      console.log('✅ Diretórios criados');
 
       // Garantir modo headless em produção
+      const originalHeadless = process.env.HEADLESS;
       process.env.HEADLESS = 'true';
-      
+      console.log(`🖥️  Modo headless: ${process.env.HEADLESS}`);
+
       console.log(`🌐 Extraindo preços de: ${extractorSearch.url}`);
-      console.log(`📅 Período: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()}`);
-      
+
       // Detectar plataforma baseada na URL
       const platform = this.detectPlatform(extractorSearch.url);
       console.log(`🏷️  Plataforma detectada: ${platform}`);
