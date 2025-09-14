@@ -20,7 +20,12 @@
       "Bash(start http://localhost:5174/hoteis/editar/3e74f4e5-8763-11f0-bd40-02420a0b00b1)",
       "Bash(start http://localhost:5174/hoteis)",
       "Bash(start http://localhost:5174)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run process-database:saas:*)",
+      "Bash(timeout 30s npm run process-database:saas)",
+      "Bash(timeout 60s npm run process-database:saas)",
+      "Bash(timeout 90s npm run process-database:saas)",
+      "Bash(timeout 120s npm run process-database:saas)"
     ],
     "deny": [],
     "ask": []

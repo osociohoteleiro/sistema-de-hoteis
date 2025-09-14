@@ -402,7 +402,7 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
             if (retry === maxRetries - 1) {
               logger.error(`Failed after ${maxRetries} attempts`, {
                 property: propertyName,
-                date: booking_query_param_current_date,
+                date: checkin_str,
                 bundle_size: bundle_size
               });
             }

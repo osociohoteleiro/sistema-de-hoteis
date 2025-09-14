@@ -37,10 +37,7 @@ function getBrowserConfig() {
       '--disable-web-security',
       '--disable-xss-auditor',
       '--disable-features=VizDisplayCompositor',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-dev-shm-usage',
-      '--disable-infobars',
-      '--single-process'
+      '--disable-blink-features=AutomationControlled'
     );
 
     // Especificar executablePath em produção Linux (Docker)
@@ -60,13 +57,7 @@ function getBrowserConfig() {
   if (isLinux || isCI || isProduction) {
     config.args.push(
       '--memory-pressure-off',
-      '--max_old_space_size=2048',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-component-update',
-      '--disable-extensions-http-throttling',
-      '--disable-client-side-phishing-detection'
+      '--max_old_space_size=2048'
     );
 
     // Timeout mais generoso para ambientes lentos
