@@ -340,6 +340,7 @@ const marketingMessagesRoutes = require('./routes/marketing-messages');
 const logosRoutes = require('./routes/logos');
 const whatsappCloudRoutes = require('./routes/whatsapp-cloud');
 const rateShopperRoutes = require('./routes/rateShopper');
+const rateShopperExtractionRoutes = require('./routes/rateShopperExtraction');
 const sitesRoutes = require('./routes/sites');
 const siteThemesRoutes = require('./routes/siteThemes');
 const siteTemplatesRoutes = require('./routes/site-templates');
@@ -373,15 +374,13 @@ app.use('/api/marketing-messages', marketingMessagesRoutes);
 app.use('/api/logos', logosRoutes);
 app.use('/api/whatsapp-cloud', whatsappCloudRoutes);
 app.use('/api/rate-shopper', rateShopperRoutes);
+app.use('/api/rate-shopper-extraction', rateShopperExtractionRoutes);
 app.use('/api/sites', sitesRoutes);
 app.use('/api/site-themes', siteThemesRoutes);
 app.use('/api/site-templates', siteTemplatesRoutes);
 app.use('/api/hotel-sites', hotelSitesRoutes);
 app.use('/api/app-configurations', appConfigurationsRoutes);
 
-// Rate Shopper Extraction Control
-const rateShopperExtractionRoutes = require('./routes/rateShopperExtraction');
-app.use('/api/rate-shopper-extraction', rateShopperExtractionRoutes);
 app.use('/api/migrate', migrateRoutes); // Habilitado temporariamente
 
 // Socket.io configuration
