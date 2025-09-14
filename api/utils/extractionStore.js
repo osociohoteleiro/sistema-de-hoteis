@@ -14,6 +14,11 @@ class ExtractionStore {
     try {
       const startTime = extractionData.startTime || new Date();
 
+      console.log(`🔄 Salvando extração ativa para hotel ${hotelId}:`);
+      console.log(`   - Status: ${extractionData.status || 'RUNNING'}`);
+      console.log(`   - PID: ${extractionData.process?.pid || 'null'}`);
+      console.log(`   - Start Time: ${startTime}`);
+
       await this.db.query(`
         INSERT INTO active_extractions (
           hotel_id,
@@ -67,6 +72,8 @@ class ExtractionStore {
    */
   async getActiveExtraction(hotelId) {
     try {
+      console.log(`🔍 Buscando extração ativa para hotel ${hotelId}`);
+
       const result = await this.db.query(`
         SELECT * FROM active_extractions
         WHERE hotel_id = $1
@@ -74,7 +81,17 @@ class ExtractionStore {
         AND created_at > NOW() - INTERVAL '2 hours'
       `, [hotelId]);
 
+      console.log(`📊 Encontrados ${result.rows.length} registros ativos para hotel ${hotelId}`);
+
       if (result.rows.length === 0) {
+        // Debug: mostrar o que tem na tabela para este hotel
+        const debugResult = await this.db.query(`
+          SELECT hotel_id, status, created_at FROM active_extractions
+          WHERE hotel_id = $1
+          ORDER BY created_at DESC LIMIT 3
+        `, [hotelId]);
+
+        console.log(`🐛 Debug - Registros para hotel ${hotelId}:`, debugResult.rows);
         return null;
       }
 
