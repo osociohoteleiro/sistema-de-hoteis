@@ -33,7 +33,8 @@
       "Bash(grep:*)",
       "Bash(git rm:*)",
       "Bash(del nul)",
-      "Bash(./scripts/deploy-pms.sh:*)"
+      "Bash(./scripts/deploy-pms.sh:*)",
+      "Bash(./scripts/deploy-extrator.sh:*)"
     ],
     "deny": [],
     "ask": []
