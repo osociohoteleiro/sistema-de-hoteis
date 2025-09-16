@@ -1,11 +1,39 @@
 const os = require('os');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 /**
  * Gerenciador de processos multiplataforma
  * Resolve diferenças entre Windows/Linux para spawning e killing de processos
  */
 class ProcessManager {
+
+  /**
+   * Encontra o caminho do Node.js no sistema
+   */
+  static findNodePath() {
+    const possiblePaths = [
+      process.execPath, // Caminho do Node.js atual
+      '/usr/local/bin/node',
+      '/usr/bin/node',
+      '/opt/node/bin/node',
+      'node' // último recurso
+    ];
+
+    for (const path of possiblePaths) {
+      try {
+        if (path === 'node' || fs.existsSync(path)) {
+          console.log(`🔍 Node.js encontrado em: ${path}`);
+          return path;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    console.log(`⚠️ Node.js não encontrado, usando fallback: node`);
+    return 'node';
+  }
 
   /**
    * Spawna um processo de forma consistente entre plataformas
@@ -24,11 +52,10 @@ class ProcessManager {
         actualCommand = 'cmd';
         actualArgs = ['/c', command, ...args];
       } else {
-        // Linux/EasyPanel: usar processo Node.js do próprio container
-        const nodePath = process.execPath; // Caminho do Node.js atual
-        actualCommand = nodePath;
-        actualArgs = ['/app/extrator-rate-shopper/src/database-processor.js'];
-        console.log(`🐧 Linux: Usando Node.js do container - ${nodePath}`);
+        // Linux/EasyPanel: usar npm via shell (mais confiável)
+        actualCommand = '/bin/sh';
+        actualArgs = ['-c', 'cd /app/extrator-rate-shopper && npm run process-database:saas'];
+        console.log(`🐧 Linux: Usando npm via shell - /bin/sh`);
       }
     } else {
       // Comportamento padrão para outros comandos
