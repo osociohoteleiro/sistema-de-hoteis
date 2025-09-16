@@ -24,10 +24,10 @@ class ProcessManager {
         actualCommand = 'cmd';
         actualArgs = ['/c', command, ...args];
       } else {
-        // Linux: usar Node.js diretamente para evitar problemas com npm/cross-env
-        actualCommand = 'node';
-        actualArgs = ['src/database-processor.js'];
-        console.log(`🐧 Linux: Usando Node.js diretamente em vez de npm script`);
+        // Linux: usar shell para encontrar node automaticamente
+        actualCommand = 'sh';
+        actualArgs = ['-c', 'cd /app/extrator-rate-shopper && node src/database-processor.js'];
+        console.log(`🐧 Linux: Usando shell para executar rate-shopper - comando: ${actualArgs.join(' ')}`);
       }
     } else {
       // Comportamento padrão para outros comandos

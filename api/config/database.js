@@ -80,10 +80,12 @@ class DatabaseConnection {
         const result = await this.pool.query(pgSql, params);
 
         // Manter compatibilidade com código legado
-        const rows = result.rows;
-        rows.rowCount = result.rowCount;
-        rows.command = result.command;
-        rows.fields = result.fields;
+        const rows = result.rows || [];
+        if (rows && typeof rows === 'object') {
+          rows.rowCount = result.rowCount;
+          rows.command = result.command;
+          rows.fields = result.fields;
+        }
         return rows;
       } catch (error) {
         console.error('Erro na query PostgreSQL:', error);
