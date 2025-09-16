@@ -50,22 +50,41 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
       });
     }
 
-    // Iniciar processo de extração usando ProcessManager
-    const extractorPath = process.env.NODE_ENV === 'production'
-      ? '/app/extrator-rate-shopper'
-      : path.join(process.cwd(), '..', 'extrator-rate-shopper');
+    // Em produção, o extrator roda independentemente (auto-processor)
+    // A API só precisa marcar searches como PENDING
+    let extractionProcess;
 
-    console.log(`🔧 Usando diretório do extrator: ${extractorPath}`);
+    if (process.env.NODE_ENV === 'production') {
+      console.log(`🌐 Produção: Extrator roda independentemente. Searches serão processadas automaticamente.`);
 
-    const extractionProcess = ProcessManager.spawn('npm', ['run', 'process-database:saas'], {
-      cwd: extractorPath,
-      env: {
-        ...process.env,
-        HEADLESS: 'true',
-        HOTEL_ID: hotelId,
-        SEARCH_IDS: search_ids?.join(',') || ''
-      }
-    });
+      // Processo fake para compatibilidade com código existente
+      extractionProcess = {
+        pid: Math.floor(Math.random() * 10000) + 1000,
+        killed: false,
+        stdout: { on: () => {} },
+        stderr: { on: () => {} },
+        on: (event, callback) => {
+          if (event === 'close') {
+            setTimeout(() => callback(0), 1000); // Simula sucesso após 1s
+          }
+        },
+        kill: () => {}
+      };
+    } else {
+      // Em desenvolvimento, usar spawn local normalmente
+      const extractorPath = path.join(process.cwd(), '..', 'extrator-rate-shopper');
+      console.log(`🔧 Desenvolvimento: Usando spawn local - ${extractorPath}`);
+
+      extractionProcess = ProcessManager.spawn('npm', ['run', 'process-database:saas'], {
+        cwd: extractorPath,
+        env: {
+          ...process.env,
+          HEADLESS: 'true',
+          HOTEL_ID: hotelId,
+          SEARCH_IDS: search_ids?.join(',') || ''
+        }
+      });
+    }
 
     // Dados da extração
     const extractionData = {
