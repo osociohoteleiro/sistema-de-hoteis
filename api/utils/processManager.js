@@ -9,6 +9,68 @@ const fs = require('fs');
 class ProcessManager {
 
   /**
+   * Cria um processo HTTP que se comunica com extrator em instância separada
+   * (para EasyPanel com deploy separado)
+   */
+  static createHttpProcess(options) {
+    const EventEmitter = require('events');
+    const axios = require('axios');
+
+    const fakeProcess = new EventEmitter();
+    fakeProcess.pid = Math.floor(Math.random() * 10000) + 1000;
+    fakeProcess.killed = false;
+    fakeProcess.stdout = new EventEmitter();
+    fakeProcess.stderr = new EventEmitter();
+
+    const env = { ...process.env, ...options.env };
+    const extractorUrl = process.env.EXTRATOR_URL || 'https://osh-sistemas-extrator-rate-shopper.d32pnk.easypanel.host';
+
+    console.log(`🔧 Processo HTTP criado - PID fake: ${fakeProcess.pid}`);
+    console.log(`🌐 URL do Extrator: ${extractorUrl}`);
+    console.log(`🔧 Variáveis: HOTEL_ID=${env.HOTEL_ID}, SEARCH_IDS=${env.SEARCH_IDS}`);
+
+    // Fazer chamada HTTP para o extrator
+    setTimeout(async () => {
+      try {
+        fakeProcess.stdout.emit('data', `🚀 INICIANDO VIA HTTP - Extrator em instância separada\n`);
+        fakeProcess.stdout.emit('data', `🌐 Conectando com: ${extractorUrl}\n`);
+
+        const response = await axios.post(`${extractorUrl}/api/process`, {
+          hotel_id: env.HOTEL_ID,
+          search_ids: env.SEARCH_IDS
+        }, {
+          timeout: 300000, // 5 minutos
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        fakeProcess.stdout.emit('data', `✅ Extração via HTTP concluída com sucesso\n`);
+        fakeProcess.stdout.emit('data', `📊 Resultado: ${JSON.stringify(response.data)}\n`);
+        fakeProcess.emit('close', 0);
+
+      } catch (error) {
+        console.error(`❌ Erro na chamada HTTP:`, error.message);
+        fakeProcess.stderr.emit('data', `Erro HTTP: ${error.message}\n`);
+
+        if (error.response) {
+          fakeProcess.stderr.emit('data', `Status: ${error.response.status}\n`);
+          fakeProcess.stderr.emit('data', `Response: ${JSON.stringify(error.response.data)}\n`);
+        }
+
+        fakeProcess.emit('close', 1);
+      }
+    }, 100);
+
+    fakeProcess.kill = (signal) => {
+      fakeProcess.killed = true;
+      fakeProcess.emit('close', 0);
+    };
+
+    return fakeProcess;
+  }
+
+  /**
    * Cria um processo inline que executa código diretamente
    * (fallback quando spawn não funciona)
    */
@@ -110,11 +172,11 @@ class ProcessManager {
         actualCommand = 'cmd';
         actualArgs = ['/c', command, ...args];
       } else {
-        // Linux/EasyPanel: Fallback para usar require direto (sem spawn)
-        console.log(`🐧 Linux: Executando rate-shopper via require direto (sem spawn)`);
+        // Linux/EasyPanel: Extrator está em instância separada - usar HTTP
+        console.log(`🐧 Linux: Executando rate-shopper via HTTP (instância separada)`);
 
-        // Retornar um processo fake que executa o código diretamente
-        const fakeProcess = ProcessManager.createInlineProcess(options);
+        // Retornar um processo fake que faz chamada HTTP para o extrator
+        const fakeProcess = ProcessManager.createHttpProcess(options);
         return fakeProcess;
       }
     } else {
