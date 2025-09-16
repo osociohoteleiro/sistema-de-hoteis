@@ -18,17 +18,20 @@ class User {
 
   static async findById(id) {
     const result = await db.query('SELECT * FROM users WHERE id = $1', [id]);
-    return result.length > 0 ? new User(result[0]) : null;
+    const rows = result.rows || result;
+    return rows.length > 0 ? new User(rows[0]) : null;
   }
 
   static async findByUuid(uuid) {
     const result = await db.query('SELECT * FROM users WHERE uuid = $1', [uuid]);
-    return result.length > 0 ? new User(result[0]) : null;
+    const rows = result.rows || result;
+    return rows.length > 0 ? new User(rows[0]) : null;
   }
 
   static async findByEmail(email) {
     const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-    return result.length > 0 ? new User(result[0]) : null;
+    const rows = result.rows || result;
+    return rows.length > 0 ? new User(rows[0]) : null;
   }
 
   static async findAll(filters = {}) {
@@ -92,8 +95,9 @@ class User {
         [this.name, this.email, this.password_hash, this.user_type, this.active, this.email_verified]
       );
       
-      if (result && result.length > 0) {
-        const newUser = result[0];
+      const rows = result.rows || result;
+      if (rows && rows.length > 0) {
+        const newUser = rows[0];
         this.id = newUser.id;
         this.uuid = newUser.uuid;
       }
@@ -129,8 +133,9 @@ class User {
       WHERE uh.user_id = $1 AND uh.active = true
       ORDER BY h.name
     `, [this.id]);
-    
-    return result;
+
+    // Retornar apenas as rows para compatibilidade com o frontend
+    return result.rows || result;
   }
 
   // Add user to hotel
@@ -156,7 +161,8 @@ class User {
         'SELECT permission FROM user_permissions WHERE user_id = $1',
         [this.id]
       );
-      return result.map(row => row.permission);
+      const rows = result.rows || result;
+      return rows.map(row => row.permission);
     } catch (error) {
       console.error('Erro ao buscar permissões do usuário:', error);
       return [];

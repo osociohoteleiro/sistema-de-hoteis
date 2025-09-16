@@ -34,7 +34,7 @@ class ApiService {
 
   async request(endpoint, options = {}) {
     let url = `${API_BASE_URL}${endpoint}`;
-    
+
     // Handle query parameters
     if (options.params) {
       const searchParams = new URLSearchParams();
@@ -43,16 +43,16 @@ class ApiService {
           searchParams.append(key, options.params[key]);
         }
       });
-      
+
       if (searchParams.toString()) {
         url += (endpoint.includes('?') ? '&' : '?') + searchParams.toString();
       }
-      
+
       // Remove params from options to avoid passing to fetch
-      const { params, ...configOptions } = options;
+      const { params: _, ...configOptions } = options;
       options = configOptions;
     }
-    
+
     const config = {
       headers: this.getHeaders(),
       ...options,
@@ -63,13 +63,34 @@ class ApiService {
       const data = await response.json();
 
       if (!response.ok) {
+        // Tratar especificamente erro 401 (token expirado/inválido)
+        if (response.status === 401) {
+          this.handleUnauthorized();
+          throw new Error('Token expirado');
+        }
+
         throw new Error(data.error || `HTTP error! status: ${response.status}`);
       }
 
       return data;
     } catch (error) {
-      console.error('API request failed:', error);
+      // Não logar erro se for token expirado (já tratado)
+      if (error.message !== 'Token expirado') {
+        console.error('API request failed:', error);
+      }
       throw error;
+    }
+  }
+
+  // Tratar caso de não autorização (401)
+  handleUnauthorized() {
+    // Limpar dados de autenticação
+    this.setToken(null);
+    localStorage.clear();
+
+    // Redirecionar para login
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
     }
   }
 

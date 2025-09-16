@@ -25,7 +25,14 @@
       "Bash(timeout 30s npm run process-database:saas)",
       "Bash(timeout 60s npm run process-database:saas)",
       "Bash(timeout 90s npm run process-database:saas)",
-      "Bash(timeout 120s npm run process-database:saas)"
+      "Bash(timeout 120s npm run process-database:saas)",
+      "Bash(npx eslint:*)",
+      "Bash(git checkout:*)",
+      "Bash(chmod:*)",
+      "Bash(start http://localhost:5173)",
+      "Bash(grep:*)",
+      "Bash(git rm:*)",
+      "Bash(del nul)"
     ],
     "deny": [],
     "ask": []

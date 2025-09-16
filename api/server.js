@@ -375,8 +375,8 @@ app.use('/api/meta', metaRoutes);
 app.use('/api/marketing-messages', marketingMessagesRoutes);
 app.use('/api/logos', logosRoutes);
 app.use('/api/whatsapp-cloud', whatsappCloudRoutes);
-app.use('/api/rate-shopper', rateShopperRoutes);
 app.use('/api/rate-shopper-extraction', rateShopperExtractionRoutes);
+app.use('/api/rate-shopper', rateShopperRoutes);
 app.use('/api/sites', sitesRoutes);
 app.use('/api/site-themes', siteThemesRoutes);
 app.use('/api/site-templates', siteTemplatesRoutes);
@@ -430,7 +430,7 @@ app.use('*', (req, res) => {
 async function startServer() {
   try {
     // Testar conexão com banco na inicialização
-    console.log('🚀 Iniciando servidor...');
+    console.log('🚀 Iniciando servidor (FORCANDO REINICIO)...');
     console.log('🔄 Testando conexão com banco de dados...');
     
     await db.connect();

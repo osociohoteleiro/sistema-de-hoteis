@@ -90,6 +90,12 @@ class ExtractionStore {
         AND status = 'RUNNING'
       `, [hotelId]);
 
+      // Verificar se result e result.rows existem
+      if (!result || !result.rows) {
+        console.log(`⚠️ Resultado inválido para hotel ${hotelId}:`, result);
+        return null;
+      }
+
       console.log(`📊 Encontrados ${result.rows.length} registros ativos para hotel ${hotelId}`);
 
       if (result.rows.length === 0) {
@@ -201,6 +207,12 @@ class ExtractionStore {
         ORDER BY created_at DESC
       `);
 
+      // Verificar se result e result.rows existem
+      if (!result || !result.rows) {
+        console.log(`⚠️ Resultado inválido ao listar extrações ativas:`, result);
+        return [];
+      }
+
       return result.rows.map(row => ({
         hotelId: row.hotel_id,
         process: { pid: row.process_pid, killed: false },
@@ -238,6 +250,12 @@ class ExtractionStore {
         RETURNING hotel_id
       `);
 
+      // Verificar se result e result.rows existem
+      if (!result || !result.rows) {
+        console.log(`⚠️ Resultado inválido na limpeza de extrações órfãs:`, result);
+        return { cleanedCount: 0, cleanedHotelIds: [] };
+      }
+
       const cleanedCount = result.rows.length;
       const cleanedHotelIds = result.rows.map(row => row.hotel_id);
 
@@ -269,6 +287,12 @@ class ExtractionStore {
         AND status = 'RUNNING'
         AND created_at > NOW() - INTERVAL '2 hours'
       `, [hotelId]);
+
+      // Verificar se result e result.rows existem
+      if (!result || !result.rows || result.rows.length === 0) {
+        console.log(`⚠️ Resultado inválido para contagem do hotel ${hotelId}:`, result);
+        return false;
+      }
 
       return result.rows[0].count > 0;
 

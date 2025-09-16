@@ -20,12 +20,16 @@ class Hotel {
 
   static async findById(id) {
     const result = await db.query('SELECT * FROM hotels WHERE id = $1', [id]);
-    return result.length > 0 ? new Hotel(result[0]) : null;
+    // Compatibilidade com novo formato de retorno do database
+    const rows = result.rows || result;
+    return rows.length > 0 ? new Hotel(rows[0]) : null;
   }
 
   static async findByUuid(uuid) {
     const result = await db.query('SELECT * FROM hotels WHERE hotel_uuid = $1', [uuid]);
-    return result.length > 0 ? new Hotel(result[0]) : null;
+    // Compatibilidade com novo formato de retorno do database
+    const rows = result.rows || result;
+    return rows.length > 0 ? new Hotel(rows[0]) : null;
   }
 
   static async findAll(filters = {}) {

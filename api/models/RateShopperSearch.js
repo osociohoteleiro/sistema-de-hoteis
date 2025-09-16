@@ -32,11 +32,11 @@ class RateShopperSearch {
       const result = await db.query('SELECT * FROM rate_shopper_searches WHERE id = $1', [id]);
       
       // Normalizar acesso aos dados (compatibilidade entre diferentes versões do driver)
-      const data = result.rows ? result.rows : result;
-      
-      if (data && data.length > 0) {
+      const rows = result.rows || result;
+
+      if (rows && rows.length > 0) {
         console.log(`✅ Search ${id} encontrada`);
-        return new RateShopperSearch(data[0]);
+        return new RateShopperSearch(rows[0]);
       } else {
         console.log(`⚠️ Search ${id} não encontrada`);
         return null;
@@ -88,7 +88,8 @@ class RateShopperSearch {
     }
 
     const result = await db.query(query, params);
-    return result.map(row => {
+    const rows = result.rows || result;
+    return rows.map(row => {
       const search = new RateShopperSearch(row);
       search.property_name = row.property_name;
       search.is_main_property = row.is_main_property;
@@ -106,8 +107,9 @@ class RateShopperSearch {
       WHERE rs.status IN ('PENDING', 'RUNNING')
       ORDER BY rs.created_at
     `);
-    
-    return result.map(row => {
+
+    const rows = result.rows || result;
+    return rows.map(row => {
       const search = new RateShopperSearch(row);
       search.property_name = row.property_name;
       search.hotel_name = row.hotel_name;
