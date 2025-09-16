@@ -23,7 +23,7 @@ class ProcessManager {
     fakeProcess.stderr = new EventEmitter();
 
     const env = { ...process.env, ...options.env };
-    const extractorUrl = process.env.EXTRATOR_URL || 'https://osh-sistemas-extrator-rate-shopper.d32pnk.easypanel.host';
+    const extractorUrl = process.env.EXTRATOR_URL || 'http://osh-sistemas-extrator-rate-shopper.d32pnk.easypanel.host';
 
     console.log(`🔧 Processo HTTP criado - PID fake: ${fakeProcess.pid}`);
     console.log(`🌐 URL do Extrator: ${extractorUrl}`);
