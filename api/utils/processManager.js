@@ -9,30 +9,61 @@ const fs = require('fs');
 class ProcessManager {
 
   /**
-   * Encontra o caminho do Node.js no sistema
+   * Cria um processo inline que executa código diretamente
+   * (fallback quando spawn não funciona)
    */
-  static findNodePath() {
-    const possiblePaths = [
-      process.execPath, // Caminho do Node.js atual
-      '/usr/local/bin/node',
-      '/usr/bin/node',
-      '/opt/node/bin/node',
-      'node' // último recurso
-    ];
+  static createInlineProcess(options) {
+    const EventEmitter = require('events');
+    const path = require('path');
 
-    for (const path of possiblePaths) {
+    const fakeProcess = new EventEmitter();
+    fakeProcess.pid = Math.floor(Math.random() * 10000) + 1000; // PID fake
+    fakeProcess.killed = false;
+    fakeProcess.stdout = new EventEmitter();
+    fakeProcess.stderr = new EventEmitter();
+
+    // Configurar variáveis de ambiente
+    const env = { ...process.env, ...options.env };
+
+    console.log(`🔧 Processo inline criado - PID fake: ${fakeProcess.pid}`);
+    console.log(`🔧 Variáveis de ambiente: HOTEL_ID=${env.HOTEL_ID}, SEARCH_IDS=${env.SEARCH_IDS}`);
+
+    // Executar o código do database-processor diretamente
+    setTimeout(async () => {
       try {
-        if (path === 'node' || fs.existsSync(path)) {
-          console.log(`🔍 Node.js encontrado em: ${path}`);
-          return path;
-        }
-      } catch (e) {
-        continue;
-      }
-    }
+        // Simular mudança de diretório
+        const originalCwd = process.cwd();
+        const extractorPath = '/app/extrator-rate-shopper';
 
-    console.log(`⚠️ Node.js não encontrado, usando fallback: node`);
-    return 'node';
+        // Configurar environment
+        Object.assign(process.env, env);
+
+        fakeProcess.stdout.emit('data', `🚀 INICIANDO DATABASE PROCESSOR (INLINE MODE)\n`);
+        fakeProcess.stdout.emit('data', `📋 Plataforma: linux, PID: ${fakeProcess.pid}\n`);
+
+        // Executar database processor
+        const DatabaseProcessor = require('/app/extrator-rate-shopper/src/database-processor.js');
+        const processor = new DatabaseProcessor();
+
+        await processor.start();
+
+        fakeProcess.stdout.emit('data', `✅ Processamento concluído com sucesso\n`);
+        fakeProcess.emit('close', 0);
+
+      } catch (error) {
+        console.error(`❌ Erro no processo inline:`, error);
+        fakeProcess.stderr.emit('data', `Erro: ${error.message}\n`);
+        fakeProcess.emit('close', 1);
+      }
+    }, 100);
+
+    // Método kill
+    fakeProcess.kill = (signal) => {
+      fakeProcess.killed = true;
+      fakeProcess.emit('close', 0);
+    };
+
+    return fakeProcess;
   }
 
   /**
@@ -52,10 +83,12 @@ class ProcessManager {
         actualCommand = 'cmd';
         actualArgs = ['/c', command, ...args];
       } else {
-        // Linux/EasyPanel: usar npm via shell (mais confiável)
-        actualCommand = '/bin/sh';
-        actualArgs = ['-c', 'cd /app/extrator-rate-shopper && npm run process-database:saas'];
-        console.log(`🐧 Linux: Usando npm via shell - /bin/sh`);
+        // Linux/EasyPanel: Fallback para usar require direto (sem spawn)
+        console.log(`🐧 Linux: Executando rate-shopper via require direto (sem spawn)`);
+
+        // Retornar um processo fake que executa o código diretamente
+        const fakeProcess = ProcessManager.createInlineProcess(options);
+        return fakeProcess;
       }
     } else {
       // Comportamento padrão para outros comandos
