@@ -32,7 +32,8 @@
       "Bash(start http://localhost:5173)",
       "Bash(grep:*)",
       "Bash(git rm:*)",
-      "Bash(del nul)"
+      "Bash(del nul)",
+      "Bash(./scripts/deploy-pms.sh:*)"
     ],
     "deny": [],
     "ask": []
