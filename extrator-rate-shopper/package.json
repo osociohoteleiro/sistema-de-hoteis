@@ -8,7 +8,7 @@
     "start:debug": "DEBUG=true node src/index.js",
     "process-database": "node src/database-processor.js",
     "process-database:headless": "HEADLESS=true node src/database-processor.js",
-    "process-database:saas": "cross-env HEADLESS=true node src/database-processor.js",
+    "process-database:saas": "node src/database-processor.js",
     "auto-processor": "node src/auto-processor.js",
     "auto-processor:saas": "cross-env HEADLESS=true node src/auto-processor.js",
     "scheduler": "node src/scheduler-cli.js",

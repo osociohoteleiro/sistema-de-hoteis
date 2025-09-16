@@ -23,9 +23,22 @@ class DatabaseProcessor {
       const platform = process.platform;
       const nodeEnv = process.env.NODE_ENV || 'development';
 
+      // Garantir que HEADLESS está sempre ativo
+      if (!process.env.HEADLESS) {
+        process.env.HEADLESS = 'true';
+      }
+
       console.log('🚀 INICIANDO DATABASE PROCESSOR');
       console.log(`📋 Plataforma: ${platform}, Ambiente: ${nodeEnv}, PID: ${process.pid}`);
       console.log(`🕐 Timestamp: ${new Date().toISOString()}`);
+      console.log(`🖥️  Modo Headless: ${process.env.HEADLESS}`);
+      console.log(`🔧 Variáveis de ambiente carregadas:`);
+      console.log(`   - POSTGRES_HOST: ${process.env.POSTGRES_HOST || 'não definido'}`);
+      console.log(`   - POSTGRES_PORT: ${process.env.POSTGRES_PORT || 'não definido'}`);
+      console.log(`   - POSTGRES_DB: ${process.env.POSTGRES_DB || 'não definido'}`);
+      console.log(`   - POSTGRES_USER: ${process.env.POSTGRES_USER || 'não definido'}`);
+      console.log(`   - NODE_ENV: ${process.env.NODE_ENV || 'não definido'}`);
+      console.log(`   - PGSSLDISABLE: ${process.env.PGSSLDISABLE || 'não definido'}`);
 
       console.log('🔄 Conectando ao banco de dados...');
       await this.db.connect();

@@ -16,12 +16,28 @@ class ProcessManager {
     // Ajustar comando para Windows vs Linux
     let actualCommand, actualArgs;
 
-    if (isWindows) {
-      actualCommand = 'cmd';
-      actualArgs = ['/c', command, ...args];
+    // Detecção especial para comandos npm que podem falhar no Linux
+    if (command === 'npm' && args.includes('process-database:saas')) {
+      console.log(`🔧 Detectado comando rate-shopper, ajustando para plataforma: ${os.platform()}`);
+
+      if (isWindows) {
+        actualCommand = 'cmd';
+        actualArgs = ['/c', command, ...args];
+      } else {
+        // Linux: usar Node.js diretamente para evitar problemas com npm/cross-env
+        actualCommand = 'node';
+        actualArgs = ['src/database-processor.js'];
+        console.log(`🐧 Linux: Usando Node.js diretamente em vez de npm script`);
+      }
     } else {
-      actualCommand = 'sh';
-      actualArgs = ['-c', `${command} ${args.join(' ')}`];
+      // Comportamento padrão para outros comandos
+      if (isWindows) {
+        actualCommand = 'cmd';
+        actualArgs = ['/c', command, ...args];
+      } else {
+        actualCommand = 'sh';
+        actualArgs = ['-c', `${command} ${args.join(' ')}`];
+      }
     }
 
     console.log(`🚀 Spawning process - Platform: ${os.platform()}, Command: ${actualCommand}, Args: ${actualArgs.join(' ')}`);
