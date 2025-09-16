@@ -24,10 +24,11 @@ class ProcessManager {
         actualCommand = 'cmd';
         actualArgs = ['/c', command, ...args];
       } else {
-        // Linux: usar shell para encontrar node automaticamente
-        actualCommand = 'sh';
-        actualArgs = ['-c', 'cd /app/extrator-rate-shopper && node src/database-processor.js'];
-        console.log(`🐧 Linux: Usando shell para executar rate-shopper - comando: ${actualArgs.join(' ')}`);
+        // Linux/EasyPanel: usar processo Node.js do próprio container
+        const nodePath = process.execPath; // Caminho do Node.js atual
+        actualCommand = nodePath;
+        actualArgs = ['/app/extrator-rate-shopper/src/database-processor.js'];
+        console.log(`🐧 Linux: Usando Node.js do container - ${nodePath}`);
       }
     } else {
       // Comportamento padrão para outros comandos

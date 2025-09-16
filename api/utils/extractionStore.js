@@ -290,9 +290,11 @@ class ExtractionStore {
 
       // Verificar se result e result.rows existem
       if (!result || !result.rows || result.rows.length === 0) {
-        console.log(`⚠️ Resultado inválido para contagem do hotel ${hotelId}:`, result);
+        console.log(`⚠️ Nenhum resultado encontrado para contagem do hotel ${hotelId}`);
         return false;
       }
+
+      // Se chegou aqui, o resultado é válido
 
       return result.rows[0].count > 0;
 

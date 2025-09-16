@@ -51,8 +51,14 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
     }
 
     // Iniciar processo de extração usando ProcessManager
+    const extractorPath = process.env.NODE_ENV === 'production'
+      ? '/app/extrator-rate-shopper'
+      : path.join(process.cwd(), '..', 'extrator-rate-shopper');
+
+    console.log(`🔧 Usando diretório do extrator: ${extractorPath}`);
+
     const extractionProcess = ProcessManager.spawn('npm', ['run', 'process-database:saas'], {
-      cwd: path.join(process.cwd(), '..', 'extrator-rate-shopper'),
+      cwd: extractorPath,
       env: {
         ...process.env,
         HEADLESS: 'true',
