@@ -141,7 +141,14 @@ class DatabaseConnection {
         // Converter placeholders ? para $1, $2, etc. para PostgreSQL
         const pgSql = this.convertToPostgreSQLQuery(sql);
         const result = await this.pgPool.query(pgSql, params);
-        return result.rows;
+
+        // Manter compatibilidade com código legado: retornar apenas o array rows
+        // mas também incluir as propriedades extras como métodos
+        const rows = result.rows;
+        rows.rowCount = result.rowCount;
+        rows.command = result.command;
+        rows.fields = result.fields;
+        return rows;
       } catch (error) {
         console.error('Erro na query PostgreSQL:', error);
         throw error;
@@ -151,7 +158,12 @@ class DatabaseConnection {
     // MariaDB/MySQL
     if (this.pool) {
       try {
-        const [rows] = await this.pool.execute(sql, params);
+        const [rows, fields] = await this.pool.execute(sql, params);
+
+        // Manter compatibilidade com código legado: retornar apenas o array rows
+        rows.rowCount = rows.affectedRows || rows.length;
+        rows.command = sql.trim().split(' ')[0].toUpperCase();
+        rows.fields = fields;
         return rows;
       } catch (error) {
         console.error('Erro na query MariaDB:', error);

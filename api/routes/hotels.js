@@ -130,8 +130,9 @@ router.get('/my-hotels', authenticateToken, async (req, res) => {
     console.log('🏨 [my-hotels] Query:', query);
     console.log('🏨 [my-hotels] Params:', params);
 
-    const hotels = await db.query(query, params);
-    
+    const result = await db.query(query, params);
+    const hotels = result.rows || result;
+
     console.log('🏨 [my-hotels] Found hotels:', hotels.length);
 
     res.json({

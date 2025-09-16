@@ -301,7 +301,7 @@ class QdrantService {
             
             // Primeiro, buscar informações do hotel (id e nome) pelo hotel_uuid
             const hotelRows = await db.query(`
-                SELECT id, hotel_nome FROM hotels WHERE hotel_uuid = $1
+                SELECT id, name FROM hotels WHERE hotel_uuid = $1
             `, [hotelUuid]);
             
             if (hotelRows.length === 0) {
@@ -310,7 +310,7 @@ class QdrantService {
             }
             
             const hotelId = hotelRows[0].id;
-            const hotelName = hotelRows[0].hotel_nome;
+            const hotelName = hotelRows[0].name;
             console.log(`📋 Hotel encontrado: ID=${hotelId}, Nome="${hotelName}" para UUID: ${hotelUuid}`);
             
             // Criar padrão de busca baseado no nome do hotel
