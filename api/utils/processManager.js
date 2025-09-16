@@ -41,8 +41,35 @@ class ProcessManager {
         fakeProcess.stdout.emit('data', `🚀 INICIANDO DATABASE PROCESSOR (INLINE MODE)\n`);
         fakeProcess.stdout.emit('data', `📋 Plataforma: linux, PID: ${fakeProcess.pid}\n`);
 
-        // Executar database processor
-        const DatabaseProcessor = require('/app/extrator-rate-shopper/src/database-processor.js');
+        // Encontrar caminho correto do database processor
+        const possiblePaths = [
+          '/app/extrator-rate-shopper/src/database-processor.js',
+          path.join(process.cwd(), '..', 'extrator-rate-shopper', 'src', 'database-processor.js'),
+          path.join(process.cwd(), 'extrator-rate-shopper', 'src', 'database-processor.js'),
+          './extrator-rate-shopper/src/database-processor.js'
+        ];
+
+        let DatabaseProcessor = null;
+        let foundPath = null;
+
+        for (const testPath of possiblePaths) {
+          try {
+            console.log(`🔍 Testando caminho: ${testPath}`);
+            if (fs.existsSync(testPath)) {
+              DatabaseProcessor = require(testPath);
+              foundPath = testPath;
+              console.log(`✅ Encontrado em: ${foundPath}`);
+              break;
+            }
+          } catch (e) {
+            continue;
+          }
+        }
+
+        if (!DatabaseProcessor) {
+          throw new Error(`Database processor não encontrado em nenhum dos caminhos: ${possiblePaths.join(', ')}`);
+        }
+
         const processor = new DatabaseProcessor();
 
         await processor.start();
