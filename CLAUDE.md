@@ -39,7 +39,6 @@ Este é um sistema de gestão de hotéis OSH (Onscreen Hotels) composto por uma 
 ### Portas do Banco de Dados
 - **PostgreSQL**: Porta 5432
 - **Redis**: Porta 6379
-- **MariaDB**: Porta 3306 (migração/backup)
 
 ## Getting Started
 
@@ -95,7 +94,8 @@ taskkill /f /im node.exe
 
 ### Estrutura da API
 - Porta padrão: 3001
-- Banco de dados: MariaDB/MySQL
+- Banco de dados: PostgreSQL
+- Cache: Redis
 - Autenticação: JWT
 - CORS configurado para desenvolvimento
 
@@ -131,10 +131,38 @@ taskkill /f /im node.exe
 
 ## Deploy e Produção
 
+### Deploy Independente por Aplicação
+- **Sistema Implementado**: Deploy independente por aplicação usando branches específicas
+- **Documentação**: Ver `DEPLOY-INDEPENDENTE.md` para guia completo
+- **Scripts**: Pasta `/scripts` com scripts de deploy individuais
+
+#### Branches de Deploy:
+- `deploy/api` - API Backend
+- `deploy/pms` - PMS Frontend
+- `deploy/hotel-app` - Hotel App Frontend
+- `deploy/extrator-rate-shopper` - Extrator Rate Shopper
+- `deploy/automacao` - Automação Frontend
+
+#### Scripts de Deploy:
+```bash
+# Deploy individual
+./scripts/deploy-api.sh          # Deploy apenas da API
+./scripts/deploy-pms.sh          # Deploy apenas do PMS
+./scripts/deploy-hotel-app.sh    # Deploy apenas do Hotel App
+./scripts/deploy-extrator.sh     # Deploy apenas do Extrator
+./scripts/deploy-automacao.sh    # Deploy apenas da Automação
+
+# Deploy de todas as aplicações
+./scripts/deploy-all.sh
+
+# Rollback de aplicação específica
+./scripts/rollback.sh api 1      # Rollback da API (1 commit)
+```
+
 ### EasyPanel Deploy
 - **Dockerfiles**: Já configurados para todos os módulos
-- **Configuração**: Ver `.easypanel.yml` e `.env.production.example`
-- **Documentação**: Ver `DEPLOY-EASYPANEL.md` para guia completo
+- **Configuração**: Ver `.easypanel.yml` (atualizado com branches específicas)
+- **Auto-Deploy**: Ativado para cada branch de deploy
 - **Health Checks**: Configurados automaticamente
 - **SSL**: Certificados automáticos via Let's Encrypt
 
@@ -142,6 +170,8 @@ taskkill /f /im node.exe
 - `api/Dockerfile` - Container da API backend
 - `hotel-app/Dockerfile` - Container do frontend principal
 - `pms/Dockerfile` - Container do PMS
-- `.easypanel.yml` - Configuração dos serviços
-- `.env.production.example` - Exemplo de variáveis para produção
-- `DEPLOY-EASYPANEL.md` - Guia completo de deploy
+- `extrator-rate-shopper/Dockerfile` - Container do Extrator
+- `automacao/Dockerfile` - Container da Automação
+- `.easypanel.yml` - Configuração dos serviços (com branches independentes)
+- `DEPLOY-INDEPENDENTE.md` - Guia completo do novo sistema de deploy
+- `/scripts/` - Scripts de deploy e rollback

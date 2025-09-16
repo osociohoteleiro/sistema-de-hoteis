@@ -61,17 +61,12 @@
       "port": 6379,
       "description": "Redis Cache",
       "url": "localhost:6379"
-    },
-    "mariadb": {
-      "port": 3306,
-      "description": "MariaDB (para migração/backup)",
-      "url": "localhost:3306"
     }
   },
   "port_ranges": {
     "frontend_apps": "5173-5179",
     "backend_apis": "3001-3010",
-    "databases": "3306, 5432, 6379"
+    "databases": "5432, 6379"
   },
   "development_commands": {
     "start_all": {

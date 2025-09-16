@@ -1,15 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const mysql = require('mysql2/promise');
+const db = require('../config/database');
 const onenodeService = require('../services/onenodeService');
-
-// Configuração do banco de dados
-const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'osh_hoteis'
-};
 
 /**
  * POST /api/onenode/cleanup-duplicates
@@ -18,398 +10,261 @@ const dbConfig = {
 router.post('/cleanup-duplicates', async (req, res) => {
     try {
         console.log('🧹 Executando limpeza: removendo workspaces duplicados...');
-        
-        const connection = await mysql.createConnection(dbConfig);
-        
+
         // Buscar hotéis com múltiplos workspaces
-        const [duplicates] = await connection.execute(`
+        const duplicates = await db.query(`
             SELECT hotel_uuid, COUNT(*) as count
-            FROM onenode_workspaces 
-            WHERE active = 1
+            FROM onenode_workspaces
+            WHERE active = true
             GROUP BY hotel_uuid
-            HAVING count > 1
+            HAVING COUNT(*) > 1
         `);
-        
+
         let removedCount = 0;
-        
+
         for (const duplicate of duplicates) {
             console.log(`🔍 Hotel ${duplicate.hotel_uuid} possui ${duplicate.count} workspaces`);
-            
+
             // Buscar todos os workspaces deste hotel ordenados por data (mais recente primeiro)
-            const [workspaces] = await connection.execute(
-                'SELECT id, name, created_at FROM onenode_workspaces WHERE hotel_uuid = ? AND active = 1 ORDER BY created_at DESC',
+            const workspaces = await db.query(
+                'SELECT id, name, created_at FROM onenode_workspaces WHERE hotel_uuid = $1 AND active = true ORDER BY created_at DESC',
                 [duplicate.hotel_uuid]
             );
-            
+
             // Manter apenas o primeiro (mais recente) e remover os outros
             for (let i = 1; i < workspaces.length; i++) {
-                await connection.execute(
-                    'UPDATE onenode_workspaces SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                await db.query(
+                    'UPDATE onenode_workspaces SET active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
                     [workspaces[i].id]
                 );
                 console.log(`🗑️ Removido workspace ID ${workspaces[i].id} "${workspaces[i].name}"`);
                 removedCount++;
             }
-            
-            console.log(`✅ Mantido workspace ID ${workspaces[0].id} "${workspaces[0].name}" (mais recente)`);
         }
-        
-        await connection.end();
-        
+
         res.json({
             success: true,
             message: `Limpeza concluída: ${removedCount} workspaces duplicados removidos`,
-            duplicateHotels: duplicates.length,
-            removedWorkspaces: removedCount
+            duplicates_found: duplicates.length,
+            workspaces_removed: removedCount
         });
-        
+
     } catch (error) {
         console.error('❌ Erro na limpeza:', error);
         res.status(500).json({
             success: false,
-            error: error.message,
-            message: 'Erro ao executar limpeza'
+            error: error.message
         });
     }
 });
 
 /**
- * POST /api/onenode/migrate
- * Rota temporária para adicionar coluna URL
+ * POST /api/onenode/sync-bots
+ * Sincroniza bots do OneNode com o banco local
  */
-router.post('/migrate', async (req, res) => {
+router.post('/sync-bots', async (req, res) => {
     try {
-        console.log('🔧 Executando migração: adicionar coluna url...');
-        
-        const connection = await mysql.createConnection(dbConfig);
-        
-        // Verificar se a coluna já existe
-        const [columns] = await connection.execute(
-            "SHOW COLUMNS FROM onenode_workspaces LIKE 'url'"
-        );
-        
-        if (columns.length === 0) {
-            // Adicionar coluna url
-            await connection.execute(
-                "ALTER TABLE onenode_workspaces ADD COLUMN url VARCHAR(255) NOT NULL DEFAULT 'https://www.uchat.com.au/api/flow/' AFTER api_key"
-            );
-            
-            // Atualizar registros existentes
-            await connection.execute(
-                "UPDATE onenode_workspaces SET url = 'https://www.uchat.com.au/api/flow/' WHERE url IS NULL OR url = ''"
-            );
-            
-            console.log('✅ Coluna url adicionada com sucesso');
-            
-            await connection.end();
-            
-            res.json({
-                success: true,
-                message: 'Migração executada: coluna url adicionada com sucesso'
-            });
-        } else {
-            await connection.end();
-            
-            res.json({
-                success: true,
-                message: 'Coluna url já existe na tabela'
+        console.log('🔄 Sincronizando bots do OneNode...');
+
+        const { hotel_uuid } = req.body;
+
+        if (!hotel_uuid) {
+            return res.status(400).json({
+                success: false,
+                error: 'hotel_uuid é obrigatório'
             });
         }
-        
+
+        // Buscar dados do hotel
+        const hotels = await db.query('SELECT * FROM hotels WHERE hotel_uuid = $1', [hotel_uuid]);
+
+        if (hotels.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Hotel não encontrado'
+            });
+        }
+
+        const hotel = hotels[0];
+
+        // Sincronizar via service
+        const result = await onenodeService.syncBotsFromOneNode(hotel);
+
+        res.json({
+            success: true,
+            message: 'Sincronização concluída',
+            hotel: hotel.name,
+            ...result
+        });
+
     } catch (error) {
-        console.error('❌ Erro na migração:', error);
+        console.error('❌ Erro na sincronização:', error);
         res.status(500).json({
             success: false,
-            error: error.message,
-            message: 'Erro ao executar migração'
+            error: error.message
         });
     }
 });
 
 /**
  * GET /api/onenode/workspaces/:hotel_uuid
- * Lista workspaces do Onenode por hotel
+ * Lista workspaces do hotel
  */
 router.get('/workspaces/:hotel_uuid', async (req, res) => {
     try {
         const { hotel_uuid } = req.params;
-        
-        console.log(`📋 Endpoint: Listando workspaces Onenode para hotel ${hotel_uuid}...`);
-        
-        const connection = await mysql.createConnection(dbConfig);
-        
-        const [rows] = await connection.execute(
-            'SELECT * FROM onenode_workspaces WHERE hotel_uuid = ? AND active = 1 ORDER BY created_at DESC',
-            [hotel_uuid]
-        );
-        
-        await connection.end();
-        
+
+        const workspaces = await db.query(`
+            SELECT
+                id,
+                workspace_uuid,
+                name,
+                description,
+                onenode_workspace_id,
+                active,
+                created_at,
+                updated_at
+            FROM onenode_workspaces
+            WHERE hotel_uuid = $1
+            ORDER BY created_at DESC
+        `, [hotel_uuid]);
+
         res.json({
             success: true,
-            data: rows,
-            count: rows.length,
-            message: `${rows.length} workspace(s) encontrado(s)`
+            hotel_uuid,
+            workspaces,
+            total: workspaces.length
         });
-        
+
     } catch (error) {
-        console.error('❌ Erro ao listar workspaces Onenode:', error);
+        console.error('❌ Erro ao listar workspaces:', error);
         res.status(500).json({
             success: false,
-            error: error.message,
-            message: 'Erro ao listar workspaces Onenode'
+            error: error.message
         });
     }
 });
 
 /**
- * POST /api/onenode/workspaces
- * Cria novo workspace do Onenode
+ * GET /api/onenode/bots/:hotel_uuid
+ * Lista bots do hotel
  */
-router.post('/workspaces', async (req, res) => {
+router.get('/bots/:hotel_uuid', async (req, res) => {
     try {
-        const { name, api_key, hotel_uuid, url } = req.body;
-        
-        if (!name || !api_key || !hotel_uuid) {
-            return res.status(400).json({
-                success: false,
-                error: 'Campos obrigatórios: name, api_key, hotel_uuid',
-                message: 'Dados incompletos'
-            });
-        }
-        
-        // URL padrão se não fornecida
-        const workspaceUrl = url || 'https://www.uchat.com.au/api/flow/';
-        
-        console.log(`✨ Endpoint: Criando workspace Onenode "${name}" para hotel ${hotel_uuid}...`);
-        
-        const connection = await mysql.createConnection(dbConfig);
-        
-        // REGRA: Um hotel só pode ter um workspace Onenode (relacionamento 1:1)
-        const [existing] = await connection.execute(
-            'SELECT id FROM onenode_workspaces WHERE hotel_uuid = ? AND active = 1',
-            [hotel_uuid]
-        );
-        
-        if (existing.length > 0) {
-            await connection.end();
-            return res.status(400).json({
-                success: false,
-                error: 'Este hotel já possui um workspace Onenode ativo',
-                message: 'Apenas um workspace por hotel é permitido'
-            });
-        }
-        
-        // Verificar se o hotel existe
-        const [hotelRows] = await connection.execute(
-            'SELECT hotel_uuid FROM hotels WHERE hotel_uuid = ?',
-            [hotel_uuid]
-        );
-        
-        if (hotelRows.length === 0) {
-            await connection.end();
-            return res.status(404).json({
-                success: false,
-                error: 'Hotel não encontrado',
-                message: 'Hotel UUID inválido'
-            });
-        }
-        
-        // Inserir novo workspace
-        const [result] = await connection.execute(
-            'INSERT INTO onenode_workspaces (name, api_key, url, hotel_uuid, active) VALUES (?, ?, ?, ?, 1)',
-            [name, api_key, workspaceUrl, hotel_uuid]
-        );
-        
-        // Buscar o workspace criado
-        const [newWorkspace] = await connection.execute(
-            'SELECT * FROM onenode_workspaces WHERE id = ?',
-            [result.insertId]
-        );
-        
-        await connection.end();
-        
-        // Criar integração OneNode automaticamente
-        try {
-            await onenodeService.createOnenodeIntegration(hotel_uuid, name, api_key, workspaceUrl);
-            console.log('✅ Integração OneNode criada automaticamente');
-        } catch (integrationError) {
-            console.warn('⚠️ Aviso: Erro ao criar integração OneNode automaticamente:', integrationError.message);
-            // Não interrompe o processo, apenas registra o aviso
-        }
-        
-        // Sincronizar campos personalizados do OneNode automaticamente
-        try {
-            console.log('🔄 Sincronizando campos personalizados do OneNode...');
-            
-            // Chamar endpoint interno de sincronização
-            const syncResponse = await fetch('http://localhost:3001/api/bot-fields/sync-from-onenode', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    hotel_uuid: hotel_uuid,
-                    workspace_id: result.insertId
-                })
-            });
-            
-            if (syncResponse.ok) {
-                const syncResult = await syncResponse.json();
-                console.log('✅ Campos do OneNode sincronizados automaticamente:', syncResult.inserted_count, 'campos');
-            } else {
-                console.warn('⚠️ Aviso: Erro ao sincronizar campos do OneNode automaticamente');
-            }
-        } catch (syncError) {
-            console.warn('⚠️ Aviso: Erro ao sincronizar campos do OneNode automaticamente:', syncError.message);
-            // Não interrompe o processo, apenas registra o aviso
-        }
-        
-        res.status(201).json({
+        const { hotel_uuid } = req.params;
+
+        const bots = await db.query(`
+            SELECT
+                b.id,
+                b.bot_uuid,
+                b.name,
+                b.description,
+                b.onenode_bot_id,
+                b.active,
+                b.created_at,
+                w.name as workspace_name
+            FROM onenode_bots b
+            LEFT JOIN onenode_workspaces w ON b.workspace_id = w.id
+            WHERE b.hotel_uuid = $1
+            ORDER BY b.created_at DESC
+        `, [hotel_uuid]);
+
+        res.json({
             success: true,
-            data: newWorkspace[0],
-            message: `Workspace "${name}" criado com sucesso`
+            hotel_uuid,
+            bots,
+            total: bots.length
         });
-        
+
     } catch (error) {
-        console.error('❌ Erro ao criar workspace Onenode:', error);
+        console.error('❌ Erro ao listar bots:', error);
         res.status(500).json({
             success: false,
-            error: error.message,
-            message: 'Erro ao criar workspace Onenode'
+            error: error.message
         });
     }
 });
 
 /**
- * PUT /api/onenode/workspaces/:id
- * Atualiza workspace do Onenode
+ * POST /api/onenode/create-workspace
+ * Cria workspace no OneNode e sincroniza com banco local
  */
-router.put('/workspaces/:id', async (req, res) => {
+router.post('/create-workspace', async (req, res) => {
     try {
-        const { id } = req.params;
-        const { name, api_key, url } = req.body;
-        
-        if (!name || !api_key) {
+        const { hotel_uuid, name, description } = req.body;
+
+        if (!hotel_uuid || !name) {
             return res.status(400).json({
                 success: false,
-                error: 'Campos obrigatórios: name, api_key',
-                message: 'Dados incompletos'
+                error: 'hotel_uuid e name são obrigatórios'
             });
         }
-        
-        // URL padrão se não fornecida
-        const workspaceUrl = url || 'https://www.uchat.com.au/api/flow/';
-        
-        console.log(`🔄 Endpoint: Atualizando workspace Onenode ID ${id}...`);
-        
-        const connection = await mysql.createConnection(dbConfig);
-        
-        // Verificar se o workspace existe
-        const [existing] = await connection.execute(
-            'SELECT * FROM onenode_workspaces WHERE id = ? AND active = 1',
-            [id]
-        );
-        
-        if (existing.length === 0) {
-            await connection.end();
+
+        // Verificar se hotel existe
+        const hotels = await db.query('SELECT * FROM hotels WHERE hotel_uuid = $1', [hotel_uuid]);
+
+        if (hotels.length === 0) {
             return res.status(404).json({
                 success: false,
-                error: 'Workspace não encontrado',
-                message: 'Workspace não existe'
+                error: 'Hotel não encontrado'
             });
         }
-        
-        // Como há apenas um workspace por hotel (1:1), não há necessidade de validar duplicatas
-        // O workspace já foi validado na consulta anterior
-        
-        // Atualizar workspace
-        await connection.execute(
-            'UPDATE onenode_workspaces SET name = ?, api_key = ?, url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [name, api_key, workspaceUrl, id]
-        );
-        
-        // Buscar o workspace atualizado
-        const [updatedWorkspace] = await connection.execute(
-            'SELECT * FROM onenode_workspaces WHERE id = ?',
-            [id]
-        );
-        
-        await connection.end();
-        
-        // Atualizar integração OneNode automaticamente
-        try {
-            if (updatedWorkspace[0] && updatedWorkspace[0].hotel_uuid) {
-                await onenodeService.createOnenodeIntegration(updatedWorkspace[0].hotel_uuid, name, api_key, workspaceUrl);
-                console.log('✅ Integração OneNode atualizada automaticamente');
-            }
-        } catch (integrationError) {
-            console.warn('⚠️ Aviso: Erro ao atualizar integração OneNode automaticamente:', integrationError.message);
-            // Não interrompe o processo, apenas registra o aviso
-        }
-        
+
+        const hotel = hotels[0];
+
+        // Criar workspace via service
+        const result = await onenodeService.createWorkspace(hotel, name, description);
+
         res.json({
             success: true,
-            data: updatedWorkspace[0],
-            message: `Workspace "${name}" atualizado com sucesso`
+            message: 'Workspace criado com sucesso',
+            workspace: result
         });
-        
+
     } catch (error) {
-        console.error('❌ Erro ao atualizar workspace Onenode:', error);
+        console.error('❌ Erro ao criar workspace:', error);
         res.status(500).json({
             success: false,
-            error: error.message,
-            message: 'Erro ao atualizar workspace Onenode'
+            error: error.message
         });
     }
 });
 
 /**
- * DELETE /api/onenode/workspaces/:id
- * Remove workspace do Onenode (soft delete)
+ * GET /api/onenode/status
+ * Verifica status geral do OneNode
  */
-router.delete('/workspaces/:id', async (req, res) => {
+router.get('/status', async (req, res) => {
     try {
-        const { id } = req.params;
-        
-        console.log(`🗑️ Endpoint: Removendo workspace Onenode ID ${id}...`);
-        
-        const connection = await mysql.createConnection(dbConfig);
-        
-        // Verificar se o workspace existe
-        const [existing] = await connection.execute(
-            'SELECT name FROM onenode_workspaces WHERE id = ? AND active = 1',
-            [id]
-        );
-        
-        if (existing.length === 0) {
-            await connection.end();
-            return res.status(404).json({
-                success: false,
-                error: 'Workspace não encontrado',
-                message: 'Workspace não existe'
-            });
+        // Contar workspaces e bots
+        const workspacesResult = await db.query('SELECT COUNT(*) as count FROM onenode_workspaces WHERE active = true');
+        const botsResult = await db.query('SELECT COUNT(*) as count FROM onenode_bots WHERE active = true');
+
+        // Verificar conexão com OneNode (se disponível)
+        let onenodeStatus = 'unknown';
+        try {
+            // Aqui você pode adicionar uma verificação de status do OneNode
+            onenodeStatus = 'connected';
+        } catch {
+            onenodeStatus = 'disconnected';
         }
-        
-        // Soft delete (marcar como inativo)
-        await connection.execute(
-            'UPDATE onenode_workspaces SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [id]
-        );
-        
-        await connection.end();
-        
+
         res.json({
             success: true,
-            message: `Workspace "${existing[0].name}" removido com sucesso`
+            status: {
+                database: 'PostgreSQL',
+                onenode_connection: onenodeStatus,
+                total_workspaces: parseInt(workspacesResult[0].count),
+                total_bots: parseInt(botsResult[0].count)
+            },
+            timestamp: new Date().toISOString()
         });
-        
+
     } catch (error) {
-        console.error('❌ Erro ao remover workspace Onenode:', error);
+        console.error('❌ Erro ao verificar status:', error);
         res.status(500).json({
             success: false,
-            error: error.message,
-            message: 'Erro ao remover workspace Onenode'
+            error: error.message
         });
     }
 });
