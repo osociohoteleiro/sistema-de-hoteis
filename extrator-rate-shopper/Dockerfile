@@ -14,32 +14,13 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install essential dependencies for Puppeteer (simplified for reliability)
+# Install minimal dependencies for Puppeteer (ultra-simplified)
 RUN apk update && apk add --no-cache \
     chromium \
     nss \
     freetype \
-    harfbuzz \
     ca-certificates \
-    ttf-freefont \
     dumb-init \
-    # Core libraries for Chromium
-    libstdc++ \
-    libx11 \
-    libxcomposite \
-    libxcursor \
-    libxdamage \
-    libxext \
-    libxfixes \
-    libxi \
-    libxrandr \
-    libxrender \
-    libxtst \
-    alsa-lib \
-    atk \
-    glib \
-    libdrm \
-    pango \
     && rm -rf /var/cache/apk/*
 
 # Set Puppeteer environment variables - try multiple possible paths
