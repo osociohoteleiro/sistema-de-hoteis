@@ -124,19 +124,4 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=45s --retries=3 \
 
 # Start application with auto-processor in production
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "-e", " \
-  console.log('🚀 Rate Shopper Extrator initializing...'); \
-  console.log('📊 Platform:', process.platform); \
-  console.log('🔧 Node version:', process.version); \
-  console.log('🌐 Environment:', process.env.NODE_ENV); \
-  console.log('🖥️  Headless mode:', process.env.HEADLESS); \
-  console.log('🎯 Chromium path:', process.env.PUPPETEER_EXECUTABLE_PATH); \
-  const { execSync } = require('child_process'); \
-  try { \
-    const version = execSync('chromium-browser --version', { encoding: 'utf8' }); \
-    console.log('✅ Chromium available:', version.trim()); \
-  } catch(e) { \
-    console.log('⚠️  Chromium check failed:', e.message); \
-  } \
-  console.log('🎯 Starting auto-processor for production...'); \
-  require('./src/auto-processor.js');"]
+CMD ["node", "start-production.js"]
