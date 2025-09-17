@@ -19,30 +19,28 @@ async function getExtractionStore() {
 
 /**
  * Inicia extração de preços para um hotel específico
- * POST /api/rate-shopper/:hotel_id/start-extraction
+ * POST /api/rate-shopper/:hotel_uuid/start-extraction
  */
-router.post('/:hotel_id/start-extraction', async (req, res) => {
-  const hotel_id = req.params.hotel_id;
+router.post('/:hotel_uuid/start-extraction', async (req, res) => {
+  const hotel_uuid = req.params.hotel_uuid;
   const { search_ids, properties } = req.body;
 
   try {
     const Hotel = require('../models/Hotel');
-    
-    // Converter UUID para ID se necessário
-    let hotelId;
-    if (hotel_id.includes('-')) {
-      const hotel = await Hotel.findByUuid(hotel_id);
-      if (!hotel) {
-        return res.status(404).json({ error: 'Hotel not found' });
-      }
-      hotelId = hotel.id;
-    } else {
-      hotelId = parseInt(hotel_id);
+
+    // SEMPRE usar UUID - NUNCA converter para ID
+    const hotel = await Hotel.findByUuid(hotel_uuid);
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        error: 'Hotel not found'
+      });
     }
+
     const store = await getExtractionStore();
 
-    // Verificar se já há extração rodando para este hotel
-    const hasActive = await store.hasActiveExtraction(hotelId);
+    // Verificar se já há extração rodando para este hotel (usando UUID)
+    const hasActive = await store.hasActiveExtraction(hotel_uuid);
     if (hasActive) {
       return res.status(400).json({
         success: false,
@@ -80,7 +78,7 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
         env: {
           ...process.env,
           HEADLESS: 'true',
-          HOTEL_ID: hotelId,
+          HOTEL_UUID: hotel_uuid, // Usar UUID em vez de ID
           SEARCH_IDS: search_ids?.join(',') || ''
         }
       });
@@ -89,7 +87,7 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
     // Dados da extração
     const extractionData = {
       process: extractionProcess,
-      hotelId: hotelId,
+      hotelUuid: hotel_uuid, // Usar UUID em vez de ID
       startTime: new Date(),
       status: 'RUNNING',
       progress: {
@@ -101,8 +99,8 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
       logs: []
     };
 
-    // Registrar no store persistente
-    await store.setActiveExtraction(hotelId, extractionData);
+    // Registrar no store persistente (usando UUID)
+    await store.setActiveExtraction(hotel_uuid, extractionData);
 
     // Listen para output do processo
     extractionProcess.stdout.on('data', async (data) => {
@@ -139,9 +137,9 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
         }
       }
 
-      // Atualizar store se houve mudança no progresso
+      // Atualizar store se houve mudança no progresso (usando UUID)
       if (progressChanged) {
-        await store.updateProgress(hotelId, {
+        await store.updateProgress(hotel_uuid, {
           ...extractionData.progress,
           logs: extractionData.logs.slice(-10) // Manter apenas últimos 10 logs
         });
@@ -156,8 +154,8 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
       };
       extractionData.logs.push(logEntry);
 
-      // Atualizar logs no store
-      await store.updateProgress(hotelId, {
+      // Atualizar logs no store (usando UUID)
+      await store.updateProgress(hotel_uuid, {
         ...extractionData.progress,
         logs: extractionData.logs.slice(-10)
       });
@@ -168,9 +166,9 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
       extractionData.status = finalStatus;
       extractionData.endTime = new Date();
 
-      // Remover do store persistente
-      await store.removeActiveExtraction(hotelId, finalStatus);
-      console.log(`🧹 Extração finalizada para hotel ${hotelId} com status ${finalStatus}, liberando para próximas extrações`);
+      // Remover do store persistente (usando UUID)
+      await store.removeActiveExtraction(hotel_uuid, finalStatus);
+      console.log(`🧹 Extração finalizada para hotel UUID ${hotel_uuid} com status ${finalStatus}, liberando para próximas extrações`);
     });
 
     extractionProcess.on('error', async (error) => {
@@ -178,16 +176,16 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
       extractionData.status = 'FAILED';
       extractionData.endTime = new Date();
 
-      // Remover do store em caso de erro
-      await store.removeActiveExtraction(hotelId, 'FAILED');
-      console.log(`🧹 Extração com erro para hotel ${hotelId}, liberando para próximas extrações`);
+      // Remover do store em caso de erro (usando UUID)
+      await store.removeActiveExtraction(hotel_uuid, 'FAILED');
+      console.log(`🧹 Extração com erro para hotel UUID ${hotel_uuid}, liberando para próximas extrações`);
     });
 
     res.json({
       success: true,
       message: 'Extração iniciada com sucesso',
       data: {
-        hotelId: hotelId,
+        hotelUuid: hotel_uuid, // Usar UUID em vez de ID
         status: 'RUNNING',
         startTime: extractionData.startTime
       }
@@ -203,35 +201,29 @@ router.post('/:hotel_id/start-extraction', async (req, res) => {
 });
 
 /**
- * Para extração de preços para um hotel específico  
- * POST /api/rate-shopper/:hotel_id/stop-extraction
+ * Para extração de preços para um hotel específico
+ * POST /api/rate-shopper/:hotel_uuid/stop-extraction
  */
-router.post('/:hotel_id/stop-extraction', async (req, res) => {
-  const hotel_id = req.params.hotel_id;
+router.post('/:hotel_uuid/stop-extraction', async (req, res) => {
+  const hotel_uuid = req.params.hotel_uuid;
 
   try {
     const Hotel = require('../models/Hotel');
-    
-    // Converter UUID para ID se necessário (igual ao start-extraction)
-    let hotelId;
-    if (hotel_id.includes('-')) {
-      const hotel = await Hotel.findByUuid(hotel_id);
-      if (!hotel) {
-        return res.status(404).json({ 
-          success: false,
-          error: 'Hotel not found' 
-        });
-      }
-      hotelId = hotel.id;
-    } else {
-      hotelId = parseInt(hotel_id);
+
+    // SEMPRE usar UUID - NUNCA converter para ID
+    const hotel = await Hotel.findByUuid(hotel_uuid);
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        error: 'Hotel not found'
+      });
     }
 
     const store = await getExtractionStore();
-    const extraction = await store.getActiveExtraction(hotelId);
+    const extraction = await store.getActiveExtraction(hotel_uuid);
 
     if (!extraction) {
-      console.log(`⚠️ Extração não encontrada no store para hotel ${hotelId}. Verificando extrações órfãs...`);
+      console.log(`⚠️ Extração não encontrada no store para hotel UUID ${hotel_uuid}. Verificando extrações órfãs...`);
 
       // Executar limpeza automática de extrações órfãs
       try {
@@ -240,17 +232,21 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
         if (cleanupResult.cleanedCount > 0) {
           console.log(`🧹 Limpeza automática executada: ${cleanupResult.cleanedCount} extrações órfãs detectadas e canceladas`);
 
-          // Atualizar também as searches no banco
+          // Atualizar também as searches no banco (usando UUID)
           const RateShopperSearch = require('../models/RateShopperSearch');
 
-          for (const cleanedHotelId of cleanupResult.cleanedHotelIds) {
-            const runningSearches = await RateShopperSearch.findByHotel(cleanedHotelId, { status: 'RUNNING' });
+          for (const cleanedHotelUuid of cleanupResult.cleanedHotelUuids) {
+            // Buscar pelo UUID em vez de ID
+            const hotelForSearch = await Hotel.findByUuid(cleanedHotelUuid);
+            if (hotelForSearch) {
+              const runningSearches = await RateShopperSearch.findByHotel(hotelForSearch.id, { status: 'RUNNING' });
 
-            for (const staleSearch of runningSearches) {
-              await staleSearch.updateStatus('CANCELLED', {
-                error_log: 'Extração órfã detectada durante tentativa de pausa - limpeza automática'
-              });
-              console.log(`✅ Search ID ${staleSearch.id} marcada como CANCELLED automaticamente`);
+              for (const staleSearch of runningSearches) {
+                await staleSearch.updateStatus('CANCELLED', {
+                  error_log: 'Extração órfã detectada durante tentativa de pausa - limpeza automática'
+                });
+                console.log(`✅ Search ID ${staleSearch.id} marcada como CANCELLED automaticamente`);
+              }
             }
           }
 
@@ -258,7 +254,7 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
             success: true,
             message: 'Extrações órfãs foram detectadas e limpas automaticamente. A página será recarregada.',
             data: {
-              hotelId: hotelId,
+              hotelUuid: hotel_uuid, // Usar UUID em vez de ID
               status: 'CLEANED',
               stale_extractions_cleaned: cleanupResult.cleanedCount
             }
@@ -283,21 +279,21 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
     // Matar o processo usando ProcessManager
     try {
       if (extraction.process && !extraction.process.killed) {
-        console.log(`🔴 Iniciando terminação do processo PID ${extraction.process.pid} para hotel ${hotelId}`);
+        console.log(`🔴 Iniciando terminação do processo PID ${extraction.process.pid} para hotel UUID ${hotel_uuid}`);
 
         // Usar ProcessManager para terminação multiplataforma
         await ProcessManager.killProcess(extraction.process);
 
       } else {
-        console.log(`⚠️ Processo do hotel ${hotelId} já estava terminado`);
+        console.log(`⚠️ Processo do hotel UUID ${hotel_uuid} já estava terminado`);
       }
     } catch (killError) {
-      console.error(`❌ Erro ao matar processo do hotel ${hotelId}:`, killError.message);
+      console.error(`❌ Erro ao matar processo do hotel UUID ${hotel_uuid}:`, killError.message);
       // Continuar mesmo se não conseguir matar o processo
     }
     
-    // Remover do store persistente
-    await store.removeActiveExtraction(hotelId, 'CANCELLED');
+    // Remover do store persistente (usando UUID)
+    await store.removeActiveExtraction(hotel_uuid, 'CANCELLED');
 
     // ATUALIZAR STATUS NO BANCO DE DADOS
     try {
@@ -309,11 +305,11 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
           UPDATE rate_shopper_searches
           SET status = 'CANCELLED', completed_at = CURRENT_TIMESTAMP
           WHERE hotel_id = $1 AND status = 'RUNNING'
-        `, [hotelId]);
+        `, [hotel.id]); // Usar hotel.id obtido do UUID
 
-        console.log(`✅ Searches do hotel ${hotelId} marcadas como CANCELLED no banco`);
+        console.log(`✅ Searches do hotel UUID ${hotel_uuid} marcadas como CANCELLED no banco`);
       } else {
-        console.log(`⚠️ Usando fallback - não foi possível atualizar status no banco para hotel ${hotelId}`);
+        console.log(`⚠️ Usando fallback - não foi possível atualizar status no banco para hotel UUID ${hotel_uuid}`);
       }
     } catch (dbError) {
       console.error('❌ Erro ao atualizar status no banco:', dbError.message);
@@ -324,7 +320,7 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
       success: true,
       message: 'Extração pausada com sucesso',
       data: {
-        hotelId: hotelId,
+        hotelUuid: hotel_uuid, // Usar UUID em vez de ID
         status: 'CANCELLED'
       }
     });
@@ -340,31 +336,25 @@ router.post('/:hotel_id/stop-extraction', async (req, res) => {
 
 /**
  * Status da extração em tempo real
- * GET /api/rate-shopper/:hotel_id/extraction-status
+ * GET /api/rate-shopper/:hotel_uuid/extraction-status
  */
-router.get('/:hotel_id/extraction-status', async (req, res) => {
-  const hotel_id = req.params.hotel_id;
+router.get('/:hotel_uuid/extraction-status', async (req, res) => {
+  const hotel_uuid = req.params.hotel_uuid;
 
   try {
     const Hotel = require('../models/Hotel');
-    
-    // Converter UUID para ID se necessário (igual aos outros endpoints)
-    let hotelId;
-    if (hotel_id.includes('-')) {
-      const hotel = await Hotel.findByUuid(hotel_id);
-      if (!hotel) {
-        return res.status(404).json({ 
-          success: false,
-          error: 'Hotel not found' 
-        });
-      }
-      hotelId = hotel.id;
-    } else {
-      hotelId = parseInt(hotel_id);
+
+    // SEMPRE usar UUID - NUNCA converter para ID
+    const hotel = await Hotel.findByUuid(hotel_uuid);
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        error: 'Hotel not found'
+      });
     }
 
     const store = await getExtractionStore();
-    const extraction = await store.getActiveExtraction(hotelId);
+    const extraction = await store.getActiveExtraction(hotel_uuid);
 
     if (!extraction) {
       return res.json({
@@ -383,7 +373,7 @@ router.get('/:hotel_id/extraction-status', async (req, res) => {
     res.json({
       success: true,
       data: {
-        hotelId: hotelId,
+        hotelUuid: hotel_uuid, // Usar UUID em vez de ID
         status: extraction.status,
         progress: extraction.progress,
         duration: Math.floor(duration / 1000), // em segundos
@@ -425,10 +415,10 @@ router.post('/emergency-stop-all', async (req, res) => {
         }
 
         // Remover do store
-        await store.removeActiveExtraction(extraction.hotelId, 'CANCELLED');
+        await store.removeActiveExtraction(extraction.hotelUuid, 'CANCELLED');
 
       } catch (e) {
-        console.error(`❌ Erro ao matar processo do hotel ${extraction.hotelId}:`, e.message);
+        console.error(`❌ Erro ao matar processo do hotel UUID ${extraction.hotelUuid}:`, e.message);
       }
     }
 
@@ -492,14 +482,19 @@ router.post('/cleanup-stale-extractions', async (req, res) => {
 
     // Verificar quais estão realmente ativas no store
     const allActiveExtractions = await store.getAllActiveExtractions();
-    const activeHotelIds = allActiveExtractions.map(ex => ex.hotelId);
+    const activeHotelUuids = allActiveExtractions.map(ex => ex.hotelUuid);
 
-    console.log(`🔍 Extrações ativas no store: [${activeHotelIds.join(', ')}]`);
+    console.log(`🔍 Extrações ativas no store: [${activeHotelUuids.join(', ')}]`);
 
     const staleSearches = [];
     for (const search of runningSearches) {
-      const isActuallyActive = activeHotelIds.includes(search.hotel_id);
-      console.log(`🔍 Search ID ${search.id} (hotel_id: ${search.hotel_id}) - Ativa no store: ${isActuallyActive}`);
+      // Buscar hotel UUID pelo hotel_id para comparar corretamente
+      const Hotel = require('../models/Hotel');
+      const hotel = await Hotel.findById(search.hotel_id);
+      const hotelUuid = hotel ? hotel.uuid : null;
+
+      const isActuallyActive = hotelUuid && activeHotelUuids.includes(hotelUuid);
+      console.log(`🔍 Search ID ${search.id} (hotel_id: ${search.hotel_id}, hotel_uuid: ${hotelUuid}) - Ativa no store: ${isActuallyActive}`);
 
       if (!isActuallyActive) {
         staleSearches.push(search);
@@ -530,7 +525,7 @@ router.post('/cleanup-stale-extractions', async (req, res) => {
       message: `Limpeza concluída: ${cleanedCount} extrações órfãs foram marcadas como CANCELLED`,
       data: {
         total_running_in_db: runningSearches.length,
-        total_active_in_store: activeHotelIds.length,
+        total_active_in_store: activeHotelUuids.length,
         stale_extractions_found: staleSearches.length,
         extractions_cleaned: cleanedCount,
         store_cleanup_count: storeCleanupResult.cleanedCount,
@@ -558,7 +553,7 @@ router.get('/active-extractions', async (req, res) => {
     const allActiveExtractions = await store.getAllActiveExtractions();
 
     const activeList = allActiveExtractions.map(extraction => ({
-      hotelId: extraction.hotelId,
+      hotelUuid: extraction.hotelUuid, // Usar UUID em vez de ID
       status: extraction.status,
       progress: extraction.progress,
       startTime: extraction.startTime,

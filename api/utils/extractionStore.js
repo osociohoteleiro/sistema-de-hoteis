@@ -9,19 +9,26 @@ class ExtractionStore {
 
   /**
    * Registra uma extração ativa
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
    */
-  async setActiveExtraction(hotelId, extractionData) {
+  async setActiveExtraction(hotelUuid, extractionData) {
     try {
       const startTime = extractionData.startTime || new Date();
 
-      console.log(`🔄 Salvando extração ativa para hotel ${hotelId}:`);
+      console.log(`🔄 Salvando extração ativa para hotel UUID ${hotelUuid}:`);
       console.log(`   - Status: ${extractionData.status || 'RUNNING'}`);
       console.log(`   - PID: ${extractionData.process?.pid || 'null'}`);
       console.log(`   - Start Time: ${startTime}`);
 
+      // Buscar hotel_id pelo UUID para compatibilidade
+      const Hotel = require('../models/Hotel');
+      const hotel = await Hotel.findByUuid(hotelUuid);
+      const hotelId = hotel ? hotel.id : null;
+
       await this.db.query(`
         INSERT INTO active_extractions (
           hotel_id,
+          hotel_uuid,
           process_pid,
           status,
           start_time,
@@ -32,9 +39,10 @@ class ExtractionStore {
           logs,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        ON CONFLICT (hotel_id)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (hotel_uuid)
         DO UPDATE SET
+          hotel_id = EXCLUDED.hotel_id,
           process_pid = EXCLUDED.process_pid,
           status = EXCLUDED.status,
           start_time = EXCLUDED.start_time,
@@ -46,6 +54,7 @@ class ExtractionStore {
           updated_at = EXCLUDED.updated_at
       `, [
         hotelId,
+        hotelUuid,
         extractionData.process?.pid || null,
         extractionData.status || 'RUNNING',
         startTime,
@@ -58,45 +67,46 @@ class ExtractionStore {
         new Date()
       ]);
 
-      console.log(`✅ Extração ativa registrada no store para hotel ${hotelId}`);
+      console.log(`✅ Extração ativa registrada no store para hotel UUID ${hotelUuid}`);
       return true;
 
     } catch (error) {
-      console.error(`❌ Erro ao registrar extração ativa para hotel ${hotelId}:`, error.message);
+      console.error(`❌ Erro ao registrar extração ativa para hotel UUID ${hotelUuid}:`, error.message);
       return false;
     }
   }
 
   /**
    * Obtém dados de uma extração ativa
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
    */
-  async getActiveExtraction(hotelId) {
+  async getActiveExtraction(hotelUuid) {
     try {
-      console.log(`🔍 Buscando extração ativa para hotel ${hotelId}`);
+      console.log(`🔍 Buscando extração ativa para hotel UUID ${hotelUuid}`);
 
       // Primeira coisa: limpar registros antigos
       await this.db.query(`
         DELETE FROM active_extractions
-        WHERE hotel_id = $1
+        WHERE hotel_uuid = $1
         AND (
           status != 'RUNNING'
           OR created_at < NOW() - INTERVAL '1 hour'
         )
-      `, [hotelId]);
+      `, [hotelUuid]);
 
       const result = await this.db.query(`
         SELECT * FROM active_extractions
-        WHERE hotel_id = $1
+        WHERE hotel_uuid = $1
         AND status = 'RUNNING'
-      `, [hotelId]);
+      `, [hotelUuid]);
 
       // Verificar se result e result.rows existem
       if (!result || !result.rows) {
-        console.log(`⚠️ Resultado inválido para hotel ${hotelId}:`, result);
+        console.log(`⚠️ Resultado inválido para hotel UUID ${hotelUuid}:`, result);
         return null;
       }
 
-      console.log(`📊 Encontrados ${result.rows.length} registros ativos para hotel ${hotelId}`);
+      console.log(`📊 Encontrados ${result.rows.length} registros ativos para hotel UUID ${hotelUuid}`);
 
       if (result.rows.length === 0) {
         return null;
@@ -106,7 +116,7 @@ class ExtractionStore {
 
       // Reconstituir dados no formato esperado
       return {
-        hotelId: row.hotel_id,
+        hotelUuid: row.hotel_uuid, // Usar UUID em vez de ID
         process: { pid: row.process_pid, killed: false }, // Simular processo
         startTime: row.start_time,
         status: row.status,
@@ -121,15 +131,16 @@ class ExtractionStore {
       };
 
     } catch (error) {
-      console.error(`❌ Erro ao obter extração ativa para hotel ${hotelId}:`, error.message);
+      console.error(`❌ Erro ao obter extração ativa para hotel UUID ${hotelUuid}:`, error.message);
       return null;
     }
   }
 
   /**
    * Atualiza progresso de uma extração
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
    */
-  async updateProgress(hotelId, progressData) {
+  async updateProgress(hotelUuid, progressData) {
     try {
       await this.db.query(`
         UPDATE active_extractions
@@ -140,9 +151,9 @@ class ExtractionStore {
           extracted_prices = $5,
           logs = $6,
           updated_at = $7
-        WHERE hotel_id = $1 AND status = 'RUNNING'
+        WHERE hotel_uuid = $1 AND status = 'RUNNING'
       `, [
-        hotelId,
+        hotelUuid,
         progressData.current || 0,
         progressData.total || 0,
         progressData.currentProperty || null,
@@ -154,15 +165,16 @@ class ExtractionStore {
       return true;
 
     } catch (error) {
-      console.error(`❌ Erro ao atualizar progresso para hotel ${hotelId}:`, error.message);
+      console.error(`❌ Erro ao atualizar progresso para hotel UUID ${hotelUuid}:`, error.message);
       return false;
     }
   }
 
   /**
    * Remove extração ativa (quando termina ou é cancelada)
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
    */
-  async removeActiveExtraction(hotelId, finalStatus = 'COMPLETED') {
+  async removeActiveExtraction(hotelUuid, finalStatus = 'COMPLETED') {
     try {
       await this.db.query(`
         UPDATE active_extractions
@@ -170,27 +182,27 @@ class ExtractionStore {
           status = $2,
           end_time = $3,
           updated_at = $4
-        WHERE hotel_id = $1
-      `, [hotelId, finalStatus, new Date(), new Date()]);
+        WHERE hotel_uuid = $1
+      `, [hotelUuid, finalStatus, new Date(), new Date()]);
 
       // Após algumas horas, limpar da tabela
       setTimeout(async () => {
         try {
           await this.db.query(`
             DELETE FROM active_extractions
-            WHERE hotel_id = $1 AND status != 'RUNNING'
+            WHERE hotel_uuid = $1 AND status != 'RUNNING'
             AND updated_at < NOW() - INTERVAL '6 hours'
-          `, [hotelId]);
+          `, [hotelUuid]);
         } catch (e) {
           console.error('Erro na limpeza automática:', e.message);
         }
       }, 1000 * 60 * 5); // 5 minutos depois
 
-      console.log(`✅ Extração removida do store para hotel ${hotelId} com status ${finalStatus}`);
+      console.log(`✅ Extração removida do store para hotel UUID ${hotelUuid} com status ${finalStatus}`);
       return true;
 
     } catch (error) {
-      console.error(`❌ Erro ao remover extração ativa para hotel ${hotelId}:`, error.message);
+      console.error(`❌ Erro ao remover extração ativa para hotel UUID ${hotelUuid}:`, error.message);
       return false;
     }
   }
@@ -214,7 +226,7 @@ class ExtractionStore {
       }
 
       return result.rows.map(row => ({
-        hotelId: row.hotel_id,
+        hotelUuid: row.hotel_uuid, // Usar UUID em vez de ID
         process: { pid: row.process_pid, killed: false },
         startTime: row.start_time,
         status: row.status,
@@ -247,50 +259,51 @@ class ExtractionStore {
           updated_at = NOW()
         WHERE status = 'RUNNING'
         AND updated_at < NOW() - INTERVAL '30 minutes'
-        RETURNING hotel_id
+        RETURNING hotel_uuid
       `);
 
       // Verificar se result e result.rows existem
       if (!result || !result.rows) {
         console.log(`⚠️ Resultado inválido na limpeza de extrações órfãs:`, result);
-        return { cleanedCount: 0, cleanedHotelIds: [] };
+        return { cleanedCount: 0, cleanedHotelUuids: [] };
       }
 
       const cleanedCount = result.rows.length;
-      const cleanedHotelIds = result.rows.map(row => row.hotel_id);
+      const cleanedHotelUuids = result.rows.map(row => row.hotel_uuid);
 
       if (cleanedCount > 0) {
         console.log(`🧹 Limpeza automática: ${cleanedCount} extrações órfãs detectadas e canceladas`);
-        console.log(`🏨 Hotels afetados: ${cleanedHotelIds.join(', ')}`);
+        console.log(`🏨 Hotel UUIDs afetados: ${cleanedHotelUuids.join(', ')}`);
       }
 
       return {
         cleanedCount,
-        cleanedHotelIds
+        cleanedHotelUuids
       };
 
     } catch (error) {
       console.error('❌ Erro na limpeza de extrações órfãs:', error.message);
-      return { cleanedCount: 0, cleanedHotelIds: [] };
+      return { cleanedCount: 0, cleanedHotelUuids: [] };
     }
   }
 
   /**
    * Verifica se existe extração ativa para um hotel
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
    */
-  async hasActiveExtraction(hotelId) {
+  async hasActiveExtraction(hotelUuid) {
     try {
       const result = await this.db.query(`
         SELECT COUNT(*) as count
         FROM active_extractions
-        WHERE hotel_id = $1
+        WHERE hotel_uuid = $1
         AND status = 'RUNNING'
         AND created_at > NOW() - INTERVAL '2 hours'
-      `, [hotelId]);
+      `, [hotelUuid]);
 
       // Verificar se result e result.rows existem
       if (!result || !result.rows || result.rows.length === 0) {
-        console.log(`⚠️ Nenhum resultado encontrado para contagem do hotel ${hotelId}`);
+        console.log(`⚠️ Nenhum resultado encontrado para contagem do hotel UUID ${hotelUuid}`);
         return false;
       }
 
@@ -299,20 +312,71 @@ class ExtractionStore {
       return result.rows[0].count > 0;
 
     } catch (error) {
-      console.error(`❌ Erro ao verificar extração ativa para hotel ${hotelId}:`, error.message);
+      console.error(`❌ Erro ao verificar extração ativa para hotel UUID ${hotelUuid}:`, error.message);
       return false;
     }
   }
 
   /**
    * Cria tabela se não existir (migration automática)
+   * IMPORTANTE: Agora usa hotel_uuid como chave em vez de hotel_id
    */
   async ensureTable() {
     try {
+      // Verificar se a tabela existe com a estrutura antiga
+      const tableCheckResult = await this.db.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'active_extractions'
+        AND column_name IN ('hotel_id', 'hotel_uuid')
+      `);
+
+      const hasOldStructure = tableCheckResult.rows?.some(row => row.column_name === 'hotel_id');
+      const hasNewStructure = tableCheckResult.rows?.some(row => row.column_name === 'hotel_uuid');
+
+      if (hasOldStructure && !hasNewStructure) {
+        console.log('🔄 Migrando tabela active_extractions para usar UUID...');
+
+        // Adicionar coluna hotel_uuid
+        await this.db.query(`
+          ALTER TABLE active_extractions
+          ADD COLUMN IF NOT EXISTS hotel_uuid VARCHAR(36)
+        `);
+
+        // Migrar dados existentes (se houver)
+        await this.db.query(`
+          UPDATE active_extractions
+          SET hotel_uuid = h.hotel_uuid
+          FROM hotels h
+          WHERE active_extractions.hotel_id = h.id
+          AND active_extractions.hotel_uuid IS NULL
+        `);
+
+        // Remover constraint antiga e adicionar nova
+        await this.db.query(`
+          ALTER TABLE active_extractions
+          DROP CONSTRAINT IF EXISTS active_extractions_hotel_id_key
+        `);
+
+        await this.db.query(`
+          ALTER TABLE active_extractions
+          ADD CONSTRAINT active_extractions_hotel_uuid_key UNIQUE (hotel_uuid)
+        `);
+
+        // Remover coluna antiga após migração
+        await this.db.query(`
+          ALTER TABLE active_extractions
+          DROP COLUMN IF EXISTS hotel_id
+        `);
+
+        console.log('✅ Migração concluída: active_extractions agora usa hotel_uuid');
+      }
+
+      // Criar tabela com estrutura nova se não existir
       await this.db.query(`
         CREATE TABLE IF NOT EXISTS active_extractions (
           id SERIAL PRIMARY KEY,
-          hotel_id INTEGER NOT NULL,
+          hotel_uuid VARCHAR(36) NOT NULL,
           process_pid INTEGER,
           status VARCHAR(20) NOT NULL DEFAULT 'RUNNING',
           start_time TIMESTAMP WITH TIME ZONE,
@@ -324,21 +388,21 @@ class ExtractionStore {
           logs JSONB DEFAULT '[]',
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-          UNIQUE(hotel_id)
+          UNIQUE(hotel_uuid)
         )
       `);
 
       // Criar índices para performance
       await this.db.query(`
-        CREATE INDEX IF NOT EXISTS idx_active_extractions_hotel_id ON active_extractions(hotel_id);
+        CREATE INDEX IF NOT EXISTS idx_active_extractions_hotel_uuid ON active_extractions(hotel_uuid);
         CREATE INDEX IF NOT EXISTS idx_active_extractions_status ON active_extractions(status);
         CREATE INDEX IF NOT EXISTS idx_active_extractions_updated_at ON active_extractions(updated_at);
       `);
 
-      console.log('✅ Tabela active_extractions garantida');
+      console.log('✅ Tabela active_extractions garantida com UUID');
 
     } catch (error) {
-      console.error('❌ Erro ao criar tabela active_extractions:', error.message);
+      console.error('❌ Erro ao criar/migrar tabela active_extractions:', error.message);
     }
   }
 }

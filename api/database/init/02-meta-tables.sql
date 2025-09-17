@@ -1,5 +1,4 @@
 -- Tabelas Meta para Facebook/Instagram Ads
--- Criadas após migração MySQL → PostgreSQL
 
 -- TABELA: oauth_states
 CREATE TABLE IF NOT EXISTS oauth_states (

@@ -1,5 +1,4 @@
 -- OSH Hotel System - PostgreSQL Schema
--- Migração do MariaDB para PostgreSQL
 
 -- Extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
