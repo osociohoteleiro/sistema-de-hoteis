@@ -1,75 +1,142 @@
 const os = require('os');
+const fs = require('fs');
 
 /**
- * Configuração inteligente do browser baseada no ambiente
+ * Configuração robusta do browser para Docker/Linux com fallbacks múltiplos
  */
 function getBrowserConfig() {
-  const isLinux = os.platform() === 'linux';
+  const platform = os.platform();
+  const isLinux = platform === 'linux';
   const isCI = process.env.CI === 'true';
   const forceHeadless = process.env.HEADLESS === 'true';
   const isDebug = process.env.DEBUG === 'true';
   const isProduction = process.env.NODE_ENV === 'production';
+  const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER === 'true';
 
-  // Configuração base
-  const config = {
-    headless: true, // Default para headless
-    defaultViewport: { width: 1366, height: 768 },
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-gpu',
-      '--disable-extensions',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-ipc-flooding-protection'
-    ]
-  };
+  console.log(`🔍 Environment Detection:`);
+  console.log(`   Platform: ${platform}`);
+  console.log(`   Is Linux: ${isLinux}`);
+  console.log(`   Is Production: ${isProduction}`);
+  console.log(`   Is Docker: ${isDocker}`);
+  console.log(`   Force Headless: ${forceHeadless}`);
 
-  // Configurações específicas para Linux/VPS/Produção
-  if (isLinux || isCI || forceHeadless || isProduction) {
-    config.args.push(
-      '--headless=new',
-      '--disable-web-security',
-      '--disable-xss-auditor',
-      '--disable-features=VizDisplayCompositor',
-      '--disable-blink-features=AutomationControlled'
-    );
+  // Detectar path do Chromium automaticamente
+  const possibleChromiumPaths = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    process.env.CHROME_BIN,
+    process.env.CHROMIUM_PATH,
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/snap/bin/chromium'
+  ];
 
-    // Especificar executablePath em produção Linux (Docker)
-    if (isLinux && isProduction) {
-      config.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium-browser';
+  let executablePath = null;
+  for (const path of possibleChromiumPaths) {
+    if (path && fs.existsSync(path)) {
+      executablePath = path;
+      console.log(`✅ Chromium encontrado em: ${path}`);
+      break;
     }
   }
 
-  // Configurações para debug (Windows apenas)
-  if (isDebug && !isLinux && !forceHeadless) {
-    config.headless = false;
-    config.devtools = true;
-    config.slowMo = 100; // Mais lento para debug
+  if (!executablePath && isLinux) {
+    console.log(`⚠️  Nenhum Chromium encontrado nos caminhos padrão. Tentando detectar...`);
+    // Último recurso: usar comando padrão e deixar Puppeteer decidir
+    executablePath = '/usr/bin/chromium-browser';
   }
 
-  // Configurações para baixo consumo de memória (VPS/Produção)
-  if (isLinux || isCI || isProduction) {
-    config.args.push(
+  // Configuração base otimizada para Docker/Linux
+  const config = {
+    headless: true, // Sempre headless em produção
+    defaultViewport: { width: 1366, height: 768 },
+    args: [
+      // Flags obrigatórias para Docker/Linux
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-default-apps',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-ipc-flooding-protection',
+
+      // Flags para estabilidade em containers
+      '--disable-features=VizDisplayCompositor',
+      '--disable-blink-features=AutomationControlled',
+      '--disable-web-security',
+      '--disable-xss-auditor',
+      '--disable-features=TranslateUI',
+      '--disable-features=BlinkGenPropertyTrees',
+      '--run-all-compositor-stages-before-draw',
+      '--disable-accelerated-2d-canvas',
+      '--disable-accelerated-jpeg-decoding',
+      '--disable-accelerated-mjpeg-decode',
+      '--disable-accelerated-video-decode',
+      '--disable-accelerated-video-encode',
+
+      // Otimizações de memória para containers
       '--memory-pressure-off',
-      '--max_old_space_size=2048'
+      '--max_old_space_size=2048',
+      '--disable-background-networking',
+      '--disable-background-sync',
+      '--disable-client-side-phishing-detection',
+      '--disable-sync',
+      '--disable-translate',
+      '--hide-scrollbars',
+      '--mute-audio',
+      '--no-default-browser-check',
+      '--no-pings',
+      '--disable-logging',
+      '--disable-permissions-api',
+      '--disable-presentation-api',
+
+      // User agent e detecção
+      '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    ]
+  };
+
+  // Configurações específicas para Linux/Docker
+  if (isLinux || isDocker || isProduction) {
+    config.args.push(
+      '--headless=new',
+      '--virtual-time-budget=5000',
+      '--single-process', // Importante para containers com memória limitada
+      '--disable-software-rasterizer'
     );
 
-    // Timeout mais generoso para ambientes lentos
-    config.timeout = 60000;
-    config.defaultNavigationTimeout = 60000;
-    config.defaultTimeout = 60000;
+    if (executablePath) {
+      config.executablePath = executablePath;
+    }
+
+    // Timeouts mais generosos para ambientes containerizados
+    config.timeout = 90000;
+    config.defaultNavigationTimeout = 90000;
+    config.defaultTimeout = 90000;
   }
 
-  console.log(`🌐 Browser config - Platform: ${os.platform()}, Headless: ${config.headless}, Production: ${isProduction}`);
-  if (config.executablePath) {
-    console.log(`🔧 Using Chromium at: ${config.executablePath}`);
+  // Configurações para debug (apenas desenvolvimento local)
+  if (isDebug && !isLinux && !forceHeadless && !isProduction) {
+    config.headless = false;
+    config.devtools = true;
+    config.slowMo = 100;
+    // Remover algumas flags que podem interferir no debug
+    config.args = config.args.filter(arg =>
+      !arg.includes('--disable-web-security') &&
+      !arg.includes('--disable-extensions')
+    );
   }
+
+  console.log(`🌐 Browser Config Summary:`);
+  console.log(`   Headless: ${config.headless}`);
+  console.log(`   Executable: ${config.executablePath || 'auto-detect'}`);
+  console.log(`   Args count: ${config.args.length}`);
+  console.log(`   Timeout: ${config.timeout || 'default'}`);
 
   return config;
 }

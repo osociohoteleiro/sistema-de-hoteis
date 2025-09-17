@@ -7,25 +7,48 @@ const axios = require('axios');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 /**
- * Função para detectar ambiente e retornar URL da API
- * Baseada no mesmo padrão usado no PMS para detecção automática
+ * Função robusta para detectar ambiente e retornar URL da API
+ * Suporta múltiplos indicadores de produção e desenvolvimento
  */
 function getApiUrl() {
-  // Detectar se está em produção baseado em NODE_ENV específico
-  // Em EasyPanel, NODE_ENV será 'production'
-  // Em desenvolvimento local, será 'development' ou undefined
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  const baseApiUrl = isProduction 
-    ? 'https://osh-sistemas-api-backend.d32pnk.easypanel.host'
-    : 'http://localhost:3001';
-  
-  console.log(`🔍 Environment Detection:`);
-  console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
-  console.log(`   HOSTNAME: ${process.env.HOSTNAME}`);
+  // Múltiplos indicadores de ambiente de produção
+  const nodeEnv = process.env.NODE_ENV;
+  const hostname = process.env.HOSTNAME || '';
+  const dockerEnv = process.env.DOCKER === 'true' || require('fs').existsSync('/.dockerenv');
+  const easypanelEnv = hostname.includes('easypanel') || process.env.EASYPANEL === 'true';
+
+  // Detectar produção baseado em múltiplos fatores
+  const isProduction = nodeEnv === 'production' || easypanelEnv ||
+                      (dockerEnv && nodeEnv !== 'development') ||
+                      hostname.includes('prod') || hostname.includes('easypanel');
+
+  // URLs de API com fallbacks
+  let baseApiUrl;
+  if (isProduction) {
+    // Tentar múltiplas URLs de produção como fallback
+    baseApiUrl = process.env.API_URL ||
+                 process.env.BASE_API_URL ||
+                 'https://osh-sistemas-api-backend.d32pnk.easypanel.host';
+  } else {
+    // Desenvolvimento local com fallbacks
+    baseApiUrl = process.env.LOCAL_API_URL ||
+                 'http://localhost:3001';
+
+    // Se estiver em container mas não em produção, usar host.docker.internal
+    if (dockerEnv && !isProduction) {
+      baseApiUrl = 'http://host.docker.internal:3001';
+    }
+  }
+
+  console.log(`🔍 Enhanced Environment Detection:`);
+  console.log(`   NODE_ENV: ${nodeEnv || 'undefined'}`);
+  console.log(`   HOSTNAME: ${hostname || 'undefined'}`);
+  console.log(`   DOCKER: ${dockerEnv}`);
+  console.log(`   EASYPANEL: ${easypanelEnv}`);
   console.log(`   Is Production: ${isProduction}`);
   console.log(`   Base API URL: ${baseApiUrl}`);
-  
+  console.log(`   Available ENV vars: API_URL=${process.env.API_URL || 'N/A'}, BASE_API_URL=${process.env.BASE_API_URL || 'N/A'}`);
+
   return baseApiUrl;
 }
 
@@ -49,26 +72,55 @@ class DatabaseIntegration {
   }
 
   /**
-   * Conecta ao banco de dados PostgreSQL
+   * Conecta ao banco de dados PostgreSQL com configuração robusta
    */
   async connect() {
     try {
       console.log('🔄 Conectando ao PostgreSQL para extração...');
-      
+
+      // Detectar ambiente e configurar correspondentemente
+      const isProduction = process.env.NODE_ENV === 'production';
+      const isDocker = require('fs').existsSync('/.dockerenv') || process.env.DOCKER === 'true';
+
+      // Configuração robusta com fallbacks
       const config = {
-        host: process.env.POSTGRES_HOST || 'localhost',
+        host: process.env.POSTGRES_HOST || (isDocker && !isProduction ? 'host.docker.internal' : 'localhost'),
         port: parseInt(process.env.POSTGRES_PORT) || 5432,
         user: process.env.POSTGRES_USER || 'osh_user',
         password: process.env.POSTGRES_PASSWORD,
         database: process.env.POSTGRES_DB || 'osh_db',
-        min: 2,
-        max: 10,
+
+        // Pool settings otimizados para containers
+        min: isProduction ? 1 : 2,
+        max: isProduction ? 5 : 10,
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 10000,
-        // Usar SSL apenas se não estiver explicitamente desabilitado
-        ssl: process.env.PGSSLDISABLE === 'true' ? false : 
-             (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false)
+        connectionTimeoutMillis: isProduction ? 20000 : 10000,
+
+        // SSL configuration robusta
+        ssl: process.env.PGSSLDISABLE === 'true' ? false :
+             (isProduction ? { rejectUnauthorized: false } : false),
+
+        // Configurações adicionais para estabilidade
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
+        statement_timeout: 60000,
+        query_timeout: 60000
       };
+
+      console.log(`🔧 PostgreSQL Configuration:`);
+      console.log(`   Host: ${config.host}`);
+      console.log(`   Port: ${config.port}`);
+      console.log(`   Database: ${config.database}`);
+      console.log(`   User: ${config.user}`);
+      console.log(`   SSL: ${config.ssl !== false ? 'enabled' : 'disabled'}`);
+      console.log(`   Pool: min=${config.min}, max=${config.max}`);
+      console.log(`   Environment: ${isProduction ? 'production' : 'development'}`);
+      console.log(`   Docker: ${isDocker}`);
+
+      // Validar configurações obrigatórias
+      if (!config.password) {
+        throw new Error('POSTGRES_PASSWORD não definida - necessária para conectar ao banco');
+      }
 
       this.pool = new Pool(config);
       

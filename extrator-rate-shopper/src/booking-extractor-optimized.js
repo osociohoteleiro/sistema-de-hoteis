@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const path = require('path');
 
 // Plugins para evitar detecção
 puppeteer.use(StealthPlugin());
@@ -297,8 +298,12 @@ async function extract_prices_from_booking(url, start_date, end_date, max_bundle
             const fs = require('fs').promises;
             const debugLog = async (msg) => {
               try {
-                await fs.appendFile('D:/APPS-OSH/extrator-rate-shopper/debug_bundle.log', new Date().toISOString() + ' - ' + msg + '\n');
-              } catch(e) {}
+                const debugLogPath = path.join(process.cwd(), 'logs', 'debug_bundle.log');
+                await fs.mkdir(path.dirname(debugLogPath), { recursive: true });
+                await fs.appendFile(debugLogPath, new Date().toISOString() + ' - ' + msg + '\n');
+              } catch(e) {
+                // Falha silenciosa para não interromper extração
+              }
             };
             
             await debugLog(`🔄 BUNDLE LOOP START: bundle_size=${bundle_size}, current_execution=${current_execution}, dates.length=${dates.length}`);
