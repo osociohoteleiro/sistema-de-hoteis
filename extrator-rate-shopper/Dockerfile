@@ -14,24 +14,16 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install all system dependencies for Puppeteer including security updates
+# Install essential dependencies for Puppeteer (simplified for reliability)
 RUN apk update && apk add --no-cache \
     chromium \
     nss \
     freetype \
-    freetype-dev \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    ttf-dejavu \
-    ttf-droid \
-    ttf-liberation \
-    wqy-zenhei \
     dumb-init \
-    udev \
-    xvfb \
-    # Additional dependencies for better Chromium support
-    libgcc \
+    # Core libraries for Chromium
     libstdc++ \
     libx11 \
     libxcomposite \
@@ -42,22 +34,12 @@ RUN apk update && apk add --no-cache \
     libxi \
     libxrandr \
     libxrender \
-    libxss \
     libxtst \
     alsa-lib \
-    at-spi2-atk \
-    at-spi2-core \
     atk \
-    cups-libs \
-    dbus-libs \
-    expat \
     glib \
-    gtk+3.0 \
     libdrm \
-    libxkbcommon \
     pango \
-    wayland-libs-client \
-    wayland-libs-server \
     && rm -rf /var/cache/apk/*
 
 # Set Puppeteer environment variables - try multiple possible paths
