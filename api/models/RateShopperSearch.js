@@ -19,6 +19,12 @@ class RateShopperSearch {
     this.duration_seconds = data.duration_seconds || 0;
     this.created_at = data.created_at;
     this.updated_at = data.updated_at;
+
+    // Novos campos para pause/resume
+    this.last_processed_date = data.last_processed_date;
+    this.pause_checkpoint = data.pause_checkpoint;
+    this.paused_at = data.paused_at;
+    this.pause_reason = data.pause_reason;
   }
 
   static async findById(id) {
@@ -121,14 +127,18 @@ class RateShopperSearch {
     if (this.id) {
       // Update existing search
       const result = await db.query(`
-        UPDATE rate_shopper_searches SET 
+        UPDATE rate_shopper_searches SET
         status = $1, total_dates = $2, processed_dates = $3, total_prices_found = $4,
         error_log = $5, started_at = $6, completed_at = $7, duration_seconds = $8,
+        last_processed_date = $9, pause_checkpoint = $10, paused_at = $11, pause_reason = $12,
         updated_at = NOW()
-        WHERE id = $9
+        WHERE id = $13
       `, [
         this.status, this.total_dates, this.processed_dates, this.total_prices_found,
-        this.error_log, this.started_at, this.completed_at, this.duration_seconds, this.id
+        this.error_log, this.started_at, this.completed_at, this.duration_seconds,
+        this.last_processed_date,
+        this.pause_checkpoint ? JSON.stringify(this.pause_checkpoint) : null,
+        this.paused_at, this.pause_reason, this.id
       ]);
       return result;
     } else {
@@ -143,14 +153,14 @@ class RateShopperSearch {
         this.hotel_id, this.property_id, this.search_type, this.start_date,
         this.end_date, this.status, this.total_dates
       ]);
-      
+
       if (result && result.length > 0 && result[0]) {
         this.id = result[0].id;
         this.uuid = null; // UUID não é necessário para searches
       } else {
         throw new Error('Failed to create search: No result returned from database');
       }
-      
+
       return result;
     }
   }
@@ -158,21 +168,25 @@ class RateShopperSearch {
   // Update search status
   async updateStatus(status, additionalData = {}) {
     this.status = status;
-    
+
     if (status === 'RUNNING' && !this.started_at) {
       this.started_at = new Date();
     }
-    
-    if (status === 'COMPLETED' || status === 'FAILED') {
+
+    if (status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED') {
       this.completed_at = new Date();
       if (this.started_at) {
         this.duration_seconds = Math.round((this.completed_at - new Date(this.started_at)) / 1000);
       }
     }
 
+    if (status === 'PAUSED') {
+      this.paused_at = new Date();
+    }
+
     // Update additional fields if provided
     Object.assign(this, additionalData);
-    
+
     await this.save();
   }
 
@@ -344,6 +358,74 @@ class RateShopperSearch {
     });
   }
 
+  // Pause search with checkpoint
+  async pause(checkpointData = {}, reason = 'MANUAL_USER') {
+    if (this.status !== 'RUNNING') {
+      throw new Error('Can only pause running searches');
+    }
+
+    // Determinar última data processada baseada no progresso atual
+    let lastProcessedDate = null;
+    if (this.processed_dates > 0 && this.start_date) {
+      const startDate = new Date(this.start_date);
+      lastProcessedDate = new Date(startDate.getTime() + (this.processed_dates - 1) * 24 * 60 * 60 * 1000);
+    }
+
+    await this.updateStatus('PAUSED', {
+      last_processed_date: lastProcessedDate,
+      pause_checkpoint: checkpointData,
+      paused_at: new Date(),
+      pause_reason: reason
+    });
+  }
+
+  // Resume paused search
+  async resume() {
+    if (this.status !== 'PAUSED') {
+      throw new Error('Can only resume paused searches');
+    }
+
+    await this.updateStatus('RUNNING', {
+      started_at: new Date() // Atualizar started_at para o momento do resume
+      // Manter pause_checkpoint e last_processed_date para referência
+    });
+  }
+
+  // Get resume information
+  getResumeInfo() {
+    if (this.status !== 'PAUSED') {
+      return null;
+    }
+
+    const totalDays = this.total_dates || 0;
+    const processedDays = this.processed_dates || 0;
+    const remainingDays = totalDays - processedDays;
+
+    return {
+      canResume: true,
+      lastProcessedDate: this.last_processed_date,
+      pausedAt: this.paused_at,
+      pauseReason: this.pause_reason,
+      checkpoint: this.pause_checkpoint,
+      progressInfo: {
+        totalDays,
+        processedDays,
+        remainingDays,
+        progressPercentage: totalDays > 0 ? Math.round((processedDays / totalDays) * 100) : 0
+      }
+    };
+  }
+
+  // Check if search can be paused
+  canBePaused() {
+    return this.status === 'RUNNING';
+  }
+
+  // Check if search can be resumed
+  canBeResumed() {
+    return this.status === 'PAUSED';
+  }
+
   // Retry failed search
   async retry() {
     if (this.status !== 'FAILED') {
@@ -437,7 +519,17 @@ class RateShopperSearch {
       started_at: this.started_at,
       completed_at: this.completed_at,
       created_at: this.created_at,
-      updated_at: this.updated_at
+      updated_at: this.updated_at,
+
+      // Campos de pause/resume
+      last_processed_date: this.last_processed_date,
+      pause_checkpoint: this.pause_checkpoint,
+      paused_at: this.paused_at,
+      pause_reason: this.pause_reason,
+
+      // Flags de controle
+      can_be_paused: this.canBePaused(),
+      can_be_resumed: this.canBeResumed()
     };
 
     // Include property_name if available (from JOINs)
@@ -458,6 +550,11 @@ class RateShopperSearch {
     // Add estimated time remaining if running
     if (this.status === 'RUNNING') {
       json.estimated_time_remaining = this.getEstimatedTimeRemaining();
+    }
+
+    // Add resume information if paused
+    if (this.status === 'PAUSED') {
+      json.resume_info = this.getResumeInfo();
     }
 
     return json;

@@ -3,6 +3,11 @@ const router = express.Router();
 const path = require('path');
 const ProcessManager = require('../utils/processManager');
 const ExtractionStore = require('../utils/extractionStore');
+const {
+  emitExtractionPaused,
+  emitExtractionResumed,
+  emitExtractionCancelled
+} = require('../utils/socketEmitters');
 
 // Instância do store persistente (será inicializada no primeiro uso)
 let extractionStore = null;
@@ -201,7 +206,282 @@ router.post('/:hotel_uuid/start-extraction', async (req, res) => {
 });
 
 /**
- * Para extração de preços para um hotel específico
+ * Pausa extração de preços para um hotel específico (diferente de cancelar)
+ * POST /api/rate-shopper/:hotel_uuid/pause-extraction
+ */
+router.post('/:hotel_uuid/pause-extraction', async (req, res) => {
+  const hotel_uuid = req.params.hotel_uuid;
+
+  try {
+    const Hotel = require('../models/Hotel');
+    const RateShopperSearch = require('../models/RateShopperSearch');
+
+    // SEMPRE usar UUID - NUNCA converter para ID
+    const hotel = await Hotel.findByUuid(hotel_uuid);
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        error: 'Hotel not found'
+      });
+    }
+
+    const store = await getExtractionStore();
+    const extraction = await store.getActiveExtraction(hotel_uuid);
+
+    if (!extraction) {
+      return res.status(404).json({
+        success: false,
+        error: 'Nenhuma extração ativa encontrada para este hotel'
+      });
+    }
+
+    // Buscar a search ativa no banco para pausar corretamente
+    const runningSearches = await RateShopperSearch.findByHotel(hotel.id, { status: 'RUNNING' });
+
+    if (runningSearches.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Nenhuma busca em execução encontrada para pausar'
+      });
+    }
+
+    const activeSearch = runningSearches[0]; // Pegar a primeira busca ativa
+
+    // Criar checkpoint com informações do progresso atual
+    const checkpointData = {
+      extraction_id: extraction.hotelUuid,
+      progress_snapshot: extraction.progress,
+      interrupted_at: new Date().toISOString(),
+      can_resume: true,
+      extraction_logs: extraction.logs ? extraction.logs.slice(-5) : [] // Últimos 5 logs
+    };
+
+    console.log(`🔴 Pausando extração do hotel UUID ${hotel_uuid} (Search ID: ${activeSearch.id})`);
+
+    // Pausar a busca usando o novo método do model
+    await activeSearch.pause(checkpointData, 'MANUAL_USER');
+
+    // Parar o processo de extração
+    try {
+      if (extraction.process && !extraction.process.killed) {
+        console.log(`🔴 Terminando processo PID ${extraction.process.pid} para pause`);
+        await ProcessManager.killProcess(extraction.process);
+      }
+    } catch (killError) {
+      console.error(`❌ Erro ao matar processo do hotel UUID ${hotel_uuid}:`, killError.message);
+    }
+
+    // Marcar como pausado no extraction store (em vez de remover)
+    await store.pauseActiveExtraction(hotel_uuid, 'PAUSED');
+
+    console.log(`⏸️  Busca ID ${activeSearch.id} pausada com sucesso`);
+
+    // Emitir evento Socket.io para pause
+    const io = req.app.get('socketio');
+    if (io) {
+      emitExtractionPaused(io, hotel_uuid, {
+        searchId: activeSearch.id,
+        property_name: activeSearch.property_name,
+        progress_preserved: activeSearch.processed_dates,
+        total_dates: activeSearch.total_dates,
+        prices_found: activeSearch.total_prices_found
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Extração pausada com sucesso',
+      data: {
+        hotelUuid: hotel_uuid,
+        searchId: activeSearch.id,
+        status: 'PAUSED',
+        progress_preserved: activeSearch.processed_dates,
+        total_dates: activeSearch.total_dates,
+        prices_found: activeSearch.total_prices_found,
+        can_resume: true,
+        checkpoint_saved: true
+      }
+    });
+
+  } catch (error) {
+    console.error('Pause extraction error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao pausar extração'
+    });
+  }
+});
+
+/**
+ * Retoma extração pausada para um hotel específico
+ * POST /api/rate-shopper/:hotel_uuid/resume-extraction
+ */
+router.post('/:hotel_uuid/resume-extraction', async (req, res) => {
+  const hotel_uuid = req.params.hotel_uuid;
+
+  try {
+    const Hotel = require('../models/Hotel');
+    const RateShopperSearch = require('../models/RateShopperSearch');
+
+    // SEMPRE usar UUID - NUNCA converter para ID
+    const hotel = await Hotel.findByUuid(hotel_uuid);
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        error: 'Hotel not found'
+      });
+    }
+
+    // Buscar a search pausada no banco
+    const pausedSearches = await RateShopperSearch.findByHotel(hotel.id, { status: 'PAUSED' });
+
+    if (pausedSearches.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Nenhuma busca pausada encontrada para retomar'
+      });
+    }
+
+    const pausedSearch = pausedSearches[0]; // Pegar a primeira busca pausada
+
+    // Verificar se há extração ativa atualmente
+    const store = await getExtractionStore();
+    const hasActive = await store.hasActiveExtraction(hotel_uuid);
+    if (hasActive) {
+      return res.status(400).json({
+        success: false,
+        error: 'Já existe uma extração em andamento para este hotel'
+      });
+    }
+
+    console.log(`▶️ Retomando extração do hotel UUID ${hotel_uuid} (Search ID: ${pausedSearch.id})`);
+    console.log(`📊 Progresso anterior: ${pausedSearch.processed_dates}/${pausedSearch.total_dates} datas`);
+
+    // Retomar a busca usando o novo método do model
+    await pausedSearch.resume();
+
+    // Preparar dados para o extrator com informações de resume
+    const extractorSearch = {
+      id: pausedSearch.id,
+      property_id: pausedSearch.property_id,
+      name: pausedSearch.property_name || `Property_${pausedSearch.property_id}`,
+      url: '', // Será buscado da propriedade
+      start_date: pausedSearch.start_date,
+      end_date: pausedSearch.end_date,
+      max_bundle_size: 7,
+      // Informações específicas de resume
+      resume_from_date: pausedSearch.last_processed_date,
+      resume_mode: true,
+      previous_checkpoint: pausedSearch.pause_checkpoint
+    };
+
+    // Buscar URL da propriedade
+    const RateShopperProperty = require('../models/RateShopperProperty');
+    const property = await RateShopperProperty.findById(pausedSearch.property_id);
+    if (property) {
+      extractorSearch.url = property.booking_url;
+      extractorSearch.name = property.property_name;
+    }
+
+    // Iniciar extração (similar ao start-extraction, mas com modo resume)
+    let extractionProcess;
+
+    if (process.env.NODE_ENV === 'production') {
+      console.log(`🌐 Produção: Extrator roda independentemente. Search será retomada automaticamente.`);
+
+      // Processo fake para compatibilidade
+      extractionProcess = {
+        pid: Math.floor(Math.random() * 10000) + 1000,
+        killed: false,
+        stdout: { on: () => {} },
+        stderr: { on: () => {} },
+        on: (event, callback) => {
+          if (event === 'close') {
+            setTimeout(() => callback(0), 1000);
+          }
+        },
+        kill: () => {}
+      };
+    } else {
+      // Em desenvolvimento, usar spawn local com parâmetros de resume
+      const extractorPath = path.join(process.cwd(), '..', 'extrator-rate-shopper');
+      console.log(`🔧 Desenvolvimento: Usando spawn local com resume - ${extractorPath}`);
+
+      extractionProcess = ProcessManager.spawn('npm', ['run', 'process-database:saas'], {
+        cwd: extractorPath,
+        env: {
+          ...process.env,
+          HEADLESS: 'true',
+          HOTEL_UUID: hotel_uuid,
+          SEARCH_IDS: pausedSearch.id.toString(),
+          RESUME_MODE: 'true',
+          RESUME_FROM_DATE: pausedSearch.last_processed_date || '',
+          RESUME_CHECKPOINT: pausedSearch.pause_checkpoint ? JSON.stringify(pausedSearch.pause_checkpoint) : '{}'
+        }
+      });
+    }
+
+    // Dados da extração
+    const extractionData = {
+      process: extractionProcess,
+      hotelUuid: hotel_uuid,
+      startTime: new Date(),
+      status: 'RUNNING',
+      progress: {
+        current: pausedSearch.processed_dates || 0,
+        total: pausedSearch.total_dates || 0,
+        currentProperty: extractorSearch.name,
+        extractedPrices: pausedSearch.total_prices_found || 0
+      },
+      logs: [],
+      resumeMode: true,
+      resumeFromDate: pausedSearch.last_processed_date
+    };
+
+    // Registrar no store persistente
+    await store.setActiveExtraction(hotel_uuid, extractionData);
+
+    console.log(`✅ Extração retomada para busca ID ${pausedSearch.id}`);
+
+    // Emitir evento Socket.io para resume
+    const io = req.app.get('socketio');
+    if (io) {
+      emitExtractionResumed(io, hotel_uuid, {
+        searchId: pausedSearch.id,
+        property_name: pausedSearch.property_name,
+        resumed_from_date: pausedSearch.last_processed_date,
+        progress_preserved: pausedSearch.processed_dates,
+        total_dates: pausedSearch.total_dates
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Extração retomada com sucesso',
+      data: {
+        hotelUuid: hotel_uuid,
+        searchId: pausedSearch.id,
+        status: 'RUNNING',
+        resumed_from_date: pausedSearch.last_processed_date,
+        progress_preserved: pausedSearch.processed_dates,
+        total_dates: pausedSearch.total_dates,
+        prices_found: pausedSearch.total_prices_found,
+        resume_mode: true,
+        started_at: new Date()
+      }
+    });
+
+  } catch (error) {
+    console.error('Resume extraction error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao retomar extração'
+    });
+  }
+});
+
+/**
+ * Para extração de preços para um hotel específico (cancelamento definitivo)
  * POST /api/rate-shopper/:hotel_uuid/stop-extraction
  */
 router.post('/:hotel_uuid/stop-extraction', async (req, res) => {
@@ -314,6 +594,26 @@ router.post('/:hotel_uuid/stop-extraction', async (req, res) => {
     } catch (dbError) {
       console.error('❌ Erro ao atualizar status no banco:', dbError.message);
       // Não falhar a operação por causa do erro de banco
+    }
+
+    // Emitir evento Socket.io para cancel
+    const io = req.app.get('socketio');
+    if (io) {
+      // Buscar informações da search para o evento
+      try {
+        const RateShopperSearch = require('../models/RateShopperSearch');
+        const cancelledSearches = await RateShopperSearch.findByHotel(hotel.id, { status: 'CANCELLED' });
+        const cancelledSearch = cancelledSearches[0]; // Pegar a primeira cancelada
+
+        if (cancelledSearch) {
+          emitExtractionCancelled(io, hotel_uuid, {
+            searchId: cancelledSearch.id,
+            property_name: cancelledSearch.property_name
+          });
+        }
+      } catch (emitError) {
+        console.error('❌ Erro ao emitir evento de cancelamento:', emitError.message);
+      }
     }
 
     res.json({

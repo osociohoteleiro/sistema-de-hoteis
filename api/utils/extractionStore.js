@@ -171,6 +171,103 @@ class ExtractionStore {
   }
 
   /**
+   * Pausa extração ativa (para ser retomada depois)
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
+   * @param {string} pauseStatus - Status de pause ('PAUSED')
+   */
+  async pauseActiveExtraction(hotelUuid, pauseStatus = 'PAUSED') {
+    try {
+      await this.db.query(`
+        UPDATE active_extractions
+        SET
+          status = $2,
+          paused_at = $3,
+          updated_at = $4
+        WHERE hotel_uuid = $1 AND status = 'RUNNING'
+      `, [hotelUuid, pauseStatus, new Date(), new Date()]);
+
+      console.log(`⏸️  Extração pausada no store para hotel UUID ${hotelUuid} com status ${pauseStatus}`);
+      return true;
+
+    } catch (error) {
+      console.error(`❌ Erro ao pausar extração ativa para hotel UUID ${hotelUuid}:`, error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Retoma extração pausada
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
+   */
+  async resumeActiveExtraction(hotelUuid) {
+    try {
+      await this.db.query(`
+        UPDATE active_extractions
+        SET
+          status = 'RUNNING',
+          resumed_at = $2,
+          updated_at = $3
+        WHERE hotel_uuid = $1 AND status = 'PAUSED'
+      `, [hotelUuid, new Date(), new Date()]);
+
+      console.log(`▶️  Extração retomada no store para hotel UUID ${hotelUuid}`);
+      return true;
+
+    } catch (error) {
+      console.error(`❌ Erro ao retomar extração ativa para hotel UUID ${hotelUuid}:`, error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Busca extrações pausadas
+   * @param {string} hotelUuid - UUID do hotel específico (opcional)
+   */
+  async getPausedExtractions(hotelUuid = null) {
+    try {
+      let query = `
+        SELECT * FROM active_extractions
+        WHERE status = 'PAUSED'
+        AND created_at > NOW() - INTERVAL '24 hours'
+      `;
+      let params = [];
+
+      if (hotelUuid) {
+        query += ` AND hotel_uuid = $1`;
+        params.push(hotelUuid);
+      }
+
+      query += ` ORDER BY paused_at DESC`;
+
+      const result = await this.db.query(query, params);
+
+      if (!result || !result.rows) {
+        return [];
+      }
+
+      return result.rows.map(row => ({
+        hotelUuid: row.hotel_uuid,
+        process: { pid: row.process_pid, killed: false },
+        startTime: row.start_time,
+        pausedAt: row.paused_at,
+        status: row.status,
+        progress: {
+          current: row.progress_current || 0,
+          total: row.progress_total || 0,
+          currentProperty: row.current_property,
+          extractedPrices: row.extracted_prices || 0
+        },
+        logs: JSON.parse(row.logs || '[]'),
+        updatedAt: row.updated_at
+      }));
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar extrações pausadas:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * Remove extração ativa (quando termina ou é cancelada)
    * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
    */
@@ -190,7 +287,7 @@ class ExtractionStore {
         try {
           await this.db.query(`
             DELETE FROM active_extractions
-            WHERE hotel_uuid = $1 AND status != 'RUNNING'
+            WHERE hotel_uuid = $1 AND status != 'RUNNING' AND status != 'PAUSED'
             AND updated_at < NOW() - INTERVAL '6 hours'
           `, [hotelUuid]);
         } catch (e) {

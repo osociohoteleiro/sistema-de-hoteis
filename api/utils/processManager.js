@@ -169,8 +169,11 @@ class ProcessManager {
       console.log(`🔧 Detectado comando rate-shopper, ajustando para plataforma: ${os.platform()}`);
 
       if (isWindows) {
-        actualCommand = 'cmd';
-        actualArgs = ['/c', command, ...args];
+        // No Windows, usar node diretamente para executar o database-processor
+        const extractorPath = options.cwd || process.cwd();
+        const dbProcessorPath = `${extractorPath}\\src\\database-processor.js`;
+        actualCommand = 'node';
+        actualArgs = [dbProcessorPath];
       } else {
         // Linux/EasyPanel: Extrator está em instância separada - usar HTTP
         console.log(`🐧 Linux: Executando rate-shopper via HTTP (instância separada)`);
@@ -191,6 +194,7 @@ class ProcessManager {
     }
 
     console.log(`🚀 Spawning process - Platform: ${os.platform()}, Command: ${actualCommand}, Args: ${actualArgs.join(' ')}`);
+    console.log(`📁 Working directory: ${options.cwd || process.cwd()}`);
 
     const childProcess = spawn(actualCommand, actualArgs, {
       ...options,
