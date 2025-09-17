@@ -148,6 +148,90 @@ class DatabaseIntegration {
   }
 
   /**
+   * Busca searches PAUSADAS no banco de dados (para resume mode)
+   * @param {string} hotelId - Filtrar por hotel específico usando ID (opcional)
+   * @param {string} hotelUuid - Filtrar por hotel específico usando UUID (opcional)
+   * @param {string} searchIds - IDs específicos de buscas separados por vírgula (opcional)
+   */
+  async getPausedSearches(hotelId = null, hotelUuid = null, searchIds = null) {
+    try {
+      await this.ensureConnection();
+      let whereConditions = ["rs.status = 'PAUSED'"];
+      let queryParams = [];
+      let paramCounter = 1;
+
+      // Filtro por hotel específico usando ID
+      if (hotelId) {
+        whereConditions.push(`rs.hotel_id = $${paramCounter++}`);
+        queryParams.push(hotelId);
+      }
+
+      // Filtro por hotel específico usando UUID (preferência)
+      if (hotelUuid) {
+        whereConditions.push(`h.hotel_uuid = $${paramCounter++}`);
+        queryParams.push(hotelUuid);
+      }
+
+      // Filtro por IDs específicos de buscas
+      if (searchIds) {
+        const ids = searchIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+        if (ids.length > 0) {
+          whereConditions.push(`rs.id = ANY($${paramCounter++})`);
+          queryParams.push(ids);
+        }
+      }
+
+      const query = `
+        SELECT
+          rs.id,
+          rs.uuid,
+          rs.hotel_id,
+          rs.property_id,
+          rs.start_date,
+          rs.end_date,
+          rs.total_dates,
+          rs.processed_dates,
+          rs.total_prices_found,
+          rs.last_processed_date,
+          rs.pause_checkpoint,
+          rs.paused_at,
+          rs.pause_reason,
+          rs.status,
+          rsp.property_name,
+          rsp.booking_url,
+          rsp.max_bundle_size,
+          rsp.platform,
+          h.name as hotel_name,
+          h.hotel_uuid
+        FROM rate_shopper_searches rs
+        JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
+        JOIN hotels h ON rs.hotel_id = h.id
+        WHERE ${whereConditions.join(' AND ')}
+        ORDER BY rs.paused_at DESC
+        LIMIT 10
+      `;
+
+      const result = await this.pool.query(query, queryParams);
+      const rows = result.rows;
+
+      console.log(`🔍 Encontradas ${rows.length} searches pausadas${hotelUuid ? ` para hotel UUID ${hotelUuid}` : ''}${searchIds ? ` com IDs ${searchIds}` : ''}`);
+
+      if (rows.length > 0) {
+        rows.forEach(row => {
+          console.log(`   - Search ID ${row.id}: ${row.property_name} (${row.processed_dates}/${row.total_dates} processadas)`);
+        });
+      }
+
+      logger.info(`Found ${rows.length} paused searches${hotelUuid ? ` for hotel UUID ${hotelUuid}` : ''}${searchIds ? ` with IDs ${searchIds}` : ''}`);
+      return rows;
+    } catch (error) {
+      logger.error('Failed to get paused searches', { error: error.message });
+      console.error('❌ Erro ao buscar searches pausadas:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Atualiza status da busca
    */
   async updateSearchStatus(searchId, status, additionalData = {}) {

@@ -48,11 +48,24 @@ class DatabaseProcessor {
 
       // Suporte a filtros via variáveis de ambiente
       const hotelId = process.env.HOTEL_ID || null;
+      const hotelUuid = process.env.HOTEL_UUID || null; // Suporte a UUID
       const searchIds = process.env.SEARCH_IDS || null;
+      const resumeMode = process.env.RESUME_MODE === 'true';
+      const resumeFromDate = process.env.RESUME_FROM_DATE || null;
+      const resumeCheckpoint = process.env.RESUME_CHECKPOINT ? JSON.parse(process.env.RESUME_CHECKPOINT) : null;
 
-      console.log(`🔍 Filtros aplicados - Hotel ID: ${hotelId}, Search IDs: ${searchIds}`);
+      console.log(`🔍 Filtros aplicados - Hotel ID: ${hotelId}, Hotel UUID: ${hotelUuid}, Search IDs: ${searchIds}`);
+      console.log(`🔄 Modo Resume: ${resumeMode}, Resume From Date: ${resumeFromDate}`);
 
-      const pendingSearches = await this.db.getPendingSearches(hotelId, searchIds);
+      let pendingSearches;
+      if (resumeMode) {
+        // Em modo resume, buscar searches pausadas em vez de pending
+        console.log('⏸️ Modo Resume ativo - buscando searches pausadas...');
+        pendingSearches = await this.db.getPausedSearches(hotelId, hotelUuid, searchIds);
+      } else {
+        // Modo normal - buscar searches pending
+        pendingSearches = await this.db.getPendingSearches(hotelId, searchIds);
+      }
 
       if (pendingSearches.length === 0) {
         console.log('✅ Nenhuma busca pendente encontrada!');
@@ -71,7 +84,7 @@ class DatabaseProcessor {
       for (let i = 0; i < pendingSearches.length; i++) {
         const search = pendingSearches[i];
         console.log(`\n📊 Progresso: ${i + 1}/${pendingSearches.length} searches processadas`);
-        await this.processSearch(search);
+        await this.processSearch(search, resumeMode);
       }
 
       const totalTime = Date.now() - startTime;
@@ -90,16 +103,22 @@ class DatabaseProcessor {
   /**
    * Processa uma busca específica
    */
-  async processSearch(dbSearch) {
+  async processSearch(dbSearch, isResumeMode = false) {
     const searchId = dbSearch.id;
     const propertyId = dbSearch.property_id;
     const searchStartTime = Date.now();
 
     try {
-      console.log(`\n🏨 PROCESSANDO SEARCH ID ${searchId}: ${dbSearch.property_name}`);
-      console.log(`📋 Detalhes: Property ID ${propertyId}, Hotel ID ${dbSearch.hotel_id}`);
+      if (isResumeMode) {
+        console.log(`\n▶️ RETOMANDO SEARCH ID ${searchId}: ${dbSearch.property_name}`);
+        console.log(`📋 Status atual: ${dbSearch.status}, Progresso: ${dbSearch.processed_dates}/${dbSearch.total_dates}`);
+        console.log(`📅 Última data processada: ${dbSearch.last_processed_date || 'N/A'}`);
+      } else {
+        console.log(`\n🏨 PROCESSANDO SEARCH ID ${searchId}: ${dbSearch.property_name}`);
+        console.log(`📋 Detalhes: Property ID ${propertyId}, Hotel ID ${dbSearch.hotel_id}`);
+      }
 
-      // Atualizar status para RUNNING
+      // Atualizar status para RUNNING (mesmo para resume)
       console.log('🔄 Atualizando status para RUNNING...');
       await this.db.updateSearchStatus(searchId, 'RUNNING');
       console.log('✅ Status atualizado no banco');
@@ -116,11 +135,42 @@ class DatabaseProcessor {
       console.log(`   - Bundle size: ${extractorSearch.max_bundle_size || 7}`);
 
       // Preparar parâmetros para o extrator
-      const startDate = new Date(extractorSearch.start_date);
+      let startDate = new Date(extractorSearch.start_date);
       const endDate = new Date(extractorSearch.end_date);
-      const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
 
-      console.log(`📅 Período: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()} (${daysDiff} dias)`);
+      // Ajustar data de início se em modo resume
+      if (isResumeMode && dbSearch.last_processed_date) {
+        const lastProcessedDate = new Date(dbSearch.last_processed_date);
+        // Começar do dia seguinte à última data processada
+        startDate = new Date(lastProcessedDate.getTime() + 24 * 60 * 60 * 1000);
+
+        console.log(`⏭️ Resume Mode: Ajustando data de início para ${startDate.toLocaleDateString()}`);
+        console.log(`📅 Última data processada: ${lastProcessedDate.toLocaleDateString()}`);
+      }
+
+      const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+      const totalOriginalDays = Math.ceil((new Date(extractorSearch.end_date) - new Date(extractorSearch.start_date)) / (1000 * 60 * 60 * 24)) + 1;
+
+      if (isResumeMode) {
+        console.log(`📅 Período original: ${new Date(extractorSearch.start_date).toLocaleDateString()} → ${endDate.toLocaleDateString()} (${totalOriginalDays} dias)`);
+        console.log(`📅 Período restante: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()} (${daysDiff} dias)`);
+      } else {
+        console.log(`📅 Período: ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()} (${daysDiff} dias)`);
+      }
+
+      // Verificar se já terminou (para casos de resume onde todas as datas já foram processadas)
+      if (daysDiff <= 0) {
+        console.log('✅ Todas as datas já foram processadas! Marcando como COMPLETED...');
+
+        const pricesCount = await this.db.getSearchPricesCount(searchId);
+        await this.db.updateSearchStatus(searchId, 'COMPLETED', {
+          total_prices_found: pricesCount,
+          processed_dates: dbSearch.total_dates
+        });
+
+        console.log(`✅ ${dbSearch.property_name}: Extração já estava completa (${pricesCount} preços)`);
+        return;
+      }
 
       // Usar timestamp para nome do arquivo (mesmo padrão do extrator original)
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
