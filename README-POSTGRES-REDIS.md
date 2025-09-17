@@ -1,6 +1,6 @@
 # 🚀 PostgreSQL + Redis para OSH Hotel System
 
-Setup completo de PostgreSQL + Redis para substituir o MariaDB atual com maior escalabilidade e performance.
+Setup completo de PostgreSQL + Redis com alta escalabilidade e performance.
 
 ## 📋 O que foi implementado
 
@@ -99,7 +99,7 @@ await cacheService.invalidateUser(userId);
 await cacheService.invalidatePattern('osh:user:*');
 ```
 
-## ⚡ Performance vs MariaDB
+## ⚡ Performance e Vantagens
 
 ### PostgreSQL advantages:
 - **Pool maior**: 50 conexões vs 15
@@ -114,15 +114,14 @@ await cacheService.invalidatePattern('osh:user:*');
 - **Invalidação inteligente** por padrão
 - **Sub-second response** para dados cacheados
 
-## 🔄 Migração gradual
+## 🔄 Desenvolvimento e Produção
 
-Para migrar gradualmente do MariaDB:
+### Configuração para diferentes ambientes:
 
-1. **Manter ambos** bancos rodando
-2. **Novos módulos** usam PostgreSQL
-3. **Módulos críticos** migrar primeiro
-4. **Sincronizar dados** via API
-5. **Deprecar MariaDB** quando estável
+1. **Desenvolvimento** - PostgreSQL local com Docker
+2. **Staging** - PostgreSQL com Redis cluster
+3. **Produção** - PostgreSQL otimizado com backup automático
+4. **Monitoramento** contínuo de performance
 
 ## 📈 Monitoramento
 
@@ -161,4 +160,4 @@ INFO stats
 
 ---
 
-**🎯 Resultado esperado**: 3-5x melhor performance com PostgreSQL + Redis vs MariaDB puro.
+**🎯 Resultado esperado**: Sistema otimizado com PostgreSQL + Redis para máxima performance.

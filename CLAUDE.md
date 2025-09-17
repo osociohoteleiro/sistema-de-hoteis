@@ -4,13 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Status
 
-Este é um sistema de gestão de hotéis OSH (Onscreen Hotels) composto por uma aplicação frontend React e uma API backend Node.js/Express.
+Este é um ecossistema completo de gestão hoteleira OSH (Onscreen Hotels) composto por múltiplos módulos integrados:
+
+- **API Backend**: Node.js/Express com PostgreSQL e Redis
+- **Hotel App**: Aplicação principal de gestão hoteleira (React)
+- **PMS**: Sistema de Property Management System (React)
+- **Automação**: Interface de automação e workflows (React)
+- **Extrator Rate Shopper**: Serviço de monitoramento de preços da concorrência
+- **Site Hoteleiro**: Website institucional para hotéis
+- **Scripts**: Ferramentas de deploy e automação do sistema
 
 ## Estrutura do Projeto
 
 ```
 /
-├── hotel-app/          # Aplicação React frontend (porta 5173/5174)
+├── hotel-app/          # Aplicação React frontend principal (porta 5173)
 │   ├── src/           # Código fonte React
 │   ├── public/        # Assets públicos
 │   ├── package.json   # Dependências frontend
@@ -21,6 +29,23 @@ Este é um sistema de gestão de hotéis OSH (Onscreen Hotels) composto por uma 
 │   ├── services/      # Serviços
 │   ├── package.json   # Dependências backend
 │   └── server.js      # Servidor principal
+├── pms/               # Sistema PMS frontend (porta 5175)
+│   ├── src/           # Código fonte React PMS
+│   ├── public/        # Assets públicos PMS
+│   └── package.json   # Dependências PMS
+├── automacao/         # Sistema de automação frontend (porta 5174)
+│   ├── src/           # Código fonte React automação
+│   ├── public/        # Assets públicos automação
+│   └── package.json   # Dependências automação
+├── extrator-rate-shopper/ # Serviço extrator de preços (porta 3002)
+│   ├── src/           # Código fonte do extrator
+│   ├── package.json   # Dependências extrator
+│   └── server.js      # Servidor do extrator
+├── site-hoteleiro/    # Site hoteleiro institucional
+│   ├── src/           # Código fonte site
+│   ├── public/        # Assets públicos site
+│   └── package.json   # Dependências site
+├── scripts/           # Scripts de deploy e automação
 ├── .git/              # Controle de versão
 └── CLAUDE.md          # Este arquivo
 ```
@@ -175,3 +200,4 @@ taskkill /f /im node.exe
 - `.easypanel.yml` - Configuração dos serviços (com branches independentes)
 - `DEPLOY-INDEPENDENTE.md` - Guia completo do novo sistema de deploy
 - `/scripts/` - Scripts de deploy e rollback
+- Sempre responda em portugues br. Sempre analise todo o contexto da aplicação antes de alterar o código, para evitar desfazer partes importantes que já estão funcionando e evitar loop de desenvolvimento

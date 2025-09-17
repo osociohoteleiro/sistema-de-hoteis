@@ -34,7 +34,11 @@
       "Bash(git rm:*)",
       "Bash(del nul)",
       "Bash(./scripts/deploy-pms.sh:*)",
-      "Bash(./scripts/deploy-extrator.sh:*)"
+      "Bash(./scripts/deploy-extrator.sh:*)",
+      "Bash(dir:*)",
+      "Bash(del \"D:\\APPS-OSH\\test-linux-spawn.js\")",
+      "Bash(PORT=3001 npm run dev)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

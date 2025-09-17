@@ -89,20 +89,20 @@ class DatabaseIntegration {
 
   /**
    * Busca searches PENDING no banco de dados
-   * @param {string} hotelId - Filtrar por hotel específico (opcional)
+   * @param {string} hotelUuid - Filtrar por hotel específico usando UUID (opcional)
    * @param {string} searchIds - IDs específicos de buscas separados por vírgula (opcional)
    */
-  async getPendingSearches(hotelId = null, searchIds = null) {
+  async getPendingSearches(hotelUuid = null, searchIds = null) {
     try {
       await this.ensureConnection();
       let whereConditions = ["rs.status = 'PENDING'"];
       let queryParams = [];
       let paramCounter = 1;
 
-      // Filtro por hotel específico
-      if (hotelId) {
-        whereConditions.push(`rs.hotel_id = $${paramCounter++}`);
-        queryParams.push(parseInt(hotelId));
+      // Filtro por hotel específico usando UUID
+      if (hotelUuid) {
+        whereConditions.push(`h.hotel_uuid = $${paramCounter++}`);
+        queryParams.push(hotelUuid);
       }
 
       // Filtro por IDs específicos de buscas
@@ -115,7 +115,7 @@ class DatabaseIntegration {
       }
 
       const query = `
-        SELECT 
+        SELECT
           rs.id,
           rs.uuid,
           rs.hotel_id,
@@ -126,7 +126,8 @@ class DatabaseIntegration {
           rsp.property_name,
           rsp.booking_url,
           rsp.max_bundle_size,
-          h.name as hotel_name
+          h.name as hotel_name,
+          h.hotel_uuid
         FROM rate_shopper_searches rs
         JOIN rate_shopper_properties rsp ON rs.property_id = rsp.id
         JOIN hotels h ON rs.hotel_id = h.id
@@ -138,7 +139,7 @@ class DatabaseIntegration {
       const result = await this.pool.query(query, queryParams);
       const rows = result.rows;
 
-      logger.info(`Found ${rows.length} pending searches${hotelId ? ` for hotel ${hotelId}` : ''}${searchIds ? ` with IDs ${searchIds}` : ''}`);
+      logger.info(`Found ${rows.length} pending searches${hotelUuid ? ` for hotel UUID ${hotelUuid}` : ''}${searchIds ? ` with IDs ${searchIds}` : ''}`);
       return rows;
     } catch (error) {
       logger.error('Failed to get pending searches', { error: error.message });
@@ -412,7 +413,8 @@ class DatabaseIntegration {
       start_date: this.formatDate(dbSearch.start_date),
       end_date: this.formatDate(dbSearch.end_date),
       max_bundle_size: dbSearch.max_bundle_size || 7,
-      hotel_id: dbSearch.hotel_id,
+      hotel_id: dbSearch.hotel_id, // Manter para compatibilidade do extrator
+      hotel_uuid: dbSearch.hotel_uuid, // Adicionar UUID para uso nas APIs
       property_id: dbSearch.property_id
     };
   }
@@ -430,7 +432,7 @@ class DatabaseIntegration {
       if (typeof date === 'string') {
         return new Date(date).toISOString().split('T')[0];
       }
-      // Se for timestamp do mysql
+      // Se for timestamp do banco
       if (typeof date === 'object' && date.toString) {
         return new Date(date).toISOString().split('T')[0];
       }
@@ -443,8 +445,13 @@ class DatabaseIntegration {
 
   /**
    * Atualiza o progresso da extração via API
+   * @param {number} searchId - ID da busca
+   * @param {string} hotelUuid - UUID do hotel (sempre usar UUID, nunca ID numérico)
+   * @param {number} processedDates - Datas processadas
+   * @param {number} totalDates - Total de datas
+   * @param {number} totalPricesFound - Total de preços encontrados (opcional)
    */
-  async updateExtractionProgress(searchId, hotelId, processedDates, totalDates, totalPricesFound = null) {
+  async updateExtractionProgress(searchId, hotelUuid, processedDates, totalDates, totalPricesFound = null) {
     const apiUrl = getApiUrl();
     const progressData = {
       processed_dates: processedDates
@@ -453,14 +460,14 @@ class DatabaseIntegration {
     if (totalPricesFound !== null) {
       progressData.total_prices_found = totalPricesFound;
     }
-    
+
     try {
 
-      // Debug da requisição
-      const url = `${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`;
-      console.log(`🔍 Debug API Call:`);
+      // Debug da requisição (agora usando UUID)
+      const url = `${apiUrl}/api/rate-shopper/${hotelUuid}/searches/${searchId}/progress`;
+      console.log(`🔍 Debug API Call [UUID Mode]:`);
       console.log(`   URL: ${url}`);
-      console.log(`   Hotel ID: ${hotelId} (${typeof hotelId})`);
+      console.log(`   Hotel UUID: ${hotelUuid} (${typeof hotelUuid})`);
       console.log(`   Search ID: ${searchId} (${typeof searchId})`);
       console.log(`   Payload:`, JSON.stringify(progressData, null, 2));
 
@@ -470,25 +477,25 @@ class DatabaseIntegration {
         },
         timeout: 10000
       });
-      
+
       console.log(`📡 Progresso atualizado via API: ${processedDates}/${totalDates} datas`);
-      logger.info('Progress updated via API', { searchId, hotelId, processedDates, totalDates, totalPricesFound });
+      logger.info('Progress updated via API', { searchId, hotelUuid, processedDates, totalDates, totalPricesFound });
     } catch (error) {
-      logger.error('Failed to update progress via API', { 
-        searchId, 
-        hotelId, 
-        processedDates, 
+      logger.error('Failed to update progress via API', {
+        searchId,
+        hotelUuid,
+        processedDates,
         totalDates,
         error: error.message,
         response: error.response?.data,
         status: error.response?.status,
-        url: `${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`,
+        url: `${apiUrl}/api/rate-shopper/${hotelUuid}/searches/${searchId}/progress`,
         payload: progressData
       });
       console.log(`⚠️  Erro ao atualizar progresso via API: ${error.message}`);
       if (error.response) {
         console.log(`📊 Status: ${error.response.status}`);
-        console.log(`📊 URL: ${apiUrl}/api/rate-shopper/${hotelId}/searches/${searchId}/progress`);
+        console.log(`📊 URL: ${apiUrl}/api/rate-shopper/${hotelUuid}/searches/${searchId}/progress`);
         console.log(`📊 Payload:`, JSON.stringify(progressData, null, 2));
         console.log(`📊 Response:`, JSON.stringify(error.response.data, null, 2));
       }

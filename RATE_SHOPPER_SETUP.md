@@ -39,7 +39,7 @@ O Rate Shopper foi completamente implementado e está pronto para uso. Aqui est�
 
 ### 1. **Executar Migração do Banco**
 ```sql
--- Execute no seu banco MariaDB
+-- Execute no seu banco PostgreSQL
 source api/migrations/007_rate_shopper_tables.sql;
 ```
 

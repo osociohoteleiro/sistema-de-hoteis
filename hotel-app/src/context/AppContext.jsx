@@ -29,7 +29,7 @@ const DEFAULT_CONFIG = {
     deleteMessage: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/delete_marketing_message' // DELETE /marketing/messages/{id}
   },
   botFieldsEndpoints: {
-    getBotFields: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/05e590dd-8185-424b-9658-d839ca38c481/lista_botfields_onenode_mysql/:hotel_uuid', // GET /bot-fields/{hotel_uuid}
+    getBotFields: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/05e590dd-8185-424b-9658-d839ca38c481/lista_botfields_onenode/:hotel_uuid', // GET /bot-fields/{hotel_uuid}
     updateBotFields: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/atualiza_botfields_no_onenode', // POST /bot-fields/update
     updateAllBotFields: 'https://osh-ia-n8n.d32pnk.easypanel.host/webhook/atualiza_botfields_no_onenode' // POST /bot-fields/update-all
   },
