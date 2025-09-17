@@ -20,7 +20,9 @@ import {
   Building,
   Settings,
   X,
-  Trash
+  Trash,
+  StopCircle,
+  RotateCcw
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import NewSearchModal from './NewSearchModal';
@@ -646,7 +648,8 @@ const RateShopperDashboard = () => {
     }
   };
 
-  const handleStopExtraction = async (search) => {
+  // Função para pausar extração (para ser retomada depois)
+  const handlePauseExtraction = async (search) => {
     const confirmed = await new Promise((resolve) => {
       setConfirmModal({
         isOpen: true,
@@ -655,6 +658,66 @@ const RateShopperDashboard = () => {
         message: `Deseja pausar a extração de "${search.property_name}"? Os preços já coletados (${search.total_prices_found || 0}) serão preservados e a extração poderá ser retomada a partir de onde parou.`,
         confirmText: 'Pausar Extração',
         cancelText: 'Continuar Extração',
+        onConfirm: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const response = await apiService.request(`/rate-shopper-extraction/${selectedHotelUuid}/pause-extraction`, {
+        method: 'POST'
+      });
+
+      if (response.success) {
+        setNotification({
+          type: 'success',
+          title: 'Extração Pausada',
+          message: `A extração de "${search.property_name}" foi pausada com sucesso. Progresso preservado: ${response.data.progress_preserved}/${response.data.total_dates} datas.`
+        });
+
+        // Atualizar status da busca na lista local
+        setDashboardData(prevData => ({
+          ...prevData,
+          recent_searches: prevData.recent_searches.map(s =>
+            s.id === search.id
+              ? { ...s, status: 'PAUSED', can_be_resumed: true, progress_preserved: response.data.progress_preserved }
+              : s
+          )
+        }));
+
+        // Atualizar dashboard após pausa
+        setTimeout(() => {
+          loadDashboardData();
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error pausing extraction:', error);
+      setNotification({
+        type: 'error',
+        title: 'Erro ao Pausar Extração',
+        message: error.response?.data?.error || error.error || 'Ocorreu um erro inesperado'
+      });
+    }
+  };
+
+  // Função para cancelar extração definitivamente
+  const handleCancelExtraction = async (search) => {
+    const confirmed = await new Promise((resolve) => {
+      setConfirmModal({
+        isOpen: true,
+        type: 'danger',
+        title: 'Cancelar Extração',
+        message: `Deseja cancelar definitivamente a extração de "${search.property_name}"? Esta ação irá interromper permanentemente a extração. Os preços já coletados (${search.total_prices_found || 0}) serão mantidos.`,
+        confirmText: 'Cancelar Definitivamente',
+        cancelText: 'Manter Executando',
         onConfirm: () => {
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
           resolve(true);
@@ -681,39 +744,100 @@ const RateShopperDashboard = () => {
             title: 'Extrações Órfãs Limpas',
             message: `${response.data.stale_extractions_cleaned} extrações órfãs foram detectadas e limpas automaticamente. A página será recarregada.`
           });
-          
-          // Recarregar imediatamente para mostrar o estado limpo
+
           setTimeout(() => {
             loadDashboardData();
           }, 1000);
-        } else {
-          setNotification({
-            type: 'success',
-            title: 'Extração Pausada!',
-            message: `Extração de ${search.property_name} pausada. ${search.total_prices_found || 0} preços coletados foram preservados. Você pode retomar a extração a partir de onde parou.`
-          });
-          
-          // FORÇAR ATUALIZAÇÃO IMEDIATA do status local
-          setDashboardData(prevData => ({
-            ...prevData,
-            recent_searches: prevData.recent_searches.map(s => 
-              s.id === search.id 
-                ? { ...s, status: 'CANCELLED' }
-                : s
-            )
-          }));
-          
-          // Recarregar dados do servidor para confirmar
-          setTimeout(() => {
-            loadDashboardData();
-          }, 500);
+          return;
         }
+
+        setNotification({
+          type: 'success',
+          title: 'Extração Cancelada',
+          message: `A extração de "${search.property_name}" foi cancelada definitivamente.`
+        });
+
+        // Atualizar status da busca na lista local
+        setDashboardData(prevData => ({
+          ...prevData,
+          recent_searches: prevData.recent_searches.map(s =>
+            s.id === search.id
+              ? { ...s, status: 'CANCELLED' }
+              : s
+          )
+        }));
+
+        // Atualizar dashboard após cancelamento
+        setTimeout(() => {
+          loadDashboardData();
+        }, 500);
       }
     } catch (error) {
-      console.error('Error stopping extraction:', error);
+      console.error('Error cancelling extraction:', error);
       setNotification({
         type: 'error',
-        title: 'Erro ao Pausar Extração',
+        title: 'Erro ao Cancelar Extração',
+        message: error.response?.data?.error || error.error || 'Ocorreu um erro inesperado'
+      });
+    }
+  };
+
+  // Função para retomar extração pausada
+  const handleResumeExtraction = async (search) => {
+    const confirmed = await new Promise((resolve) => {
+      setConfirmModal({
+        isOpen: true,
+        type: 'info',
+        title: 'Retomar Extração',
+        message: `Deseja retomar a extração de "${search.property_name}"? A extração continuará de onde parou (${search.processed_dates || 0}/${search.total_dates} datas já processadas).`,
+        confirmText: 'Retomar Extração',
+        cancelText: 'Manter Pausada',
+        onConfirm: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(true);
+        },
+        onCancel: () => {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          resolve(false);
+        }
+      });
+    });
+
+    if (!confirmed) return;
+
+    try {
+      const response = await apiService.request(`/rate-shopper-extraction/${selectedHotelUuid}/resume-extraction`, {
+        method: 'POST'
+      });
+
+      if (response.success) {
+        setNotification({
+          type: 'success',
+          title: 'Extração Retomada',
+          message: `A extração de "${search.property_name}" foi retomada com sucesso. Continuando de onde parou.`
+        });
+
+        // Atualizar status da busca na lista local
+        setDashboardData(prevData => ({
+          ...prevData,
+          recent_searches: prevData.recent_searches.map(s =>
+            s.id === search.id
+              ? { ...s, status: 'RUNNING', can_be_paused: true, resume_mode: true }
+              : s
+          )
+        }));
+
+        // Atualizar dashboard e iniciar polling de progresso
+        setTimeout(() => {
+          loadDashboardData();
+          startProgressPolling();
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error resuming extraction:', error);
+      setNotification({
+        type: 'error',
+        title: 'Erro ao Retomar Extração',
         message: error.response?.data?.error || error.error || 'Ocorreu um erro inesperado'
       });
     }
@@ -1447,10 +1571,11 @@ const RateShopperDashboard = () => {
                           ? 'bg-orange-100 text-orange-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
-                        {search.status === 'RUNNING' ? '🔄 Executando' : 
+                        {search.status === 'RUNNING' ? '🔄 Executando' :
                          search.status === 'COMPLETED' ? '✅ Concluída' :
                          search.status === 'FAILED' ? '❌ Erro' :
-                         search.status === 'CANCELLED' ? '⏸️ Pausada' :
+                         search.status === 'PAUSED' ? '⏸️ Pausada' :
+                         search.status === 'CANCELLED' ? '🚫 Cancelada' :
                          '⏳ Pendente'}
                       </span>
                       
@@ -1477,34 +1602,84 @@ const RateShopperDashboard = () => {
                         )}
                         
                         {search.status === 'RUNNING' && (
-                          <button
-                            onClick={() => handleStopExtraction(search)}
-                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
-                          >
-                            <Pause className="h-3 w-3 mr-1" />
-                            Pausar
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handlePauseExtraction(search)}
+                              className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-yellow-600 rounded-md hover:bg-yellow-700"
+                              title="Pausar extração temporariamente (pode ser retomada)"
+                            >
+                              <Pause className="h-3 w-3 mr-1" />
+                              Pausar
+                            </button>
+                            <button
+                              onClick={() => handleCancelExtraction(search)}
+                              className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                              title="Cancelar extração definitivamente"
+                            >
+                              <StopCircle className="h-3 w-3 mr-1" />
+                              Cancelar
+                            </button>
+                          </>
                         )}
                         
-                        {(search.status === 'FAILED' || search.status === 'CANCELLED') && (
+                        {search.status === 'PAUSED' && (
                           <button
-                            onClick={() => handleStartExtraction(search)}
+                            onClick={() => handleResumeExtraction(search)}
                             disabled={startingExtractions.has(search.id)}
                             className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                            title={search.status === 'CANCELLED' 
-                              ? `Retomar extração a partir de onde parou (${search.total_prices_found || 0} preços já coletados)`
-                              : 'Tentar novamente a extração completa'
-                            }
+                            title={`Retomar extração de onde parou (${search.processed_dates || 0}/${search.total_dates} datas processadas)`}
                           >
                             {startingExtractions.has(search.id) ? (
                               <>
                                 <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
-                                {search.status === 'CANCELLED' ? 'Retomando...' : 'Reiniciando...'}
+                                Retomando...
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw className="h-3 w-3 mr-1" />
+                                Retomar de onde parou
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {search.status === 'FAILED' && (
+                          <button
+                            onClick={() => handleStartExtraction(search)}
+                            disabled={startingExtractions.has(search.id)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 disabled:opacity-50"
+                            title="Tentar novamente a extração completa"
+                          >
+                            {startingExtractions.has(search.id) ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                                Reiniciando...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-3 w-3 mr-1" />
+                                Tentar Novamente
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {search.status === 'CANCELLED' && (
+                          <button
+                            onClick={() => handleStartExtraction(search)}
+                            disabled={startingExtractions.has(search.id)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-white bg-gray-600 rounded-md hover:bg-gray-700 disabled:opacity-50"
+                            title="Reiniciar extração completa (cancelada anteriormente)"
+                          >
+                            {startingExtractions.has(search.id) ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                                Reiniciando...
                               </>
                             ) : (
                               <>
                                 <Play className="h-3 w-3 mr-1" />
-                                {search.status === 'CANCELLED' ? 'Retomar de onde parou' : 'Tentar Novamente'}
+                                Reiniciar Extração
                               </>
                             )}
                           </button>

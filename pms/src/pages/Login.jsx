@@ -3,12 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { API_BASE_URL } from '../config/environment';
+import apiService from '../services/api';
 import toast from 'react-hot-toast';
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, loading } = useAuth();
+  const { login, isAuthenticated, loading, apiConnected } = useAuth();
   const { config, selectedHotelUuid, updateFavicon, updatePageTitle } = useApp();
   
   const [formData, setFormData] = useState({
@@ -21,38 +22,51 @@ const Login = () => {
     app_title: 'PMS - Sistema de Gestão Hoteleira',
     logo_url: null
   });
+  const [checkingApi, setCheckingApi] = useState(true);
 
-  // Buscar configurações da aplicação PMS (rota pública)
+  // Verificar conectividade com a API e buscar configurações
   useEffect(() => {
-    const fetchAppConfig = async () => {
+    const checkApiConnection = async () => {
+      setCheckingApi(true);
       try {
-        // Incluir hotel_id se disponível para buscar configuração específica do hotel
-        const url = selectedHotelUuid 
-          ? `${API_BASE_URL}/app-configurations/public/pms?hotel_id=${selectedHotelUuid}`
-          : `${API_BASE_URL}/app-configurations/public/pms`;
-        
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          setAppConfig(data);
-          
-          // Atualizar favicon se disponível
-          if (data.favicon_url) {
-            updateFavicon(data.favicon_url);
+        await apiService.healthCheck();
+
+        // Se conectou com sucesso, buscar configurações
+        try {
+          const url = selectedHotelUuid
+            ? `${API_BASE_URL}/app-configurations/public/pms?hotel_id=${selectedHotelUuid}`
+            : `${API_BASE_URL}/app-configurations/public/pms`;
+
+          const response = await fetch(url);
+          if (response.ok) {
+            const data = await response.json();
+            setAppConfig(data);
+
+            // Atualizar favicon se disponível
+            if (data.favicon_url) {
+              updateFavicon(data.favicon_url);
+            }
+
+            // Atualizar título da página se disponível
+            if (data.app_title) {
+              updatePageTitle(data.app_title);
+            }
           }
-          
-          // Atualizar título da página se disponível
-          if (data.app_title) {
-            updatePageTitle(data.app_title);
-          }
+        } catch (configError) {
+          // Falha ao buscar configurações, mas API está online
         }
       } catch (error) {
-        // Error fetching app configuration - silently handle
+        // Erro de conectividade será tratado pelo AuthContext
+      } finally {
+        setCheckingApi(false);
       }
     };
 
     if (config.apiBaseUrl) {
-      fetchAppConfig();
+      checkApiConnection();
+
+      // Verificação única no carregamento da página
+      // O monitoramento contínuo será feito pelo AuthContext
     }
   }, [config.apiBaseUrl, selectedHotelUuid]);
 
@@ -77,6 +91,12 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
+      // Verificar se API está conectada antes de tentar login
+      if (!apiConnected) {
+        toast.error('API não está disponível. Verifique sua conexão ou tente novamente em alguns instantes.');
+        return;
+      }
+
       // Validação básica
       if (!formData.email || !formData.password) {
         toast.error('Por favor, preencha todos os campos');
@@ -89,10 +109,10 @@ const Login = () => {
       }
 
       const result = await login(formData.email, formData.password);
-      
+
       if (result.success) {
         toast.success(`Bem-vindo ao PMS, ${result.user.name}!`);
-        
+
         // Delay para garantir que o Header carregue os hotéis
         setTimeout(() => {
           const from = location.state?.from?.pathname || '/';
@@ -221,6 +241,37 @@ const Login = () => {
             </p>
           </div>
 
+          {/* Alerta de API desconectada */}
+          {!checkingApi && !apiConnected && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">
+                    API não disponível
+                  </h3>
+                  <div className="mt-1 text-sm text-red-700">
+                    <p>Não foi possível conectar com o servidor. Verifique se a API está rodando e tente novamente.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Status de conectividade - apenas quando desconectada */}
+          {!checkingApi && !apiConnected && (
+            <div className="mb-4 flex items-center justify-center">
+              <div className="flex items-center text-sm text-red-600">
+                <div className="w-2 h-2 rounded-full mr-2 bg-red-500"></div>
+                API Desconectada
+              </div>
+            </div>
+          )}
+
           {/* Formulário de Login */}
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-elegant border border-slate-200/60 p-8">
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -281,14 +332,21 @@ const Login = () => {
               {/* Botão de Submit */}
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !apiConnected}
                 className="w-full bg-primary-600 hover:bg-primary-500 disabled:bg-primary-800 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center shadow-sm hover:shadow-md"
               >
-                {isSubmitting ? (
+                {checkingApi ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    Verificando API...
+                  </>
+                ) : isSubmitting ? (
                   <>
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                     Entrando...
                   </>
+                ) : !apiConnected ? (
+                  'API Desconectada'
                 ) : (
                   'Entrar no PMS'
                 )}

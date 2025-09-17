@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import apiService from '../services/api';
+import toast from 'react-hot-toast';
 
 const AuthContext = createContext();
 
@@ -180,6 +181,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [apiConnected, setApiConnected] = useState(false);
 
   // Carregar dados do usuário do localStorage na inicialização
   useEffect(() => {
@@ -205,6 +207,38 @@ export const AuthProvider = ({ children }) => {
     
     setLoading(false);
   }, []);
+
+  // Monitorar conectividade da API
+  useEffect(() => {
+    const checkApiConnection = async () => {
+      try {
+        await apiService.healthCheck();
+
+        // API está conectada
+        setApiConnected(true);
+      } catch (error) {
+        // API está desconectada
+        setApiConnected(false);
+
+        if (isAuthenticated) {
+          toast.error('Conexão com a API perdida. Redirecionando para login...');
+
+          // Fazer logout automático
+          setTimeout(() => {
+            logout();
+          }, 2000);
+        }
+      }
+    };
+
+    // Verificação inicial
+    checkApiConnection();
+
+    // Verificar a cada 30 segundos
+    const interval = setInterval(checkApiConnection, 30000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   // Função de login  
   const login = async (email, password) => {
@@ -248,7 +282,8 @@ export const AuthProvider = ({ children }) => {
           
           setUser(userData);
           setIsAuthenticated(true);
-          
+          setApiConnected(true); // API está conectada após login bem-sucedido
+
           return { success: true, user: userData, hotels: apiResponse.hotels };
         }
       } catch (apiError) {
@@ -275,7 +310,8 @@ export const AuthProvider = ({ children }) => {
         
         setUser(fallbackUser);
         setIsAuthenticated(true);
-        
+        setApiConnected(false); // Fallback indica que API não está disponível
+
         return { success: true, user: fallbackUser };
       }
       
@@ -301,6 +337,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('authToken');
     setUser(null);
     setIsAuthenticated(false);
+    setApiConnected(false);
   };
 
   // Verificar se usuário tem uma permissão específica
@@ -382,11 +419,12 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     isAuthenticated,
-    
+    apiConnected,
+
     // Funções de autenticação
     login,
     logout,
-    
+
     // Funções de verificação de permissão
     hasPermission,
     hasAnyPermission,
@@ -394,11 +432,11 @@ export const AuthProvider = ({ children }) => {
     isSuperAdmin,
     isAdmin,
     isHotel,
-    
+
     // Funções de gerenciamento (Super Admin)
     updateUserPermissions,
     getAdminUsers,
-    
+
     // Constantes
     USER_TYPES,
     PERMISSIONS,
