@@ -38,7 +38,18 @@
       "Bash(dir:*)",
       "Bash(del \"D:\\APPS-OSH\\test-linux-spawn.js\")",
       "Bash(PORT=3001 npm run dev)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git pull:*)",
+      "Bash(npm run:*)",
+      "Bash(PORT=3002 npm start)",
+      "Bash(git fetch:*)",
+      "Bash(git restore:*)",
+      "Bash(start http://localhost:5175/rate-shopper)",
+      "Bash(timeout 3s npm run dev)",
+      "Bash(tasklist:*)",
+      "Bash(powershell:*)",
+      "Bash(timeout 10s curl -X GET \"http://localhost:3001/api/rate-shopper-extraction/3e74f4e5-8763-11f0-bd40-02420a0b00b1/extraction-status\")",
+      "Bash(start http://localhost:5175)"
     ],
     "deny": [],
     "ask": []

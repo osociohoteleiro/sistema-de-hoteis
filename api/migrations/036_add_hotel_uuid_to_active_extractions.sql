@@ -24,7 +24,7 @@ BEGIN
 
         -- Popular com UUIDs dos hotéis existentes baseado no hotel_id
         UPDATE active_extractions
-        SET hotel_uuid = h.uuid
+        SET hotel_uuid = h.hotel_uuid
         FROM hotels h
         WHERE active_extractions.hotel_id = h.id
         AND active_extractions.hotel_uuid IS NULL;
