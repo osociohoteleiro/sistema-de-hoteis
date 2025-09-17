@@ -13,8 +13,8 @@ console.log('=' * 50);
 process.env.NODE_ENV = 'production';
 process.env.HEADLESS = 'true';
 
-// Garantir que variáveis de banco estejam definidas
-const requiredEnvVars = [
+// Verificar variáveis de banco (OPCIONAIS - adaptativo para produção sem config explícita)
+const preferredEnvVars = [
   'POSTGRES_HOST',
   'POSTGRES_PORT',
   'POSTGRES_DB',
@@ -22,30 +22,34 @@ const requiredEnvVars = [
   'POSTGRES_PASSWORD'
 ];
 
-console.log('🔧 Verificando variáveis de ambiente:');
+console.log('🔧 Verificando variáveis de ambiente (opcionais):');
 let missingVars = [];
+let hasAnyDbVar = false;
 
-requiredEnvVars.forEach(varName => {
+preferredEnvVars.forEach(varName => {
   const value = process.env[varName];
   if (value) {
+    hasAnyDbVar = true;
     // Não mostrar password completa
     const displayValue = varName.includes('PASSWORD') ?
       `${value.substring(0, 3)}***${value.substring(value.length - 3)}` :
       value;
     console.log(`   ✅ ${varName}: ${displayValue}`);
   } else {
-    console.log(`   ❌ ${varName}: NOT SET`);
+    console.log(`   ⚠️  ${varName}: NOT SET (usando detecção automática)`);
     missingVars.push(varName);
   }
 });
 
 if (missingVars.length > 0) {
-  console.error('\n❌ ERRO: Variáveis de ambiente obrigatórias não definidas:');
-  missingVars.forEach(varName => {
-    console.error(`   - ${varName}`);
-  });
-  console.error('\nDefina essas variáveis antes de executar o extrator.');
-  process.exit(1);
+  if (hasAnyDbVar) {
+    console.log('\n⚠️  AVISO: Algumas variáveis de banco não definidas, mas continuando...');
+    console.log('   O extrator tentará usar detecção automática de ambiente.');
+  } else {
+    console.log('\n🔄 INFO: Nenhuma variável de banco explícita encontrada.');
+    console.log('   Modo adaptativo: usando detecção automática de ambiente.');
+    console.log('   Isso é normal em produções como EasyPanel que fazem linking automático.');
+  }
 }
 
 // Verificar Chromium
@@ -70,7 +74,57 @@ console.log('');
 
 // Iniciar auto-processor
 try {
-  require('./src/auto-processor.js');
+  const AutoProcessor = require('./src/auto-processor.js');
+
+  // Configurar intervalo baseado no ambiente
+  const isProduction = process.env.NODE_ENV === 'production';
+  const interval = parseInt(process.env.AUTO_PROCESSOR_INTERVAL) || (isProduction ? 60 : 30);
+
+  console.log(`⏰ Configurando intervalo: ${interval}s (${isProduction ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'})`);
+
+  // Instanciar e iniciar auto-processor
+  const autoProcessor = new AutoProcessor(interval);
+
+  // Iniciar o auto-processador
+  autoProcessor.start().then(success => {
+    if (!success) {
+      console.error('💥 Falha ao iniciar auto-processador');
+      process.exit(1);
+    }
+
+    console.log(`🚀 Auto-processador iniciado com sucesso em modo ${isProduction ? 'PRODUÇÃO' : 'DESENVOLVIMENTO'}`);
+    console.log(`⏰ Intervalo configurado: ${interval}s`);
+    console.log(`🔄 Processamento automático ativo`);
+
+  }).catch((error) => {
+    console.error('💥 Erro fatal no auto-processador:', error);
+    console.error('Stack:', error.stack);
+    process.exit(1);
+  });
+
+  // Tratamento de sinais para parar graciosamente
+  let isShuttingDown = false;
+
+  const gracefulShutdown = (signal) => {
+    if (isShuttingDown) {
+      console.log(`\n🔴 Forçando saída (${signal})...`);
+      process.exit(1);
+    }
+
+    isShuttingDown = true;
+    console.log(`\n🛑 Recebido ${signal}, parando auto-processador graciosamente...`);
+
+    autoProcessor.stop();
+
+    setTimeout(() => {
+      console.log('✅ Auto-processador parado. Saindo...');
+      process.exit(0);
+    }, 2000);
+  };
+
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
 } catch (error) {
   console.error('💥 ERRO FATAL ao iniciar auto-processor:', error.message);
   console.error('Stack:', error.stack);

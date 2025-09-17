@@ -49,7 +49,11 @@
       "Bash(tasklist:*)",
       "Bash(powershell:*)",
       "Bash(timeout 10s curl -X GET \"http://localhost:3001/api/rate-shopper-extraction/3e74f4e5-8763-11f0-bd40-02420a0b00b1/extraction-status\")",
-      "Bash(start http://localhost:5175)"
+      "Bash(start http://localhost:5175)",
+      "Bash(git config:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git log:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []
