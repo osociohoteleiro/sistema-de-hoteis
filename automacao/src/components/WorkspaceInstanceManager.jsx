@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import InstanceStatusIndicator from './InstanceStatusIndicator';
+import QRCodeModal from './QRCodeModal';
+import ConfirmationModal from './ConfirmationModal';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -9,6 +11,7 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
   const [data, setData] = useState({
     instances: [],
     linkedInstances: [],
+    linkedInstancesData: [], // Array completo com custom_name
     loading: true,
     saving: false
   });
@@ -17,6 +20,28 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
     search: '',
     statusFilter: 'all', // 'all', 'online', 'offline', 'linked', 'unlinked'
     sortBy: 'name' // 'name', 'status', 'linked'
+  });
+
+  const [qrModal, setQrModal] = useState({
+    isOpen: false,
+    instanceName: null
+  });
+
+  const [editingCustomName, setEditingCustomName] = useState({
+    instanceName: null,
+    value: '',
+    saving: false
+  });
+
+  const [confirmationModal, setConfirmationModal] = useState({
+    isOpen: false,
+    type: 'warning',
+    title: '',
+    message: '',
+    instanceName: '',
+    action: null,
+    confirmText: 'Confirmar',
+    cancelText: 'Cancelar'
   });
 
   useEffect(() => {
@@ -39,6 +64,7 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
       setData({
         instances,
         linkedInstances: linkedNames,
+        linkedInstancesData: linked, // Dados completos incluindo custom_name
         loading: false,
         saving: false
       });
@@ -49,7 +75,64 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
     }
   };
 
-  const handleInstanceToggle = async (instanceName) => {
+  const showConfirmation = (type, title, message, instanceName, action, confirmText = 'Confirmar') => {
+    setConfirmationModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      instanceName,
+      action,
+      confirmText,
+      cancelText: 'Cancelar'
+    });
+  };
+
+  const hideConfirmation = () => {
+    setConfirmationModal({
+      isOpen: false,
+      type: 'warning',
+      title: '',
+      message: '',
+      instanceName: '',
+      action: null,
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar'
+    });
+  };
+
+  const handleConfirmAction = async () => {
+    if (confirmationModal.action) {
+      await confirmationModal.action();
+    }
+    hideConfirmation();
+  };
+
+  const handleInstanceToggle = (instanceName) => {
+    const isLinked = data.linkedInstances.includes(instanceName);
+
+    if (isLinked) {
+      showConfirmation(
+        'warning',
+        'Desvincular Instância',
+        `Tem certeza que deseja desvincular a instância "${instanceName}" deste workspace? Esta ação removerá a vinculação, mas não afetará a configuração da instância.`,
+        instanceName,
+        () => performInstanceToggle(instanceName),
+        'Desvincular'
+      );
+    } else {
+      showConfirmation(
+        'info',
+        'Vincular Instância',
+        `Deseja vincular a instância "${instanceName}" a este workspace? Isso permitirá que as mensagens desta instância apareçam no chat ao vivo.`,
+        instanceName,
+        () => performInstanceToggle(instanceName),
+        'Vincular'
+      );
+    }
+  };
+
+  const performInstanceToggle = async (instanceName) => {
     try {
       setData(prev => ({ ...prev, saving: true }));
 
@@ -75,12 +158,114 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
         linkedInstances: isLinked
           ? prev.linkedInstances.filter(name => name !== instanceName)
           : [...prev.linkedInstances, instanceName],
+        linkedInstancesData: isLinked
+          ? prev.linkedInstancesData.filter(item => item.instance_name !== instanceName)
+          : [...prev.linkedInstancesData, { instance_name: instanceName, custom_name: null }],
         saving: false
       }));
     } catch (error) {
       console.error('Erro ao alterar vínculo:', error);
       toast.error(`Erro ao ${data.linkedInstances.includes(instanceName) ? 'desvincular' : 'vincular'} instância`);
       setData(prev => ({ ...prev, saving: false }));
+    }
+  };
+
+  const handleConnectInstance = (instanceName) => {
+    setQrModal({
+      isOpen: true,
+      instanceName
+    });
+  };
+
+  const handleDisconnectInstance = (instanceName) => {
+    showConfirmation(
+      'danger',
+      'Desconectar WhatsApp',
+      `Tem certeza que deseja desconectar a instância "${instanceName}" do WhatsApp? Esta ação encerrará a sessão ativa e será necessário escanear o QR Code novamente para reconectar.`,
+      instanceName,
+      () => performDisconnectInstance(instanceName),
+      'Desconectar'
+    );
+  };
+
+  const performDisconnectInstance = async (instanceName) => {
+    try {
+      setData(prev => ({ ...prev, saving: true }));
+
+      const response = await axios.delete(`${API_BASE_URL}/evolution/instances/${instanceName}`);
+
+      if (response.data.success) {
+        toast.success(`Instância ${instanceName} desconectada com sucesso`);
+        // Recarregar dados para atualizar status
+        await loadData();
+      } else {
+        throw new Error('Falha ao desconectar instância');
+      }
+    } catch (error) {
+      console.error('Erro ao desconectar instância:', error);
+      toast.error(`Erro ao desconectar instância: ${error.message}`);
+    } finally {
+      setData(prev => ({ ...prev, saving: false }));
+    }
+  };
+
+  const handleCloseQrModal = () => {
+    setQrModal({
+      isOpen: false,
+      instanceName: null
+    });
+  };
+
+  const getInstanceCustomName = (instanceName) => {
+    const linkedData = data.linkedInstancesData.find(item => item.instance_name === instanceName);
+    return linkedData?.custom_name || '';
+  };
+
+  const handleStartEditCustomName = (instanceName) => {
+    const currentCustomName = getInstanceCustomName(instanceName);
+    setEditingCustomName({
+      instanceName,
+      value: currentCustomName,
+      saving: false
+    });
+  };
+
+  const handleCancelEditCustomName = () => {
+    setEditingCustomName({
+      instanceName: null,
+      value: '',
+      saving: false
+    });
+  };
+
+  const handleSaveCustomName = async () => {
+    if (!editingCustomName.instanceName) return;
+
+    try {
+      setEditingCustomName(prev => ({ ...prev, saving: true }));
+
+      await axios.put(
+        `${API_BASE_URL}/workspace-instances/${workspaceUuid}/${editingCustomName.instanceName}/custom-name`,
+        { custom_name: editingCustomName.value.trim() || null }
+      );
+
+      // Atualizar estado local após sucesso da API
+      setData(prev => ({
+        ...prev,
+        linkedInstancesData: prev.linkedInstancesData.map(item =>
+          item.instance_name === editingCustomName.instanceName
+            ? { ...item, custom_name: editingCustomName.value.trim() || null }
+            : item
+        )
+      }));
+
+      toast.success('Nome personalizado atualizado com sucesso');
+      handleCancelEditCustomName();
+
+    } catch (error) {
+      console.error('Erro ao salvar nome personalizado:', error);
+      toast.error('Erro ao salvar nome personalizado');
+      setEditingCustomName(prev => ({ ...prev, saving: false }));
     }
   };
 
@@ -97,6 +282,11 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
       // Filtro de status
       if (filters.statusFilter === 'linked' && !isLinked) return false;
       if (filters.statusFilter === 'unlinked' && isLinked) return false;
+
+      // Filtros de conexão online/offline
+      const isConnected = instance.connectionStatus === 'open';
+      if (filters.statusFilter === 'online' && !isConnected) return false;
+      if (filters.statusFilter === 'offline' && isConnected) return false;
 
       return true;
     });
@@ -127,9 +317,7 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
     const total = data.instances.length;
     const linked = data.linkedInstances.length;
     const online = data.instances.filter(instance => {
-      // Mock: assumir que instâncias vinculadas estão online
-      const instanceName = instance.name || instance.instanceName;
-      return data.linkedInstances.includes(instanceName);
+      return instance.connectionStatus === 'open';
     }).length;
 
     return { total, linked, online, offline: total - online };
@@ -160,10 +348,10 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-semibold text-midnight-950">
-              Gerenciamento de Instâncias
+              Gerenciamento de Contas
             </h2>
             <p className="text-steel-600 text-sm mt-1">
-              Vincule instâncias Evolution ao workspace "{workspace?.name || 'Desconhecido'}"
+              Contas personalizadas da Workspace "{workspace?.name || 'Desconhecido'}"
             </p>
           </div>
           <button
@@ -263,6 +451,15 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
             {processedInstances.map((instance) => {
               const instanceName = instance.name || instance.instanceName;
               const isLinked = data.linkedInstances.includes(instanceName);
+              const customName = getInstanceCustomName(instanceName);
+              const displayName = customName || instanceName;
+              const isEditingThisInstance = editingCustomName.instanceName === instanceName;
+
+              // Dados da conexão WhatsApp
+              const isConnected = instance.connectionStatus === 'open';
+              const whatsappNumber = instance.number;
+              const profileName = instance.profileName;
+              const profilePicUrl = instance.profilePicUrl;
 
               return (
                 <div
@@ -274,14 +471,85 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
                   }`}
                 >
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                        isLinked ? 'bg-emerald-500' : 'bg-steel-300'
-                      }`}>
-                        <span className="text-white text-sm">📱</span>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-midnight-950 text-sm">{instanceName}</h3>
+                    <div className="flex items-center space-x-3 flex-1">
+                      {isConnected && profilePicUrl ? (
+                        <div className="w-8 h-8 rounded-lg overflow-hidden border-2 border-green-400">
+                          <img
+                            src={profilePicUrl}
+                            alt={profileName || 'Perfil WhatsApp'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                          <div className={`w-8 h-8 rounded-lg hidden items-center justify-center ${
+                            isLinked ? 'bg-emerald-500' : 'bg-steel-300'
+                          }`}>
+                            <span className="text-white text-sm">📱</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          isLinked ? 'bg-emerald-500' : 'bg-steel-300'
+                        }`}>
+                          <span className="text-white text-sm">📱</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        {/* Nome da Instância */}
+                        {isEditingThisInstance && isLinked ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={editingCustomName.value}
+                              onChange={(e) => setEditingCustomName(prev => ({ ...prev, value: e.target.value }))}
+                              placeholder="Nome personalizado..."
+                              className="w-full px-2 py-1 text-sm border border-sapphire-300 rounded focus:ring-2 focus:ring-sapphire-500 focus:border-transparent"
+                              disabled={editingCustomName.saving}
+                              autoFocus
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                onClick={handleSaveCustomName}
+                                disabled={editingCustomName.saving}
+                                className="px-2 py-1 bg-emerald-500 text-white text-xs rounded hover:bg-emerald-600 disabled:opacity-50"
+                              >
+                                {editingCustomName.saving ? '...' : '✓'}
+                              </button>
+                              <button
+                                onClick={handleCancelEditCustomName}
+                                disabled={editingCustomName.saving}
+                                className="px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:opacity-50"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-midnight-950 text-sm truncate">
+                                {displayName}
+                              </h3>
+                              {isLinked && (
+                                <button
+                                  onClick={() => handleStartEditCustomName(instanceName)}
+                                  className="text-gray-400 hover:text-sapphire-600 text-xs"
+                                  title="Editar nome personalizado"
+                                >
+                                  ✏️
+                                </button>
+                              )}
+                            </div>
+                            {/* Nome real (se diferente do personalizado) */}
+                            {customName && customName !== instanceName && (
+                              <p className="text-xs text-steel-500 truncate">
+                                Real: {instanceName}
+                              </p>
+                            )}
+                          </div>
+                        )}
                         <InstanceStatusIndicator
                           instanceName={instanceName}
                           size="sm"
@@ -293,22 +561,63 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className={`text-sm font-medium ${
-                        isLinked ? 'text-emerald-700' : 'text-steel-600'
-                      }`}>
-                        {isLinked ? '✅ Vinculada' : '➖ Não vinculada'}
-                      </span>
-                      <button
-                        onClick={() => handleInstanceToggle(instanceName)}
-                        disabled={data.saving}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
-                          isLinked
-                            ? 'bg-red-500 hover:bg-red-600 text-white'
-                            : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        {data.saving ? '...' : (isLinked ? 'Desvincular' : 'Vincular')}
-                      </button>
+                      {isConnected && whatsappNumber ? (
+                        <div className="flex-1 mr-3">
+                          <div className="text-sm font-medium text-green-700 mb-1">
+                            ✅ WhatsApp Conectado
+                          </div>
+                          <div className="text-xs text-green-600 space-y-1">
+                            <div className="font-mono">
+                              📞 {whatsappNumber.replace(/(\d{2})(\d{2})(\d{5})(\d{4})/, '+$1 ($2) $3-$4')}
+                            </div>
+                            {profileName && (
+                              <div className="truncate" title={profileName}>
+                                👤 {profileName}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex-1 mr-3">
+                          <div className="text-sm font-medium text-gray-600 mb-1">
+                            📱 WhatsApp Desconectado
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Use o botão "Conectar" para vincular uma conta WhatsApp
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        {isConnected ? (
+                          <button
+                            onClick={() => handleDisconnectInstance(instanceName)}
+                            disabled={data.saving}
+                            className="px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 bg-red-500 hover:bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Desconectar WhatsApp"
+                          >
+                            {data.saving ? '...' : '🔌 Desconectar'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleConnectInstance(instanceName)}
+                            className="px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Conectar WhatsApp (QR Code)"
+                          >
+                            📱 Conectar
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleInstanceToggle(instanceName)}
+                          disabled={data.saving}
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            isLinked
+                              ? 'bg-red-500 hover:bg-red-600 text-white'
+                              : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {data.saving ? '...' : (isLinked ? 'Desvincular' : 'Vincular')}
+                        </button>
+                      </div>
                     </div>
 
                     {isLinked && (
@@ -328,6 +637,26 @@ const WorkspaceInstanceManager = ({ workspaceUuid, workspace }) => {
           </div>
         )}
       </div>
+
+      {/* QR Code Modal */}
+      <QRCodeModal
+        isOpen={qrModal.isOpen}
+        onClose={handleCloseQrModal}
+        instanceName={qrModal.instanceName}
+      />
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmationModal.isOpen}
+        onClose={hideConfirmation}
+        onConfirm={handleConfirmAction}
+        title={confirmationModal.title}
+        message={confirmationModal.message}
+        confirmText={confirmationModal.confirmText}
+        cancelText={confirmationModal.cancelText}
+        type={confirmationModal.type}
+        instanceName={confirmationModal.instanceName}
+      />
     </div>
   );
 };

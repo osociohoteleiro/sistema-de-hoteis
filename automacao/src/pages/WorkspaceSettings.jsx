@@ -225,49 +225,6 @@ const WorkspaceSettings = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-6 shadow-blue-elegant">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Link
-                to="/workspaces"
-                className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
-              >
-                ← Voltar aos Workspaces
-              </Link>
-              <span className="text-steel-400">|</span>
-              <Link
-                to={`/workspace/${workspaceUuid}/chat-ao-vivo`}
-                className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
-              >
-                Chat ao Vivo
-              </Link>
-              <span className="text-steel-400">|</span>
-              <Link
-                to={`/workspace/${workspaceUuid}/bots`}
-                className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
-              >
-                Bots
-              </Link>
-            </div>
-            <h1 className="text-3xl font-bold text-midnight-950">
-              Configurações - {workspace?.name || 'Workspace'}
-            </h1>
-            <p className="text-steel-700 mt-2">
-              {workspace ? `Hotel: ${workspace.hotel_nome}` : 'Configure as integrações e preferências do workspace'}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-sm font-semibold">Configurações</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Gerenciamento Avançado de Instâncias */}
       <WorkspaceInstanceManager

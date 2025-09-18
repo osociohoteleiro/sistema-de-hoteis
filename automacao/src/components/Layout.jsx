@@ -2,7 +2,6 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import WorkspaceSidebar from './WorkspaceSidebar';
 import Header from './Header';
-import Breadcrumbs from './Breadcrumbs';
 import { useSidebar } from '../contexts/SidebarContext';
 
 const Layout = () => {
@@ -27,9 +26,6 @@ const Layout = () => {
       >
         {/* Header */}
         <Header />
-
-        {/* Breadcrumbs */}
-        <Breadcrumbs />
 
         {/* Page Content */}
         <main className="p-8">

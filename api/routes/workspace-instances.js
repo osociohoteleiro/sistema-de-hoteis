@@ -2,7 +2,44 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 
-console.log('🔗 Workspace-instances routes loaded');
+console.log('🔗 Workspace-instances routes loaded - UPDATED v2');
+
+/**
+ * GET /api/workspace-instances/test-migration
+ * Rota para testar e executar migração da coluna custom_name
+ */
+router.get('/test-migration', async (req, res) => {
+    try {
+        console.log('🔧 Testando migração da coluna custom_name...');
+
+        // Executar migração diretamente
+        try {
+            await db.query(`ALTER TABLE workspace_instances ADD COLUMN custom_name VARCHAR(255)`);
+            console.log('✅ Coluna custom_name adicionada com sucesso');
+            res.json({
+                success: true,
+                message: 'Coluna custom_name adicionada com sucesso'
+            });
+        } catch (alterError) {
+            if (alterError.code === '42701') {
+                console.log('ℹ️ Coluna custom_name já existe');
+                res.json({
+                    success: true,
+                    message: 'Coluna custom_name já existe'
+                });
+            } else {
+                throw alterError;
+            }
+        }
+    } catch (error) {
+        console.error('❌ Erro na migração:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erro na migração',
+            error: error.message
+        });
+    }
+});
 
 /**
  * GET /api/workspace-instances/:workspaceUuid
@@ -17,15 +54,65 @@ router.get('/:workspaceUuid', async (req, res) => {
         // Criar tabela se não existir (fallback para desenvolvimento)
         await createTableIfNotExists();
 
-        const query = `
-            SELECT
-                instance_name,
-                created_at,
-                updated_at
-            FROM workspace_instances
-            WHERE workspace_uuid = $1
-            ORDER BY created_at DESC
-        `;
+        // Verificar se coluna custom_name existe antes de incluí-la na query
+        let query;
+        try {
+            const columnCheck = await db.query(`
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'workspace_instances'
+                AND column_name = 'custom_name'
+            `);
+
+            if (columnCheck && columnCheck.length > 0) {
+                // Coluna existe, usar query completa
+                query = `
+                    SELECT
+                        instance_name,
+                        custom_name,
+                        created_at,
+                        updated_at
+                    FROM workspace_instances
+                    WHERE workspace_uuid = $1
+                    ORDER BY created_at DESC
+                `;
+            } else {
+                // Coluna não existe, usar query sem custom_name
+                query = `
+                    SELECT
+                        instance_name,
+                        NULL as custom_name,
+                        created_at,
+                        updated_at
+                    FROM workspace_instances
+                    WHERE workspace_uuid = $1
+                    ORDER BY created_at DESC
+                `;
+
+                // Tentar adicionar a coluna
+                try {
+                    await db.query(`ALTER TABLE workspace_instances ADD COLUMN custom_name VARCHAR(255)`);
+                    console.log('✅ Coluna custom_name adicionada automaticamente');
+                } catch (alterError) {
+                    if (alterError.code !== '42701') { // Não é erro de coluna já existir
+                        console.error('❌ Erro ao adicionar coluna custom_name:', alterError.message);
+                    }
+                }
+            }
+        } catch (checkError) {
+            console.error('❌ Erro ao verificar coluna custom_name:', checkError.message);
+            // Fallback para query sem custom_name
+            query = `
+                SELECT
+                    instance_name,
+                    NULL as custom_name,
+                    created_at,
+                    updated_at
+                FROM workspace_instances
+                WHERE workspace_uuid = $1
+                ORDER BY created_at DESC
+            `;
+        }
 
         // Debug: verificar se há dados na tabela
         const countQuery = `SELECT COUNT(*) as total FROM workspace_instances`;
@@ -69,7 +156,7 @@ router.get('/:workspaceUuid', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     try {
-        const { workspace_uuid, instance_name } = req.body;
+        const { workspace_uuid, instance_name, custom_name } = req.body;
 
         if (!workspace_uuid || !instance_name) {
             return res.status(400).json({
@@ -99,12 +186,12 @@ router.post('/', async (req, res) => {
 
         // Criar o vínculo
         const insertQuery = `
-            INSERT INTO workspace_instances (workspace_uuid, instance_name)
-            VALUES ($1, $2)
+            INSERT INTO workspace_instances (workspace_uuid, instance_name, custom_name)
+            VALUES ($1, $2, $3)
             RETURNING *
         `;
 
-        const result = await db.query(insertQuery, [workspace_uuid, instance_name]);
+        const result = await db.query(insertQuery, [workspace_uuid, instance_name, custom_name || null]);
         console.log(`🔍 Resultado da inserção:`, result);
 
         console.log(`✅ Instância ${instance_name} vinculada com sucesso`);
@@ -125,6 +212,108 @@ router.post('/', async (req, res) => {
             });
         }
 
+        res.status(500).json({
+            success: false,
+            message: 'Erro interno do servidor',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * PUT /api/workspace-instances/update-custom-name
+ * Atualizar o nome personalizado de uma instância (endpoint alternativo)
+ */
+router.put('/update-custom-name', async (req, res) => {
+    try {
+        const { workspaceUuid, instanceName, custom_name } = req.body;
+
+        if (!workspaceUuid || !instanceName) {
+            return res.status(400).json({
+                success: false,
+                message: 'workspaceUuid e instanceName são obrigatórios'
+            });
+        }
+
+        console.log(`🏷️ [ALTERNATIVO] Atualizando nome personalizado da instância ${instanceName} para: ${custom_name}`);
+
+        // Criar tabela se não existir (fallback para desenvolvimento)
+        await createTableIfNotExists();
+
+        const updateQuery = `
+            UPDATE workspace_instances
+            SET custom_name = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE workspace_uuid = $2 AND instance_name = $3
+            RETURNING *
+        `;
+
+        const result = await db.query(updateQuery, [custom_name || null, workspaceUuid, instanceName]);
+
+        if (!result || result.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Vínculo não encontrado'
+            });
+        }
+
+        console.log(`✅ [ALTERNATIVO] Nome personalizado atualizado com sucesso`);
+
+        res.json({
+            success: true,
+            message: 'Nome personalizado atualizado com sucesso',
+            data: result[0]
+        });
+
+    } catch (error) {
+        console.error('❌ [ALTERNATIVO] Erro ao atualizar nome personalizado:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erro interno do servidor',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * PUT /api/workspace-instances/:workspaceUuid/:instanceName/custom-name
+ * Atualizar o nome personalizado de uma instância
+ */
+router.put('/:workspaceUuid/:instanceName/custom-name', async (req, res) => {
+    try {
+        const { workspaceUuid, instanceName } = req.params;
+        const { custom_name } = req.body;
+
+        console.log(`🏷️ Atualizando nome personalizado da instância ${instanceName} para: ${custom_name}`);
+
+        // Criar tabela se não existir (fallback para desenvolvimento)
+        await createTableIfNotExists();
+
+        const updateQuery = `
+            UPDATE workspace_instances
+            SET custom_name = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE workspace_uuid = $2 AND instance_name = $3
+            RETURNING *
+        `;
+
+        const result = await db.query(updateQuery, [custom_name || null, workspaceUuid, instanceName]);
+
+        if (!result || result.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Vínculo não encontrado'
+            });
+        }
+
+        console.log(`✅ Nome personalizado atualizado com sucesso`);
+
+        res.json({
+            success: true,
+            message: 'Nome personalizado atualizado com sucesso',
+            data: result[0]
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao atualizar nome personalizado:', error);
         res.status(500).json({
             success: false,
             message: 'Erro interno do servidor',
@@ -191,6 +380,7 @@ async function createTableIfNotExists() {
                 id SERIAL PRIMARY KEY,
                 workspace_uuid UUID NOT NULL,
                 instance_name VARCHAR(255) NOT NULL,
+                custom_name VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(workspace_uuid, instance_name)
@@ -202,6 +392,33 @@ async function createTableIfNotExists() {
 
         await db.query(createTableQuery);
         console.log('✅ Tabela workspace_instances criada/verificada com sucesso');
+
+        // Verificar se a coluna custom_name existe, e adicionar se necessário
+        console.log('🔧 Verificando se coluna custom_name existe...');
+        try {
+            // Verificar se a coluna existe
+            const columnCheck = await db.query(`
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'workspace_instances'
+                AND column_name = 'custom_name'
+            `);
+
+            if (!columnCheck || columnCheck.length === 0) {
+                console.log('🔧 Coluna custom_name não existe, adicionando...');
+                await db.query(`ALTER TABLE workspace_instances ADD COLUMN custom_name VARCHAR(255)`);
+                console.log('✅ Coluna custom_name adicionada com sucesso');
+            } else {
+                console.log('ℹ️ Coluna custom_name já existe');
+            }
+        } catch (alterError) {
+            // Se o erro for porque a coluna já existe, não é problema
+            if (alterError.code === '42701') {
+                console.log('ℹ️ Coluna custom_name já existe (erro capturado)');
+            } else {
+                console.error('❌ Erro ao verificar/adicionar coluna custom_name:', alterError.message);
+            }
+        }
     } catch (error) {
         console.error('❌ Erro ao criar tabela workspace_instances:', error.message);
         throw error;

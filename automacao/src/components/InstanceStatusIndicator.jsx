@@ -30,19 +30,40 @@ const InstanceStatusIndicator = ({
     }
   }, [instanceName, showDetails]);
 
+  // Mapear estados da Evolution API para estados do componente
+  const mapEvolutionState = (evolutionState) => {
+    switch (evolutionState?.toLowerCase()) {
+      case 'open':
+        return 'online';
+      case 'close':
+      case 'closed':
+        return 'offline';
+      case 'connecting':
+        return 'connecting';
+      case 'error':
+      case 'failed':
+        return 'error';
+      default:
+        return 'unknown';
+    }
+  };
+
   const checkInstanceStatus = async () => {
     try {
       setStatus(prev => ({ ...prev, loading: true }));
 
-      // Simular verificação de status da instância Evolution
-      // Em produção, faria uma chamada real para a API da Evolution
-      const response = await axios.get(`${API_BASE_URL}/evolution/instances/${instanceName}/status`);
+      // Verificação real de status da instância Evolution
+      const response = await axios.get(`${API_BASE_URL}/evolution/status/${instanceName}`);
 
       if (response.data.success) {
+        // Mapear estados da Evolution API para estados do componente
+        const evolutionState = response.data.data.instance?.state || response.data.data.state;
+        const mappedState = mapEvolutionState(evolutionState);
+
         setStatus({
-          state: response.data.data.state || 'online',
+          state: mappedState,
           lastCheck: new Date(),
-          details: response.data.data.details,
+          details: response.data.data.instance || response.data.data,
           loading: false
         });
       } else {
