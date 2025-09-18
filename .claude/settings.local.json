@@ -53,7 +53,15 @@
       "Bash(git config:*)",
       "Bash(git ls-tree:*)",
       "Bash(git log:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(start http://localhost:5174/whatsapp)",
+      "Bash(ngrok:*)",
+      "Bash(choco install:*)",
+      "Bash(./ngrok.exe http 3001 --log=stdout)",
+      "Bash(ssh:*)",
+      "Bash(./cloudflared.exe tunnel --url http://localhost:3001)",
+      "Read(//c/Users/osoci/OneDrive/Imagens/Screenshots/**)",
+      "WebFetch(domain:doc.evolution-api.com)"
     ],
     "deny": [],
     "ask": []

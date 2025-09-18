@@ -801,6 +801,77 @@ class EvolutionService {
   }
 
   /**
+   * Configurar webhook em uma instância existente
+   */
+  async setWebhook(instanceName, webhookData) {
+    try {
+      console.log(`🔗 Configurando webhook para instância: ${instanceName}`);
+
+      const payload = {
+        webhook: {
+          enabled: true,
+          url: webhookData.url,
+          byEvents: true,
+          base64: true,
+          events: [
+            'APPLICATION_STARTUP',
+            'MESSAGES_UPSERT',
+            'MESSAGES_UPDATE',
+            'MESSAGES_DELETE',
+            'SEND_MESSAGE',
+            'CONTACTS_UPSERT',
+            'CONTACTS_UPDATE',
+            'PRESENCE_UPDATE',
+            'CHATS_UPSERT',
+            'CHATS_UPDATE',
+            'CHATS_DELETE',
+            'GROUPS_UPSERT',
+            'GROUP_UPDATE',
+            'GROUP_PARTICIPANTS_UPDATE',
+            'CONNECTION_UPDATE'
+          ]
+        }
+      };
+
+      const response = await axios.post(
+        `${this.baseURL}/webhook/set/${instanceName}`,
+        payload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': this.apiKey
+          },
+          timeout: 30000
+        }
+      );
+
+      console.log(`✅ Webhook configurado para ${instanceName}:`, response.data);
+
+      // TODO: Atualizar no banco de dados quando a tabela evolution_instances for criada
+      // await db.query(`
+      //   UPDATE evolution_instances
+      //   SET webhook_url = $1, updated_at = CURRENT_TIMESTAMP
+      //   WHERE instance_name = $2
+      // `, [webhookData.url, instanceName]);
+
+      return {
+        success: true,
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error(`❌ Erro ao configurar webhook para ${instanceName}:`, error.message);
+
+      return {
+        success: false,
+        error: {
+          message: error.response?.data?.message || error.message
+        }
+      };
+    }
+  }
+
+  /**
    * Listar instâncias do banco de dados
    */
   async getInstancesFromDatabase(hotel_uuid = null) {
@@ -824,7 +895,7 @@ class EvolutionService {
 
     } catch (error) {
       console.error('❌ Erro ao buscar instâncias no banco:', error);
-      
+
       return {
         success: false,
         error: {

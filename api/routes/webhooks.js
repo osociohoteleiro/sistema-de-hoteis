@@ -205,13 +205,13 @@ router.post('/whatsapp/:instanceName', async (req, res) => {
 
         console.log(`📱 Webhook recebido de ${instanceName}:`, JSON.stringify(webhookData, null, 2));
 
-        // Verificar se é uma mensagem de texto
+        // Verificar se é uma mensagem
         if (webhookData.event === 'messages.upsert' && webhookData.data) {
             const message = webhookData.data;
-            
+
             // Filtrar apenas mensagens recebidas (não enviadas pelo bot)
             if (message.key && !message.key.fromMe && message.message) {
-                await processIncomingMessage(instanceName, message);
+                await processIncomingWhatsAppMessage(instanceName, message);
             }
         }
 
@@ -230,9 +230,264 @@ router.post('/whatsapp/:instanceName', async (req, res) => {
 });
 
 /**
- * Processar mensagem recebida
+ * Webhook específico para Evolution API
+ * POST /api/webhooks/evolution/:instanceName
  */
-async function processIncomingMessage(instanceName, messageData) {
+router.post('/evolution/:instanceName', async (req, res) => {
+    try {
+        const { instanceName } = req.params;
+        const webhookData = req.body;
+
+        console.log(`🚀 Evolution webhook recebido de ${instanceName}:`, JSON.stringify(webhookData, null, 2));
+
+        // Processar diferentes tipos de eventos da Evolution API
+        if (webhookData.event) {
+            switch (webhookData.event) {
+                case 'messages.upsert':
+                case 'MESSAGES_UPSERT':
+                    if (webhookData.data && webhookData.data.key && !webhookData.data.key.fromMe) {
+                        await processEvolutionMessage(instanceName, webhookData.data);
+                    }
+                    break;
+
+                case 'connection.update':
+                    await processConnectionUpdate(instanceName, webhookData.data);
+                    break;
+
+                default:
+                    console.log(`ℹ️ Evento não processado: ${webhookData.event}`);
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Webhook Evolution processado com sucesso'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro no webhook Evolution:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/webhooks/evolution/:instanceName/messages-upsert
+ * Webhook específico para mensagens da Evolution API
+ */
+router.post('/evolution/:instanceName/messages-upsert', async (req, res) => {
+    try {
+        const { instanceName } = req.params;
+        const messageData = req.body;
+
+        console.log(`📨 Nova mensagem recebida de ${instanceName}`);
+        await processEvolutionMessage(instanceName, messageData);
+
+        res.status(200).json({
+            success: true,
+            message: 'Mensagem processada com sucesso'
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao processar mensagem:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno do servidor'
+        });
+    }
+});
+
+/**
+ * POST /api/webhooks/evolution/:instanceName/:eventType
+ * Webhook genérico para outros eventos da Evolution API
+ */
+router.post('/evolution/:instanceName/:eventType', async (req, res) => {
+    try {
+        const { instanceName, eventType } = req.params;
+
+        console.log(`📡 Evento ${eventType} recebido de ${instanceName}`);
+
+        res.status(200).json({
+            success: true,
+            message: `Evento ${eventType} recebido`
+        });
+
+    } catch (error) {
+        console.error(`❌ Erro no evento ${eventType}:`, error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno do servidor'
+        });
+    }
+});
+
+/**
+ * Processar mensagem da Evolution API
+ */
+async function processEvolutionMessage(instanceName, messageData) {
+    try {
+        // Tentar diferentes estruturas possíveis para encontrar mensagens
+        let messages = [];
+
+        // Estrutura real da Evolution API: messageData.data é uma mensagem única
+        if (messageData.data && messageData.data.key && messageData.data.message) {
+            messages = [messageData.data];
+        }
+        // Estrutura array: messageData.data é um array de mensagens
+        else if (messageData.data && Array.isArray(messageData.data)) {
+            messages = messageData.data;
+        }
+        // messageData em si é uma mensagem
+        else if (messageData.key || messageData.message || messageData.body) {
+            messages = [messageData];
+        }
+        // Estrutura alternativa: messageData.messages
+        else if (messageData.messages && Array.isArray(messageData.messages)) {
+            messages = messageData.messages;
+        }
+
+        if (messages.length === 0) {
+            console.log(`⚠️ Nenhuma mensagem encontrada na estrutura do webhook`);
+            return;
+        }
+
+        // Processar cada mensagem
+        for (const message of messages) {
+            // Tentar extrair informações da mensagem
+            let phoneNumber = 'desconhecido';
+            let messageText = 'Mensagem sem texto';
+            let messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            let direction = 'inbound';
+
+            // Verificar diferentes estruturas possíveis
+            if (message.key) {
+                phoneNumber = cleanPhoneNumber(message.key.remoteJid || message.key.participant || '');
+                messageId = message.key.id || messageId;
+                direction = message.key.fromMe ? 'outbound' : 'inbound';
+            } else if (message.remoteJid) {
+                phoneNumber = cleanPhoneNumber(message.remoteJid);
+            }
+
+            // Extrair texto da mensagem
+            if (message.message) {
+                messageText = extractMessageText(message.message);
+            } else if (message.text) {
+                messageText = message.text;
+            } else if (message.body) {
+                messageText = message.body;
+            }
+
+            console.log(`💬 Nova mensagem de ${phoneNumber}: ${messageText}`);
+
+            // Preparar dados da mensagem para salvar
+            const messageDataToSave = {
+                message_id: messageId,
+                instance_name: instanceName,
+                phone_number: phoneNumber,
+                contact_name: null,
+                message_type: 'text',
+                content: messageText,
+                direction: direction,
+                timestamp: new Date(),
+                raw_data: message
+            };
+
+            // Salvar mensagem diretamente no banco
+            await saveIncomingMessage(messageDataToSave);
+            console.log(`✅ Mensagem salva no sistema: ${messageId}`);
+        }
+
+    } catch (error) {
+        console.error('❌ Erro ao processar mensagem Evolution:', error);
+        console.error('Stack trace:', error.stack);
+    }
+}
+
+/**
+ * Processar atualização de conexão
+ */
+async function processConnectionUpdate(instanceName, connectionData) {
+    try {
+        console.log(`🔌 Atualização de conexão para ${instanceName}:`, connectionData);
+
+        // Aqui você pode atualizar o status da instância no banco de dados
+        // Por exemplo, armazenar se está conectada, desconectada, etc.
+
+    } catch (error) {
+        console.error('❌ Erro ao processar atualização de conexão:', error);
+    }
+}
+
+/**
+ * Limpar número de telefone
+ */
+function cleanPhoneNumber(remoteJid) {
+    // Remover @s.whatsapp.net e outros sufixos
+    return remoteJid.replace(/@.*$/, '');
+}
+
+/**
+ * Salvar mensagem recebida no sistema
+ */
+async function saveIncomingMessage(messageData) {
+    try {
+        // Inserir mensagem
+        await db.query(`
+            INSERT INTO whatsapp_messages (
+                message_id, instance_name, phone_number, contact_name,
+                message_type, content, media_url, direction, timestamp,
+                read_at, delivered_at, raw_data
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (message_id) DO NOTHING
+        `, [
+            messageData.message_id,
+            messageData.instance_name,
+            messageData.phone_number,
+            messageData.contact_name,
+            messageData.message_type,
+            messageData.content,
+            messageData.media_url || null,
+            messageData.direction,
+            messageData.timestamp,
+            messageData.read_at || null,
+            messageData.delivered_at || null,
+            JSON.stringify(messageData.raw_data)
+        ]);
+
+        // Atualizar ou criar contato
+        await db.query(`
+            INSERT INTO whatsapp_contacts (
+                instance_name, phone_number, contact_name, last_message_at, message_count, unread_count
+            ) VALUES ($1, $2, $3, $4, 1, $5)
+            ON CONFLICT (instance_name, phone_number)
+            DO UPDATE SET
+                contact_name = COALESCE(EXCLUDED.contact_name, whatsapp_contacts.contact_name),
+                last_message_at = EXCLUDED.last_message_at,
+                message_count = whatsapp_contacts.message_count + 1,
+                unread_count = whatsapp_contacts.unread_count + EXCLUDED.unread_count,
+                updated_at = CURRENT_TIMESTAMP
+        `, [
+            messageData.instance_name,
+            messageData.phone_number,
+            messageData.contact_name,
+            messageData.timestamp,
+            messageData.direction === 'inbound' ? 1 : 0 // Só incrementar não lidas se for mensagem recebida
+        ]);
+
+        console.log(`💾 Mensagem salva: ${messageData.message_id}`);
+
+    } catch (error) {
+        console.error('❌ Erro ao salvar mensagem:', error);
+        throw error;
+    }
+}
+
+/**
+ * Processar mensagem recebida (função original)
+ */
+async function processIncomingWhatsAppMessage(instanceName, messageData) {
     try {
         // Extrair dados da mensagem
         const from = messageData.key.remoteJid;

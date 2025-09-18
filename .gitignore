@@ -67,3 +67,7 @@ api/backup-*.sql
 
 # Claude Code settings (local only)
 .claude/settings.local.json
+
+# Tunneling executables (dev tools only)
+ngrok.exe
+cloudflared.exe

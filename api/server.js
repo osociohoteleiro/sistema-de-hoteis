@@ -351,6 +351,7 @@ const hotelSitesRoutes = require('./routes/hotel-sites');
 const migrateRoutes = require('./routes/migrate'); // Habilitado temporariamente
 const appConfigurationsRoutes = require('./routes/app-configurations');
 const dataImportRoutes = require('./routes/dataImport');
+const whatsappMessagesRoutes = require('./routes/whatsapp-messages');
 
 // Rotas da API
 app.use('/api/data-import', dataImportRoutes);
@@ -384,6 +385,7 @@ app.use('/api/site-themes', siteThemesRoutes);
 app.use('/api/site-templates', siteTemplatesRoutes);
 app.use('/api/hotel-sites', hotelSitesRoutes);
 app.use('/api/app-configurations', appConfigurationsRoutes);
+app.use('/api/whatsapp-messages', whatsappMessagesRoutes);
 
 app.use('/api/migrate', migrateRoutes); // Habilitado temporariamente
 

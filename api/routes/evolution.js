@@ -483,4 +483,46 @@ router.get('/test', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/evolution/webhook/:instanceName
+ * Configurar webhook para uma instância
+ */
+router.post('/webhook/:instanceName', async (req, res) => {
+  try {
+    const { instanceName } = req.params;
+    const { webhook_url } = req.body;
+
+    if (!webhook_url) {
+      return res.status(400).json({
+        success: false,
+        error: 'webhook_url é obrigatório'
+      });
+    }
+
+    const result = await evolutionService.setWebhook(instanceName, {
+      url: webhook_url
+    });
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Webhook configurado com sucesso!',
+        data: result.data
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error.message
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Erro na configuração de webhook:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
 module.exports = router;

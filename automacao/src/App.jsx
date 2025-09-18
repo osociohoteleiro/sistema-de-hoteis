@@ -44,6 +44,9 @@ function App() {
           {/* WhatsApp App (Evolution API) */}
           <Route path="workspace/:workspaceUuid/whatsapp-app" element={<WhatsAppApp />} />
 
+          {/* Direct WhatsApp route */}
+          <Route path="whatsapp" element={<WhatsAppApp />} />
+
           {/* Flowise Management */}
           <Route path="flowise" element={<FlowiseManagement />} />
 
