@@ -69,6 +69,8 @@ const WorkspaceChatAoVivo = () => {
 
     if (selectedConversation) {
       loadProfilePicture(selectedConversation.instance_name, selectedConversation.phone_number);
+      // Marcar mensagens como lidas quando abrir a conversa
+      markMessagesAsRead(selectedConversation.instance_name, selectedConversation.phone_number);
     }
   }, [selectedConversation]);
 
@@ -173,6 +175,22 @@ const WorkspaceChatAoVivo = () => {
     messagesContainer.addEventListener('scroll', handleScroll);
     return () => messagesContainer.removeEventListener('scroll', handleScroll);
   }, [hasMoreMessages, loadingMessages, selectedConversation]);
+
+  // Polling para atualizar contadores de mensagens não lidas
+  useEffect(() => {
+    if (linkedInstances.length === 0) return;
+
+    const interval = setInterval(async () => {
+      try {
+        // Recarregar conversas para sincronizar contadores
+        await loadAllLinkedConversations(linkedInstances);
+      } catch (error) {
+        console.error('Erro ao atualizar contadores:', error);
+      }
+    }, 10000); // Atualizar a cada 10 segundos
+
+    return () => clearInterval(interval);
+  }, [linkedInstances]);
 
   const loadWorkspaceData = async () => {
     try {
@@ -424,6 +442,38 @@ const WorkspaceChatAoVivo = () => {
     await loadMessages(selectedConversation.instance_name, selectedConversation.phone_number, true);
   };
 
+  const markMessagesAsRead = async (instanceName, phoneNumber) => {
+    try {
+      const response = await axios.put(`${API_BASE_URL}/whatsapp-messages/mark-read/${instanceName}/${phoneNumber}`);
+
+      if (response.data.success) {
+        // Atualizar contador local na lista de conversas
+        setConversations(prev => prev.map(conv => {
+          if (conv.instance_name === instanceName && conv.phone_number === phoneNumber) {
+            return { ...conv, unread_count: 0 };
+          }
+          return conv;
+        }));
+
+        console.log(`✅ Mensagens marcadas como lidas: ${phoneNumber}`);
+      }
+    } catch (error) {
+      console.error('Erro ao marcar mensagens como lidas:', error);
+    }
+  };
+
+  const updateUnreadCount = (instanceName, phoneNumber, increment = 1) => {
+    setConversations(prev => prev.map(conv => {
+      if (conv.instance_name === instanceName && conv.phone_number === phoneNumber) {
+        return {
+          ...conv,
+          unread_count: Math.max(0, conv.unread_count + increment)
+        };
+      }
+      return conv;
+    }));
+  };
+
   const sendMessage = async () => {
     if (!messageText.trim() || !selectedConversation) {
       return;
@@ -631,8 +681,8 @@ const WorkspaceChatAoVivo = () => {
                                     })()}
                                   </p>
                                   {conversation.unread_count > 0 && (
-                                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 flex-shrink-0">
-                                      {conversation.unread_count}
+                                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 flex-shrink-0 font-semibold shadow-lg animate-pulse">
+                                      {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
                                     </span>
                                   )}
                                 </div>
