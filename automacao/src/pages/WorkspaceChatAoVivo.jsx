@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -30,15 +30,106 @@ const WorkspaceChatAoVivo = () => {
   const [instancesStatus, setInstancesStatus] = useState(new Map());
   const [instancesSummary, setInstancesSummary] = useState([]);
   const [linkedInstances, setLinkedInstances] = useState([]);
+  const [linkedInstancesData, setLinkedInstancesData] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
   const [qrCode, setQrCode] = useState(null);
+  const [profileImageError, setProfileImageError] = useState(false);
+  const [profileImageUrl, setProfileImageUrl] = useState(null);
+  const [loadingProfileImage, setLoadingProfileImage] = useState(false);
+  const [conversationProfileImages, setConversationProfileImages] = useState({});
+  const [loadingConversationImages, setLoadingConversationImages] = useState({});
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
     loadWorkspaceData();
   }, [workspaceUuid]);
+
+  // Auto scroll para a última mensagem quando messages mudam
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  // Reset profile image error when conversation changes and load profile picture
+  useEffect(() => {
+    setProfileImageError(false);
+    setProfileImageUrl(null);
+
+    if (selectedConversation) {
+      loadProfilePicture(selectedConversation.instance_name, selectedConversation.phone_number);
+    }
+  }, [selectedConversation]);
+
+  const loadProfilePicture = async (instanceName, phoneNumber) => {
+    if (!instanceName || !phoneNumber) return;
+
+    try {
+      setLoadingProfileImage(true);
+
+      // Buscar foto de perfil específica do contato
+      const response = await axios.get(`${API_BASE_URL}/evolution/profile-picture/${instanceName}/${phoneNumber}`);
+
+      if (response.data.success && response.data.data) {
+        const profilePictureUrl = response.data.data.profilePictureUrl;
+        if (profilePictureUrl) {
+          setProfileImageUrl(profilePictureUrl);
+          console.log('Foto de perfil do contato encontrada:', phoneNumber, profilePictureUrl);
+        } else {
+          setProfileImageError(true);
+          console.log('Foto de perfil do contato não encontrada para:', phoneNumber);
+        }
+      } else {
+        setProfileImageError(true);
+        console.log('Resposta inválida ao buscar foto de perfil para:', phoneNumber);
+      }
+    } catch (error) {
+      console.log('Erro ao buscar foto de perfil do contato:', error);
+      setProfileImageError(true);
+    } finally {
+      setLoadingProfileImage(false);
+    }
+  };
+
+  const loadConversationProfilePicture = async (instanceName, phoneNumber) => {
+    if (!instanceName || !phoneNumber) return;
+
+    const conversationKey = `${instanceName}-${phoneNumber}`;
+
+    // Se já está carregando ou já tem a imagem, não carregar novamente
+    if (loadingConversationImages[conversationKey] || conversationProfileImages[conversationKey]) {
+      return;
+    }
+
+    try {
+      setLoadingConversationImages(prev => ({ ...prev, [conversationKey]: true }));
+
+      const response = await axios.get(`${API_BASE_URL}/evolution/profile-picture/${instanceName}/${phoneNumber}`);
+
+      if (response.data.success && response.data.data && response.data.data.profilePictureUrl) {
+        setConversationProfileImages(prev => ({
+          ...prev,
+          [conversationKey]: response.data.data.profilePictureUrl
+        }));
+      }
+    } catch (error) {
+      console.log(`Erro ao buscar foto de perfil da conversa ${phoneNumber}:`, error);
+    } finally {
+      setLoadingConversationImages(prev => ({ ...prev, [conversationKey]: false }));
+    }
+  };
+
+  // Carregar fotos de perfil das conversas quando a lista de conversas mudar
+  useEffect(() => {
+    if (conversations.length > 0) {
+      conversations.forEach(conversation => {
+        loadConversationProfilePicture(conversation.instance_name, conversation.phone_number);
+      });
+    }
+  }, [conversations]);
 
   const loadWorkspaceData = async () => {
     try {
@@ -109,6 +200,7 @@ const WorkspaceChatAoVivo = () => {
         const linked = response.data.data || [];
         const linkedNames = linked.map(item => item.instance_name);
         setLinkedInstances(linkedNames);
+        setLinkedInstancesData(linked); // Armazenar dados completos incluindo custom_name
         console.log('Instâncias vinculadas ao workspace:', linkedNames);
 
         // Carregar conversas de todas as instâncias vinculadas
@@ -317,6 +409,21 @@ const WorkspaceChatAoVivo = () => {
     }
   };
 
+  const getInstanceDisplayName = (instanceName) => {
+    const linkedData = linkedInstancesData.find(item => item.instance_name === instanceName);
+    return linkedData?.custom_name || instanceName;
+  };
+
+  const isGroupConversation = (phoneNumber) => {
+    // Verificar se é um grupo baseado no padrão do número
+    // Grupos geralmente contêm '@g.us' ou têm mais de 15 dígitos (identificadores de grupo)
+    return phoneNumber && (
+      phoneNumber.includes('@g.us') ||
+      phoneNumber.includes('-') ||
+      phoneNumber.length > 15
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -340,8 +447,24 @@ const WorkspaceChatAoVivo = () => {
                 {/* Lista de Conversas */}
                 <div className="col-span-4 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle">
                     <div className="p-4 border-b border-sapphire-200/30">
-                      <h4 className="font-semibold text-midnight-950">Conversas</h4>
-                      <p className="text-sm text-steel-600">{conversations.length} conversa(s)</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold text-midnight-950">Conversas</h4>
+                          <p className="text-sm text-steel-600">{conversations.length} conversa(s)</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-steel-500">
+                            {conversations.length > 0 && conversations[0]?.last_message_at &&
+                              new Date(conversations[0].last_message_at).toLocaleString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            }
+                          </p>
+                        </div>
+                      </div>
                     </div>
                     <div className="overflow-y-auto" style={{height: 'calc(100vh - 360px)'}}>
                       {conversations.length === 0 ? (
@@ -360,29 +483,98 @@ const WorkspaceChatAoVivo = () => {
                               selectedConversation?.phone_number === conversation.phone_number && selectedConversation?.instance_name === conversation.instance_name ? 'bg-blue-100' : ''
                             }`}
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-start gap-3">
+                              {/* Foto de perfil */}
+                              <div className="w-12 h-12 rounded-full overflow-hidden shadow-sapphire-glow border-2 border-sapphire-200 flex-shrink-0">
+                                {(() => {
+                                  const conversationKey = `${conversation.instance_name}-${conversation.phone_number}`;
+                                  const profilePictureUrl = conversationProfileImages[conversationKey];
+                                  const isLoadingImage = loadingConversationImages[conversationKey];
+
+                                  if (isLoadingImage) {
+                                    return (
+                                      <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                                      </div>
+                                    );
+                                  } else if (profilePictureUrl) {
+                                    return (
+                                      <img
+                                        src={profilePictureUrl}
+                                        alt="Foto de perfil"
+                                        className="w-full h-full object-cover"
+                                        onError={() => {
+                                          setConversationProfileImages(prev => {
+                                            const newState = { ...prev };
+                                            delete newState[conversationKey];
+                                            return newState;
+                                          });
+                                        }}
+                                      />
+                                    );
+                                  } else {
+                                    return (
+                                      <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
+                                        <span className="text-white text-lg">
+                                          {isGroupConversation(conversation.phone_number) ? '👥' :
+                                           (conversation.contact_name ?
+                                            conversation.contact_name.charAt(0).toUpperCase() :
+                                            conversation.phone_number.charAt(0)
+                                           )
+                                          }
+                                        </span>
+                                      </div>
+                                    );
+                                  }
+                                })()}
+                              </div>
+
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium text-midnight-950 truncate">
-                                    {conversation.contact_name || conversation.phone_number}
+                                {/* Nome do usuário (principal) ou número se não houver nome */}
+                                <div className="flex items-center gap-2 mb-1">
+                                  {isGroupConversation(conversation.phone_number) && (
+                                    <span className="text-blue-600 text-sm flex-shrink-0" title="Conversa em grupo">
+                                      👥
+                                    </span>
+                                  )}
+                                  <p className="font-medium text-midnight-950 truncate text-base">
+                                    {conversation.contact_name || `+${conversation.phone_number}`}
                                   </p>
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                    {conversation.instance_name}
-                                  </span>
+                                  {conversation.unread_count > 0 && (
+                                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 flex-shrink-0">
+                                      {conversation.unread_count}
+                                    </span>
+                                  )}
                                 </div>
-                                <p className="text-sm text-steel-600 truncate">
+
+                                {/* Número pequeno abaixo (se houver nome) */}
+                                {conversation.contact_name && (
+                                  <p className="text-xs text-steel-500 mb-2">
+                                    +{conversation.phone_number}
+                                  </p>
+                                )}
+
+                                {/* Nome personalizado da instância */}
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                    {getInstanceDisplayName(conversation.instance_name)}
+                                  </span>
+                                  <p className="text-xs text-steel-500">
+                                    {conversation.last_message_at && new Date(conversation.last_message_at).toLocaleString('pt-BR', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
+
+                                {/* Última mensagem */}
+                                <p className="text-sm text-steel-600 truncate mt-2">
                                   {conversation.last_message_content || 'Sem mensagens'}
                                 </p>
                               </div>
-                              {conversation.unread_count > 0 && (
-                                <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 ml-2">
-                                  {conversation.unread_count}
-                                </span>
-                              )}
                             </div>
-                            <p className="text-xs text-steel-500 mt-1">
-                              {conversation.last_message_at && new Date(conversation.last_message_at).toLocaleString('pt-BR')}
-                            </p>
                           </div>
                         ))
                       )}
@@ -405,14 +597,48 @@ const WorkspaceChatAoVivo = () => {
                         {/* Header do Chat */}
                         <div className="p-4 border-b border-sapphire-200/30">
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gradient-sapphire rounded-full flex items-center justify-center shadow-sapphire-glow">
-                              <span className="text-white text-sm">👤</span>
+                            <div className="w-10 h-10 rounded-full overflow-hidden shadow-sapphire-glow border-2 border-sapphire-200">
+                              {loadingProfileImage ? (
+                                <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                                </div>
+                              ) : profileImageUrl && !profileImageError ? (
+                                <img
+                                  src={profileImageUrl}
+                                  alt="Foto de perfil"
+                                  className="w-full h-full object-cover"
+                                  onError={() => {
+                                    setProfileImageError(true);
+                                    setProfileImageUrl(null);
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
+                                  <span className="text-white text-lg">
+                                    {isGroupConversation(selectedConversation.phone_number) ? '👥' :
+                                     (selectedConversation.contact_name ?
+                                      selectedConversation.contact_name.charAt(0).toUpperCase() :
+                                      selectedConversation.phone_number.charAt(0)
+                                     )
+                                    }
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             <div>
-                              <h4 className="font-semibold text-midnight-950">
-                                {selectedConversation.contact_name || selectedConversation.phone_number}
-                              </h4>
-                              <p className="text-sm text-steel-600">{selectedConversation.phone_number}</p>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-semibold text-midnight-950">
+                                  {selectedConversation.contact_name || selectedConversation.phone_number}
+                                </h4>
+                                {isGroupConversation(selectedConversation.phone_number) && (
+                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                    Grupo
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-steel-600">
+                                {selectedConversation.contact_name ? selectedConversation.phone_number : getInstanceDisplayName(selectedConversation.instance_name)}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -424,30 +650,55 @@ const WorkspaceChatAoVivo = () => {
                               <p>Nenhuma mensagem encontrada</p>
                             </div>
                           ) : (
-                            messages.map((message) => (
-                              <div
-                                key={message.id}
-                                className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
-                              >
+                            <>
+                              {messages.map((message) => (
                                 <div
-                                  className={`max-w-xs px-4 py-2 rounded-lg ${
-                                    message.direction === 'outbound'
-                                      ? 'bg-gradient-sapphire text-white'
-                                      : 'bg-gray-200 text-midnight-950'
-                                  }`}
+                                  key={message.id}
+                                  className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'} items-end gap-2`}
                                 >
-                                  <p className="text-sm">{message.content}</p>
-                                  <p className={`text-xs mt-1 ${
-                                    message.direction === 'outbound' ? 'text-blue-100' : 'text-steel-500'
-                                  }`}>
-                                    {new Date(message.timestamp).toLocaleTimeString('pt-BR', {
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </p>
+                                  {message.direction === 'inbound' && (
+                                    <div className="w-6 h-6 rounded-full overflow-hidden border border-sapphire-200 flex-shrink-0">
+                                      {profileImageUrl && !profileImageError ? (
+                                        <img
+                                          src={profileImageUrl}
+                                          alt="Foto de perfil"
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
+                                          <span className="text-white text-xs">
+                                            {isGroupConversation(selectedConversation.phone_number) ? '👥' :
+                                             (selectedConversation.contact_name ?
+                                              selectedConversation.contact_name.charAt(0).toUpperCase() :
+                                              selectedConversation.phone_number.charAt(0)
+                                             )
+                                            }
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  <div
+                                    className={`max-w-xs px-4 py-2 rounded-lg ${
+                                      message.direction === 'outbound'
+                                        ? 'bg-gradient-sapphire text-white'
+                                        : 'bg-gray-200 text-midnight-950'
+                                    }`}
+                                  >
+                                    <p className="text-sm">{message.content}</p>
+                                    <p className={`text-xs mt-1 ${
+                                      message.direction === 'outbound' ? 'text-blue-100' : 'text-steel-500'
+                                    }`}>
+                                      {new Date(message.timestamp).toLocaleTimeString('pt-BR', {
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                            ))
+                              ))}
+                              <div ref={messagesEndRef} />
+                            </>
                           )}
                         </div>
 

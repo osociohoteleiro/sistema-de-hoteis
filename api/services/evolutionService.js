@@ -904,6 +904,87 @@ class EvolutionService {
       };
     }
   }
+
+  /**
+   * Buscar dados do perfil de um contato
+   */
+  async fetchProfilePicture(instanceName, phoneNumber) {
+    try {
+      console.log(`📷 Buscando foto de perfil para ${phoneNumber} na instância ${instanceName}`);
+
+      const response = await axios.post(
+        `${this.baseURL}/chat/fetchProfilePictureUrl/${instanceName}`,
+        {
+          number: phoneNumber
+        },
+        {
+          headers: {
+            'apikey': this.apiKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      return {
+        success: true,
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar foto de perfil:', error);
+
+      return {
+        success: false,
+        error: {
+          message: error.message,
+          response: error.response?.data || null,
+          status: error.response?.status || null
+        }
+      };
+    }
+  }
+
+  /**
+   * Buscar informações do contato
+   */
+  async fetchContact(instanceName, phoneNumber) {
+    try {
+      console.log(`👤 Buscando informações do contato ${phoneNumber} na instância ${instanceName}`);
+
+      const response = await axios.get(
+        `${this.baseURL}/chat/findContacts/${instanceName}`,
+        {
+          headers: {
+            'apikey': this.apiKey
+          },
+          params: {
+            where: JSON.stringify({
+              id: phoneNumber
+            })
+          },
+          timeout: 30000
+        }
+      );
+
+      return {
+        success: true,
+        data: response.data
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar informações do contato:', error);
+
+      return {
+        success: false,
+        error: {
+          message: error.message,
+          response: error.response?.data || null,
+          status: error.response?.status || null
+        }
+      };
+    }
+  }
 }
 
 module.exports = new EvolutionService();
