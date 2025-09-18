@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 const API_BASE_URL = 'http://localhost:3001/api';
 
 const WorkspaceBots = () => {
-  const { workspaceId } = useParams();
+  const { workspaceUuid } = useParams();
   const navigate = useNavigate();
   const [workspace, setWorkspace] = useState(null);
   const [bots, setBots] = useState([]);
@@ -17,10 +17,10 @@ const WorkspaceBots = () => {
   const [showActiveOnly, setShowActiveOnly] = useState(true);
 
   useEffect(() => {
-    // Verificar se workspaceId é válido
-    if (!workspaceId || workspaceId === 'undefined' || workspaceId === 'null') {
-      console.error('WorkspaceId inválido:', workspaceId);
-      toast.error('ID do workspace inválido. Redirecionando para lista de workspaces...');
+    // Verificar se workspaceUuid é válido
+    if (!workspaceUuid || workspaceUuid === 'undefined' || workspaceUuid === 'null') {
+      console.error('WorkspaceUuid inválido:', workspaceUuid);
+      toast.error('UUID do workspace inválido. Redirecionando para lista de workspaces...');
       setTimeout(() => {
         navigate('/workspaces');
       }, 2000);
@@ -28,14 +28,14 @@ const WorkspaceBots = () => {
     }
 
     loadWorkspaceData();
-  }, [workspaceId, showActiveOnly, filterType, filterStatus, navigate]);
+  }, [workspaceUuid, showActiveOnly, filterType, filterStatus, navigate]);
 
   const loadWorkspaceData = async () => {
     try {
       setLoading(true);
       
-      // Verificar novamente se o workspaceId é válido antes de fazer requisições
-      if (!workspaceId || workspaceId === 'undefined' || workspaceId === 'null') {
+      // Verificar novamente se o workspaceUuid é válido antes de fazer requisições
+      if (!workspaceUuid || workspaceUuid === 'undefined' || workspaceUuid === 'null') {
         setLoading(false);
         return;
       }
@@ -58,8 +58,8 @@ const WorkspaceBots = () => {
       if (filterType) params.append('bot_type', filterType);
       if (filterStatus) params.append('status', filterStatus);
       
-      console.log('Fazendo requisição para workspace ID:', workspaceId);
-      const response = await axios.get(`${API_BASE_URL}/bots/workspace/${workspaceId}?${params}`);
+      console.log('Fazendo requisição para workspace UUID:', workspaceUuid);
+      const response = await axios.get(`${API_BASE_URL}/bots/workspace/${workspaceUuid}?${params}`);
       
       if (response.data.success) {
         setBots(response.data.data || []);
@@ -77,7 +77,7 @@ const WorkspaceBots = () => {
         const errorMessage = error.response.data?.message || 'Erro desconhecido da API';
         
         if (statusCode === 404) {
-          toast.error(`Workspace não encontrado (ID: ${workspaceId})`);
+          toast.error(`Workspace não encontrado (UUID: ${workspaceUuid})`);
         } else if (statusCode === 400) {
           toast.error('Dados inválidos enviados para a API');
         } else {
@@ -197,11 +197,18 @@ const WorkspaceBots = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <Link 
-                to="/workspaces" 
+              <Link
+                to="/workspaces"
                 className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
               >
                 ← Voltar aos Workspaces
+              </Link>
+              <span className="text-steel-400">|</span>
+              <Link
+                to={`/workspace/${workspaceUuid}/chat-ao-vivo`}
+                className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
+              >
+                Chat ao Vivo
               </Link>
             </div>
             <h1 className="text-3xl font-bold text-midnight-950">

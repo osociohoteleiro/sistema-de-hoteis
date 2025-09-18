@@ -4,6 +4,8 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Workspaces from './pages/Workspaces';
 import WorkspaceBots from './pages/WorkspaceBots';
+import WorkspaceChatAoVivo from './pages/WorkspaceChatAoVivo';
+import WorkspaceSettings from './pages/WorkspaceSettings';
 import BotFlows from './pages/BotFlows';
 import WhatsAppCloud from './pages/WhatsAppCloudOAuth';
 import WhatsAppOAuthCallback from './pages/WhatsAppOAuthCallback';
@@ -31,21 +33,30 @@ function App() {
 
           {/* Workspaces */}
           <Route path="workspaces" element={<Workspaces />} />
-          
+
+          {/* Workspace Chat ao Vivo (rota padrão do workspace) */}
+          <Route path="workspace/:workspaceUuid/chat-ao-vivo" element={<WorkspaceChatAoVivo />} />
+
           {/* Workspace Bots */}
-          <Route path="workspace/:workspaceId/bots" element={<WorkspaceBots />} />
-          
+          <Route path="workspace/:workspaceUuid/bots" element={<WorkspaceBots />} />
+
+          {/* Workspace Settings */}
+          <Route path="workspace/:workspaceUuid/settings" element={<WorkspaceSettings />} />
+
           {/* Bot Flows */}
           <Route path="bot/:botUuid/flows" element={<BotFlows />} />
 
           {/* WhatsApp Cloud API */}
           <Route path="workspace/:workspaceUuid/whatsapp-cloud" element={<WhatsAppCloud />} />
-          
+
           {/* WhatsApp App (Evolution API) */}
           <Route path="workspace/:workspaceUuid/whatsapp-app" element={<WhatsAppApp />} />
 
-          {/* Direct WhatsApp route */}
+          {/* Direct WhatsApp route (mantido para compatibilidade) */}
           <Route path="whatsapp" element={<WhatsAppApp />} />
+
+          {/* Redirecionamento de workspace para chat-ao-vivo */}
+          <Route path="workspace/:workspaceUuid" element={<Navigate to="chat-ao-vivo" replace />} />
 
           {/* Flowise Management */}
           <Route path="flowise" element={<FlowiseManagement />} />

@@ -38,12 +38,8 @@ const WorkspaceSidebar = () => {
         setWorkspace(JSON.parse(savedWorkspace));
       }
 
-      // Carregar bots da workspace
-      // Verificar se é um UUID (contém hífens) ou um ID numérico
-      const isUUID = workspaceUuid && workspaceUuid.includes('-');
-      const endpoint = isUUID 
-        ? `${API_BASE_URL}/bots/workspace/uuid/${workspaceUuid}?active=true`
-        : `${API_BASE_URL}/bots/workspace/${workspaceUuid}?active=true`;
+      // Carregar bots da workspace usando UUID
+      const endpoint = `${API_BASE_URL}/bots/workspace/${workspaceUuid}?active=true`;
       
       console.log('Carregando bots do workspace:', workspaceUuid, 'endpoint:', endpoint);
       const response = await axios.get(endpoint);
@@ -143,16 +139,50 @@ const WorkspaceSidebar = () => {
       {/* Navigation Menu */}
       <nav className="mt-4">
         <div className="px-4 space-y-2">
-          
-          {/* Todos os Bots */}
+
+          {/* Chat ao Vivo - Página principal */}
+          {workspace?.workspace_uuid && (
+            <Link
+              to={`/workspace/${workspace.workspace_uuid}/chat-ao-vivo`}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+                isActive(`/workspace/${workspace.workspace_uuid}/chat-ao-vivo`)
+                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
+              }`}
+            >
+              <span className="text-lg">💬</span>
+              <span className="text-sm font-medium">Chat ao Vivo</span>
+              <span className="ml-auto bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full font-semibold">Principal</span>
+            </Link>
+          )}
+
+          {/* Divisor */}
+          <div className="my-3 border-t border-sapphire-200/20"></div>
+
+          {/* Gerenciar Bots */}
+          {workspace?.workspace_uuid && (
+            <Link
+              to={`/workspace/${workspace.workspace_uuid}/bots`}
+              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+                isActive(`/workspace/${workspace.workspace_uuid}/bots`)
+                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
+              }`}
+            >
+              <span className="text-lg">🤖</span>
+              <span className="text-sm font-medium">Gerenciar Bots</span>
+            </Link>
+          )}
+
+          {/* Bots Individuais */}
           <div>
             <button
               onClick={() => toggleMenu('bots')}
               className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800 transition-minimal"
             >
               <div className="flex items-center space-x-3">
-                <span className="text-lg">🤖</span>
-                <span className="text-sm font-medium">Todos os Bots</span>
+                <span className="text-lg">🔧</span>
+                <span className="text-sm font-medium">Configurar Bots</span>
               </div>
               <svg
                 className={`w-4 h-4 transition-transform ${expandedMenus.bots ? 'rotate-90' : ''}`}
@@ -195,40 +225,6 @@ const WorkspaceSidebar = () => {
             )}
           </div>
 
-          {/* Divisor */}
-          <div className="my-3 border-t border-sapphire-200/20"></div>
-
-          {/* WhatsApp Cloud */}
-          {workspace?.workspace_uuid && (
-            <Link
-              to={`/workspace/${workspace.workspace_uuid}/whatsapp-cloud`}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
-                isActive(`/workspace/${workspace.workspace_uuid}/whatsapp-cloud`)
-                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
-                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
-              }`}
-            >
-              <span className="text-lg">☁️</span>
-              <span className="text-sm font-medium">WhatsApp Cloud</span>
-              <span className="ml-auto bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full font-semibold">Novo</span>
-            </Link>
-          )}
-
-          {/* WhatsApp App */}
-          {workspace?.workspace_uuid && (
-            <Link
-              to={`/workspace/${workspace.workspace_uuid}/whatsapp-app`}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
-                isActive(`/workspace/${workspace.workspace_uuid}/whatsapp-app`)
-                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
-                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
-              }`}
-            >
-              <span className="text-lg">📱</span>
-              <span className="text-sm font-medium">WhatsApp App</span>
-              <span className="ml-auto bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full font-semibold">Evolution</span>
-            </Link>
-          )}
 
           {/* Divisor */}
           <div className="my-3 border-t border-sapphire-200/20"></div>

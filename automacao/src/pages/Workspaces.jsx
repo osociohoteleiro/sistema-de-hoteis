@@ -47,10 +47,10 @@ const Workspaces = () => {
       return;
     }
 
-    // Validar se o workspace tem um ID válido
-    if (!workspace.id) {
-      toast.error('Workspace não possui ID válido');
-      console.error('Workspace sem ID:', workspace);
+    // Validar se o workspace tem um UUID válido
+    if (!workspace.workspace_uuid) {
+      toast.error('Workspace não possui UUID válido');
+      console.error('Workspace sem UUID:', workspace);
       return;
     }
 
@@ -63,14 +63,13 @@ const Workspaces = () => {
       toast.error('Erro ao salvar dados do workspace');
       return;
     }
-    
+
     toast.success(`Entrando no workspace: ${workspace.name}`);
-    
-    // Redirecionar para página de bots do workspace
-    // Usar ID numérico que é garantido
-    const workspaceId = workspace.id;
-    console.log('Redirecionando para workspace ID:', workspaceId);
-    window.location.href = `/workspace/${workspaceId}/bots`;
+
+    // Redirecionar para chat ao vivo do workspace usando UUID
+    const workspaceUuid = workspace.workspace_uuid;
+    console.log('Redirecionando para workspace UUID:', workspaceUuid);
+    window.location.href = `/workspace/${workspaceUuid}/chat-ao-vivo`;
   };
 
   const formatDate = (dateString) => {

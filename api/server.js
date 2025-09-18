@@ -52,10 +52,22 @@ const PORT = process.env.PORT || 3001;
 // Middleware de segurança
 app.use(helmet());
 
-// Rate limiting
+// Rate limiting - Configuração diferente para desenvolvimento
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 500 // máximo 500 requests por IP por janela (aumentado para desenvolvimento)
+  windowMs: process.env.NODE_ENV === 'production' ? 15 * 60 * 1000 : 1 * 60 * 1000, // 15 min em prod, 1 min em dev
+  max: process.env.NODE_ENV === 'production' ? 500 : 2000, // 500 em prod, 2000 em dev
+  skipSuccessfulRequests: true, // Não contar requests bem-sucedidos
+  trustProxy: false, // Desabilitar trust proxy para resolver erro
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many requests, please try again later.',
+  handler: (req, res) => {
+    console.log(`🚫 Rate limit atingido para IP: ${req.ip}, rota: ${req.path}`);
+    res.status(429).json({
+      error: 'Too many requests',
+      retryAfter: Math.round(limiter.windowMs / 1000)
+    });
+  }
 });
 app.use(limiter);
 
@@ -352,6 +364,9 @@ const migrateRoutes = require('./routes/migrate'); // Habilitado temporariamente
 const appConfigurationsRoutes = require('./routes/app-configurations');
 const dataImportRoutes = require('./routes/dataImport');
 const whatsappMessagesRoutes = require('./routes/whatsapp-messages');
+console.log('🔄 Carregando workspace-instances routes...');
+const workspaceInstancesRoutes = require('./routes/workspace-instances');
+console.log('✅ Workspace-instances routes carregadas');
 
 // Rotas da API
 app.use('/api/data-import', dataImportRoutes);
@@ -386,6 +401,7 @@ app.use('/api/site-templates', siteTemplatesRoutes);
 app.use('/api/hotel-sites', hotelSitesRoutes);
 app.use('/api/app-configurations', appConfigurationsRoutes);
 app.use('/api/whatsapp-messages', whatsappMessagesRoutes);
+app.use('/api/workspace-instances', workspaceInstancesRoutes);
 
 app.use('/api/migrate', migrateRoutes); // Habilitado temporariamente
 
@@ -478,3 +494,6 @@ process.on('SIGINT', async () => {
 
 startServer();
 // restart
+// force restart
+// another restart
+// restart Thu, Sep 18, 2025  2:13:41 PM
