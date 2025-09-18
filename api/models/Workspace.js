@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const cacheService = require('../services/cacheService');
 
 class Workspace {
   constructor(data = {}) {
@@ -26,37 +27,54 @@ class Workspace {
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT w.*, h.name as hotel_nome 
-      FROM workspaces w 
-      LEFT JOIN hotels h ON w.hotel_id = h.id 
+      SELECT
+        w.*,
+        h.name as hotel_nome,
+        h.hotel_uuid as hotel_uuid_full,
+        h.status as hotel_status,
+        (SELECT COUNT(*) FROM bots b WHERE b.workspace_id = w.id AND b.active = true) as bots_count,
+        (SELECT COUNT(*) FROM workspace_instances wi WHERE wi.workspace_uuid = w.uuid) as instances_count
+      FROM workspaces w
+      LEFT JOIN hotels h ON w.hotel_id = h.id
       WHERE 1=1
     `;
     const params = [];
+    let paramCount = 0;
 
     if (filters.active !== undefined) {
-      query += ' AND w.active = ?';
+      paramCount++;
+      query += ` AND w.active = $${paramCount}`;
       params.push(filters.active);
     }
 
     if (filters.hotel_id) {
-      query += ' AND w.hotel_id = ?';
+      paramCount++;
+      query += ` AND w.hotel_id = $${paramCount}`;
       params.push(filters.hotel_id);
     }
 
     if (filters.hotel_uuid) {
-      query += ' AND w.hotel_uuid = ?';
+      paramCount++;
+      query += ` AND w.hotel_uuid = $${paramCount}`;
       params.push(filters.hotel_uuid);
     }
 
     if (filters.search) {
-      query += ' AND (w.name LIKE ? OR w.description LIKE ? OR h.name LIKE ?)';
+      paramCount++;
+      const searchParam1 = paramCount;
+      paramCount++;
+      const searchParam2 = paramCount;
+      paramCount++;
+      const searchParam3 = paramCount;
+      query += ` AND (w.name ILIKE $${searchParam1} OR w.description ILIKE $${searchParam2} OR h.name ILIKE $${searchParam3})`;
       params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY w.created_at DESC';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      paramCount++;
+      query += ` LIMIT $${paramCount}`;
       params.push(parseInt(filters.limit));
     }
 
@@ -64,55 +82,108 @@ class Workspace {
     return result.map(row => {
       const workspace = new Workspace(row);
       workspace.hotel_nome = row.hotel_nome;
+      workspace.hotel_status = row.hotel_status;
+      workspace.bots_count = parseInt(row.bots_count) || 0;
+      workspace.instances_count = parseInt(row.instances_count) || 0;
       return workspace;
     });
   }
 
-  static async findByHotel(hotelId, filters = {}) {
+  static async findByHotel(hotelId, filters = {}, useCache = true) {
+    const cacheKey = `hotel:${hotelId}:workspaces:${JSON.stringify(filters)}`;
+
+    if (useCache) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        return cached.map(data => {
+          const workspace = new Workspace(data);
+          workspace.hotel_nome = data.hotel_nome;
+          workspace.hotel_status = data.hotel_status;
+          workspace.bots_count = data.bots_count;
+          workspace.instances_count = data.instances_count;
+          return workspace;
+        });
+      }
+    }
+
     let query = `
-      SELECT w.*, h.name as hotel_nome 
-      FROM workspaces w 
-      LEFT JOIN hotels h ON w.hotel_id = h.id 
-      WHERE w.hotel_id = ?
+      SELECT
+        w.*,
+        h.name as hotel_nome,
+        h.hotel_uuid as hotel_uuid_full,
+        h.status as hotel_status,
+        (SELECT COUNT(*) FROM bots b WHERE b.workspace_id = w.id AND b.active = true) as bots_count,
+        (SELECT COUNT(*) FROM workspace_instances wi WHERE wi.workspace_uuid = w.uuid) as instances_count
+      FROM workspaces w
+      LEFT JOIN hotels h ON w.hotel_id = h.id
+      WHERE w.hotel_id = $1
     `;
     const params = [hotelId];
+    let paramCount = 1;
 
     if (filters.active !== undefined) {
-      query += ' AND w.active = ?';
+      paramCount++;
+      query += ` AND w.active = $${paramCount}`;
       params.push(filters.active);
     }
 
     if (filters.search) {
-      query += ' AND (w.name LIKE ? OR w.description LIKE ?)';
+      paramCount++;
+      const searchParam1 = paramCount;
+      paramCount++;
+      const searchParam2 = paramCount;
+      query += ` AND (w.name ILIKE $${searchParam1} OR w.description ILIKE $${searchParam2})`;
       params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY w.created_at DESC';
 
     const result = await db.query(query, params);
-    return result.map(row => {
+    const workspaces = result.map(row => {
       const workspace = new Workspace(row);
       workspace.hotel_nome = row.hotel_nome;
+      workspace.hotel_status = row.hotel_status;
+      workspace.bots_count = parseInt(row.bots_count) || 0;
+      workspace.instances_count = parseInt(row.instances_count) || 0;
       return workspace;
     });
+
+    // Cache por 5 minutos
+    if (useCache && workspaces.length > 0) {
+      await cacheService.set(cacheKey, workspaces.map(w => w.toJSON()), 300);
+    }
+
+    return workspaces;
   }
 
   static async findByHotelUuid(hotelUuid, filters = {}) {
     let query = `
-      SELECT w.*, h.name as hotel_nome 
-      FROM workspaces w 
-      LEFT JOIN hotels h ON w.hotel_id = h.id 
-      WHERE w.hotel_uuid = ?
+      SELECT
+        w.*,
+        h.name as hotel_nome,
+        h.hotel_uuid as hotel_uuid_full,
+        h.status as hotel_status,
+        (SELECT COUNT(*) FROM bots b WHERE b.workspace_id = w.id AND b.active = true) as bots_count,
+        (SELECT COUNT(*) FROM workspace_instances wi WHERE wi.workspace_uuid = w.uuid) as instances_count
+      FROM workspaces w
+      LEFT JOIN hotels h ON w.hotel_id = h.id
+      WHERE w.hotel_uuid = $1
     `;
     const params = [hotelUuid];
+    let paramCount = 1;
 
     if (filters.active !== undefined) {
-      query += ' AND w.active = ?';
+      paramCount++;
+      query += ` AND w.active = $${paramCount}`;
       params.push(filters.active);
     }
 
     if (filters.search) {
-      query += ' AND (w.name LIKE ? OR w.description LIKE ?)';
+      paramCount++;
+      const searchParam1 = paramCount;
+      paramCount++;
+      const searchParam2 = paramCount;
+      query += ` AND (w.name ILIKE $${searchParam1} OR w.description ILIKE $${searchParam2})`;
       params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
@@ -122,6 +193,9 @@ class Workspace {
     return result.map(row => {
       const workspace = new Workspace(row);
       workspace.hotel_nome = row.hotel_nome;
+      workspace.hotel_status = row.hotel_status;
+      workspace.bots_count = parseInt(row.bots_count) || 0;
+      workspace.instances_count = parseInt(row.instances_count) || 0;
       return workspace;
     });
   }
@@ -130,21 +204,26 @@ class Workspace {
     if (this.id) {
       // Update existing workspace
       const result = await db.query(`
-        UPDATE workspaces SET 
+        UPDATE workspaces SET
         name = $1, description = $2, settings = $3, active = $4
         WHERE id = $5
       `, [
         this.name,
-        this.description, 
+        this.description,
         this.settings ? JSON.stringify(this.settings) : null,
         this.active,
         this.id
       ]);
+
+      // Invalidar cache
+      await cacheService.invalidateWorkspaceCache(this.id, this.workspace_uuid);
+      await cacheService.invalidateHotelCache(this.hotel_id);
+
       return result;
     } else {
       // Create new workspace
       const result = await db.query(`
-        INSERT INTO workspaces (hotel_id, hotel_uuid, name, description, settings, active) 
+        INSERT INTO workspaces (hotel_id, hotel_uuid, name, description, settings, active)
         VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         this.hotel_id,
@@ -154,13 +233,16 @@ class Workspace {
         this.settings ? JSON.stringify(this.settings) : null,
         this.active
       ]);
-      
+
       this.id = result.insertId;
-      
+
       // Get the generated UUID
       const newWorkspace = await Workspace.findById(this.id);
       this.workspace_uuid = newWorkspace.workspace_uuid;
-      
+
+      // Invalidar cache
+      await cacheService.invalidateHotelCache(this.hotel_id);
+
       return result;
     }
   }
@@ -310,9 +392,82 @@ class Workspace {
     return this.settings || {};
   }
 
+  // Lazy loading methods
+  async loadBots(useCache = true) {
+    if (this._bots) return this._bots;
+
+    const cacheKey = `workspace:${this.id}:bots:lazy`;
+    if (useCache) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        this._bots = cached;
+        return this._bots;
+      }
+    }
+
+    const Bot = require('./Bot');
+    this._bots = await Bot.findByWorkspace(this.id, { active: true });
+
+    if (useCache) {
+      await cacheService.set(cacheKey, this._bots, 300);
+    }
+
+    return this._bots;
+  }
+
+  async loadInstances(useCache = true) {
+    if (this._instances) return this._instances;
+
+    const cacheKey = `workspace:${this.workspace_uuid}:instances:lazy`;
+    if (useCache) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        this._instances = cached;
+        return this._instances;
+      }
+    }
+
+    const result = await db.query(`
+      SELECT instance_name, created_at, updated_at
+      FROM workspace_instances
+      WHERE workspace_uuid = $1
+      ORDER BY created_at DESC
+    `, [this.workspace_uuid]);
+
+    this._instances = result.rows || result;
+
+    if (useCache) {
+      await cacheService.set(cacheKey, this._instances, 300);
+    }
+
+    return this._instances;
+  }
+
+  async loadHotel(useCache = true) {
+    if (this._hotel) return this._hotel;
+
+    const cacheKey = `hotel:${this.hotel_id}:data:lazy`;
+    if (useCache) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        this._hotel = cached;
+        return this._hotel;
+      }
+    }
+
+    const Hotel = require('./Hotel');
+    this._hotel = await Hotel.findById(this.hotel_id);
+
+    if (useCache) {
+      await cacheService.set(cacheKey, this._hotel, 600); // Cache hotel por mais tempo
+    }
+
+    return this._hotel;
+  }
+
   // Convert to JSON for API response
   toJSON() {
-    return {
+    const json = {
       id: this.id,
       workspace_uuid: this.workspace_uuid,
       hotel_id: this.hotel_id,
@@ -323,8 +478,18 @@ class Workspace {
       active: this.active,
       created_at: this.created_at,
       updated_at: this.updated_at,
-      hotel_nome: this.hotel_nome
+      hotel_nome: this.hotel_nome,
+      hotel_status: this.hotel_status,
+      bots_count: this.bots_count,
+      instances_count: this.instances_count
     };
+
+    // Include loaded relationships if available
+    if (this._bots) json.bots = this._bots;
+    if (this._instances) json.instances = this._instances;
+    if (this._hotel) json.hotel = this._hotel;
+
+    return json;
   }
 }
 

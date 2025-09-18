@@ -31,58 +31,82 @@ class Bot {
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT b.*, w.name as workspace_name, h.name as hotel_nome 
-      FROM bots b 
-      LEFT JOIN workspaces w ON b.workspace_id = w.id 
-      LEFT JOIN hotels h ON b.hotel_id = h.id 
+      SELECT
+        b.*,
+        w.name as workspace_name,
+        w.uuid as workspace_uuid_full,
+        w.active as workspace_active,
+        h.name as hotel_nome,
+        h.hotel_uuid as hotel_uuid_full,
+        h.status as hotel_status,
+        (SELECT COUNT(*) FROM flows f WHERE f.bot_id = b.id AND f.active = true) as flows_count,
+        (SELECT COUNT(*) FROM folders fd WHERE fd.bot_id = b.id AND fd.active = true) as folders_count
+      FROM bots b
+      LEFT JOIN workspaces w ON b.workspace_id = w.id
+      LEFT JOIN hotels h ON b.hotel_id = h.id
       WHERE 1=1
     `;
     const params = [];
+    let paramCount = 0;
 
     if (filters.active !== undefined) {
-      query += ' AND b.active = ?';
+      paramCount++;
+      query += ` AND b.active = $${paramCount}`;
       params.push(filters.active);
     }
 
     if (filters.workspace_id) {
-      query += ' AND b.workspace_id = ?';
+      paramCount++;
+      query += ` AND b.workspace_id = $${paramCount}`;
       params.push(filters.workspace_id);
     }
 
     if (filters.workspace_uuid) {
-      query += ' AND b.workspace_uuid = ?';
+      paramCount++;
+      query += ` AND b.workspace_uuid = $${paramCount}`;
       params.push(filters.workspace_uuid);
     }
 
     if (filters.hotel_id) {
-      query += ' AND b.hotel_id = ?';
+      paramCount++;
+      query += ` AND b.hotel_id = $${paramCount}`;
       params.push(filters.hotel_id);
     }
 
     if (filters.hotel_uuid) {
-      query += ' AND b.hotel_uuid = ?';
+      paramCount++;
+      query += ` AND b.hotel_uuid = $${paramCount}`;
       params.push(filters.hotel_uuid);
     }
 
     if (filters.bot_type) {
-      query += ' AND b.bot_type = ?';
+      paramCount++;
+      query += ` AND b.bot_type = $${paramCount}`;
       params.push(filters.bot_type);
     }
 
     if (filters.status) {
-      query += ' AND b.status = ?';
+      paramCount++;
+      query += ` AND b.status = $${paramCount}`;
       params.push(filters.status);
     }
 
     if (filters.search) {
-      query += ' AND (b.name LIKE ? OR b.description LIKE ? OR h.name LIKE ?)';
+      paramCount++;
+      const searchParam1 = paramCount;
+      paramCount++;
+      const searchParam2 = paramCount;
+      paramCount++;
+      const searchParam3 = paramCount;
+      query += ` AND (b.name ILIKE $${searchParam1} OR b.description ILIKE $${searchParam2} OR h.name ILIKE $${searchParam3})`;
       params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
     query += ' ORDER BY b.created_at DESC';
 
     if (filters.limit) {
-      query += ' LIMIT ?';
+      paramCount++;
+      query += ` LIMIT $${paramCount}`;
       params.push(parseInt(filters.limit));
     }
 
@@ -90,23 +114,38 @@ class Bot {
     return result.map(row => {
       const bot = new Bot(row);
       bot.workspace_name = row.workspace_name;
+      bot.workspace_active = row.workspace_active;
       bot.hotel_nome = row.hotel_nome;
+      bot.hotel_status = row.hotel_status;
+      bot.flows_count = parseInt(row.flows_count) || 0;
+      bot.folders_count = parseInt(row.folders_count) || 0;
       return bot;
     });
   }
 
   static async findByWorkspace(workspaceId, filters = {}) {
     let query = `
-      SELECT b.*, w.name as workspace_name, h.name as hotel_nome 
-      FROM bots b 
-      LEFT JOIN workspaces w ON b.workspace_id = w.id 
-      LEFT JOIN hotels h ON b.hotel_id = h.id 
-      WHERE b.workspace_id = ?
+      SELECT
+        b.*,
+        w.name as workspace_name,
+        w.uuid as workspace_uuid_full,
+        w.active as workspace_active,
+        h.name as hotel_nome,
+        h.hotel_uuid as hotel_uuid_full,
+        h.status as hotel_status,
+        (SELECT COUNT(*) FROM flows f WHERE f.bot_id = b.id AND f.active = true) as flows_count,
+        (SELECT COUNT(*) FROM folders fd WHERE fd.bot_id = b.id AND fd.active = true) as folders_count
+      FROM bots b
+      LEFT JOIN workspaces w ON b.workspace_id = w.id
+      LEFT JOIN hotels h ON b.hotel_id = h.id
+      WHERE b.workspace_id = $1
     `;
     const params = [workspaceId];
+    let paramCount = 1;
 
     if (filters.active !== undefined) {
-      query += ' AND b.active = ?';
+      paramCount++;
+      query += ` AND b.active = $${paramCount}`;
       params.push(filters.active);
     }
 

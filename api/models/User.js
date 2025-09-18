@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const bcrypt = require('bcryptjs');
+const cacheService = require('../services/cacheService');
 // Fixed uuid column references
 
 class User {
@@ -122,36 +123,64 @@ class User {
     return await db.query('DELETE FROM users WHERE id = $1', [this.id]);
   }
 
-  // Get user hotels
-  async getHotels() {
+  // Get user hotels with cache
+  async getHotels(useCache = true) {
+    if (useCache) {
+      const cached = await cacheService.getUserHotels(this.id);
+      if (cached) {
+        return cached;
+      }
+    }
+
     const result = await db.query(`
-      SELECT h.id, h.hotel_uuid, h.name as hotel_nome, h.created_at as hotel_criado_em, 
-             h.cover_image as hotel_capa, h.checkin_time as hora_checkin, h.checkout_time as hora_checkout, 
-             uh.role, uh.permissions, uh.active as user_active
+      SELECT
+        h.id, h.hotel_uuid, h.name as hotel_nome, h.created_at as hotel_criado_em,
+        h.cover_image as hotel_capa, h.checkin_time as hora_checkin, h.checkout_time as hora_checkout,
+        h.status as hotel_status, h.description as hotel_description,
+        uh.role, uh.permissions, uh.active as user_active,
+        (SELECT COUNT(*) FROM workspaces w WHERE w.hotel_id = h.id AND w.active = true) as workspaces_count
       FROM hotels h
       JOIN user_hotels uh ON h.id = uh.hotel_id
       WHERE uh.user_id = $1 AND uh.active = true
       ORDER BY h.name
     `, [this.id]);
 
-    // Retornar apenas as rows para compatibilidade com o frontend
-    return result.rows || result;
+    const hotels = result.rows || result;
+
+    // Cache por 5 minutos
+    if (useCache && hotels.length > 0) {
+      await cacheService.setUserHotels(this.id, hotels, 300);
+    }
+
+    return hotels;
   }
 
   // Add user to hotel
   async addToHotel(hotelId, role = 'STAFF', permissions = null) {
-    return await db.query(
+    const result = await db.query(
       'INSERT INTO user_hotels (user_id, hotel_id, role, permissions) VALUES ($1, $2, $3, $4)',
       [this.id, hotelId, role, permissions ? JSON.stringify(permissions) : null]
     );
+
+    // Invalidar cache
+    await cacheService.invalidateUserCache(this.id);
+    await cacheService.invalidateHotelCache(hotelId);
+
+    return result;
   }
 
   // Remove user from hotel
   async removeFromHotel(hotelId) {
-    return await db.query(
+    const result = await db.query(
       'DELETE FROM user_hotels WHERE user_id = $1 AND hotel_id = $2',
       [this.id, hotelId]
     );
+
+    // Invalidar cache
+    await cacheService.invalidateUserCache(this.id);
+    await cacheService.invalidateHotelCache(hotelId);
+
+    return result;
   }
 
   // Get user permissions
@@ -199,9 +228,75 @@ class User {
     }
   }
 
+  // Lazy loading methods
+  async loadHotelsDetailed(useCache = true) {
+    if (this._hotels) return this._hotels;
+
+    this._hotels = await this.getHotels(useCache);
+    return this._hotels;
+  }
+
+  async loadWorkspaces(useCache = true) {
+    if (this._workspaces) return this._workspaces;
+
+    const cacheKey = `user:${this.id}:workspaces:lazy`;
+    if (useCache) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        this._workspaces = cached;
+        return this._workspaces;
+      }
+    }
+
+    // Carregar workspaces através dos hotéis do usuário
+    const hotels = await this.getHotels(useCache);
+    const Workspace = require('./Workspace');
+
+    const allWorkspaces = [];
+    for (const hotel of hotels) {
+      const workspaces = await Workspace.findByHotel(hotel.id, { active: true }, useCache);
+      allWorkspaces.push(...workspaces);
+    }
+
+    this._workspaces = allWorkspaces;
+
+    if (useCache) {
+      await cacheService.set(cacheKey, this._workspaces, 300);
+    }
+
+    return this._workspaces;
+  }
+
+  async loadPermissionsDetailed(useCache = true) {
+    if (this._permissions) return this._permissions;
+
+    const cacheKey = `user:${this.id}:permissions:lazy`;
+    if (useCache) {
+      const cached = await cacheService.get(cacheKey);
+      if (cached) {
+        this._permissions = cached;
+        return this._permissions;
+      }
+    }
+
+    this._permissions = await this.getPermissions();
+
+    if (useCache) {
+      await cacheService.set(cacheKey, this._permissions, 600); // Cache permissões por mais tempo
+    }
+
+    return this._permissions;
+  }
+
   toJSON() {
     const user = { ...this };
     delete user.password_hash; // Never expose password hash
+
+    // Include loaded relationships if available
+    if (this._hotels) user.hotels = this._hotels;
+    if (this._workspaces) user.workspaces = this._workspaces;
+    if (this._permissions) user.permissions = this._permissions;
+
     return user;
   }
 }
