@@ -35,24 +35,32 @@ const WorkspaceChatAoVivo = () => {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [messagesOffset, setMessagesOffset] = useState(0);
   const [qrCode, setQrCode] = useState(null);
   const [profileImageError, setProfileImageError] = useState(false);
   const [profileImageUrl, setProfileImageUrl] = useState(null);
   const [loadingProfileImage, setLoadingProfileImage] = useState(false);
   const [conversationProfileImages, setConversationProfileImages] = useState({});
   const [loadingConversationImages, setLoadingConversationImages] = useState({});
+  const [conversationContactNames, setConversationContactNames] = useState({});
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
   useEffect(() => {
     loadWorkspaceData();
   }, [workspaceUuid]);
 
-  // Auto scroll para a última mensagem quando messages mudam
+  // Auto scroll para a última mensagem apenas quando carregar nova conversa ou enviar mensagem
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current && selectedConversation && messages.length > 0) {
+      // Só fazer auto-scroll se for uma nova conversa (offset === 12) ou se enviou uma mensagem
+      if (messagesOffset <= 12) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
     }
-  }, [messages]);
+  }, [messages, selectedConversation, messagesOffset]);
 
   // Reset profile image error when conversation changes and load profile picture
   useEffect(() => {
@@ -70,66 +78,101 @@ const WorkspaceChatAoVivo = () => {
     try {
       setLoadingProfileImage(true);
 
-      // Buscar foto de perfil específica do contato
-      const response = await axios.get(`${API_BASE_URL}/evolution/profile-picture/${instanceName}/${phoneNumber}`);
+      // Buscar informações completas do contato (foto e nome)
+      const response = await axios.get(`${API_BASE_URL}/evolution/contact/${instanceName}/${phoneNumber}`);
 
       if (response.data.success && response.data.data) {
-        const profilePictureUrl = response.data.data.profilePictureUrl;
-        if (profilePictureUrl) {
-          setProfileImageUrl(profilePictureUrl);
-          console.log('Foto de perfil do contato encontrada:', phoneNumber, profilePictureUrl);
+        const contactData = response.data.data;
+
+        if (contactData.picture) {
+          setProfileImageUrl(contactData.picture);
+          console.log('Foto de perfil do contato encontrada:', phoneNumber, contactData.picture);
         } else {
           setProfileImageError(true);
           console.log('Foto de perfil do contato não encontrada para:', phoneNumber);
         }
       } else {
         setProfileImageError(true);
-        console.log('Resposta inválida ao buscar foto de perfil para:', phoneNumber);
+        console.log('Resposta inválida ao buscar informações do contato para:', phoneNumber);
       }
     } catch (error) {
-      console.log('Erro ao buscar foto de perfil do contato:', error);
+      console.log('Erro ao buscar informações do contato:', error);
       setProfileImageError(true);
     } finally {
       setLoadingProfileImage(false);
     }
   };
 
-  const loadConversationProfilePicture = async (instanceName, phoneNumber) => {
+  const loadConversationContactInfo = async (instanceName, phoneNumber) => {
     if (!instanceName || !phoneNumber) return;
 
     const conversationKey = `${instanceName}-${phoneNumber}`;
 
-    // Se já está carregando ou já tem a imagem, não carregar novamente
-    if (loadingConversationImages[conversationKey] || conversationProfileImages[conversationKey]) {
+    // Se já está carregando ou já tem as informações, não carregar novamente
+    if (loadingConversationImages[conversationKey] ||
+        (conversationProfileImages[conversationKey] && conversationContactNames[conversationKey])) {
       return;
     }
 
     try {
       setLoadingConversationImages(prev => ({ ...prev, [conversationKey]: true }));
 
-      const response = await axios.get(`${API_BASE_URL}/evolution/profile-picture/${instanceName}/${phoneNumber}`);
+      // Buscar informações completas do contato (nome e foto)
+      const contactResponse = await axios.get(`${API_BASE_URL}/evolution/contact/${instanceName}/${phoneNumber}`);
 
-      if (response.data.success && response.data.data && response.data.data.profilePictureUrl) {
-        setConversationProfileImages(prev => ({
-          ...prev,
-          [conversationKey]: response.data.data.profilePictureUrl
-        }));
+      if (contactResponse.data.success && contactResponse.data.data) {
+        const contactData = contactResponse.data.data;
+
+        // Salvar nome do contato
+        if (contactData.name) {
+          setConversationContactNames(prev => ({
+            ...prev,
+            [conversationKey]: contactData.name
+          }));
+        }
+
+        // Salvar foto de perfil
+        if (contactData.picture) {
+          setConversationProfileImages(prev => ({
+            ...prev,
+            [conversationKey]: contactData.picture
+          }));
+        }
+
+        console.log(`Informações do contato carregadas: ${phoneNumber} - Nome: ${contactData.name}`);
       }
     } catch (error) {
-      console.log(`Erro ao buscar foto de perfil da conversa ${phoneNumber}:`, error);
+      console.log(`Erro ao buscar informações do contato ${phoneNumber}:`, error);
     } finally {
       setLoadingConversationImages(prev => ({ ...prev, [conversationKey]: false }));
     }
   };
 
-  // Carregar fotos de perfil das conversas quando a lista de conversas mudar
+  // Carregar informações dos contatos das conversas quando a lista de conversas mudar
   useEffect(() => {
     if (conversations.length > 0) {
       conversations.forEach(conversation => {
-        loadConversationProfilePicture(conversation.instance_name, conversation.phone_number);
+        loadConversationContactInfo(conversation.instance_name, conversation.phone_number);
       });
     }
   }, [conversations]);
+
+  // Listener para scroll na área de mensagens (carregar mais mensagens)
+  useEffect(() => {
+    const messagesContainer = messagesContainerRef.current;
+    if (!messagesContainer) return;
+
+    const handleScroll = () => {
+      // Verificar se chegou no topo (scrollTop próximo de 0)
+      if (messagesContainer.scrollTop <= 50 && hasMoreMessages && !loadingMessages) {
+        console.log('📜 Carregando mais mensagens...');
+        loadMoreMessages();
+      }
+    };
+
+    messagesContainer.addEventListener('scroll', handleScroll);
+    return () => messagesContainer.removeEventListener('scroll', handleScroll);
+  }, [hasMoreMessages, loadingMessages, selectedConversation]);
 
   const loadWorkspaceData = async () => {
     try {
@@ -337,16 +380,48 @@ const WorkspaceChatAoVivo = () => {
     }
   };
 
-  const loadMessages = async (instanceName, phoneNumber) => {
+  const loadMessages = async (instanceName, phoneNumber, isLoadMore = false) => {
+    if (loadingMessages) return;
+
     try {
-      const response = await axios.get(`${API_BASE_URL}/whatsapp-messages/${instanceName}/${phoneNumber}`);
+      setLoadingMessages(true);
+
+      const limit = 12;
+      const offset = isLoadMore ? messagesOffset : 0;
+
+      const response = await axios.get(`${API_BASE_URL}/whatsapp-messages/${instanceName}/${phoneNumber}?limit=${limit}&offset=${offset}`);
+
       if (response.data.success) {
-        setMessages(response.data.data.messages || []);
+        const newMessages = response.data.data.messages || [];
+        const pagination = response.data.data.pagination || {};
+
+        if (isLoadMore) {
+          // Adicionar mensagens mais antigas no início do array
+          setMessages(prev => [...newMessages, ...prev]);
+          setMessagesOffset(prev => prev + limit);
+        } else {
+          // Primeira carga - resetar tudo
+          setMessages(newMessages);
+          setMessagesOffset(limit);
+        }
+
+        // Verificar se há mais mensagens para carregar
+        setHasMoreMessages(pagination.hasMore || false);
+
+        console.log(`Carregadas ${newMessages.length} mensagens (offset: ${offset}, hasMore: ${pagination.hasMore})`);
       }
     } catch (error) {
       console.error('Erro ao carregar mensagens:', error);
       toast.error('Erro ao carregar mensagens');
+    } finally {
+      setLoadingMessages(false);
     }
+  };
+
+  const loadMoreMessages = async () => {
+    if (!selectedConversation || !hasMoreMessages || loadingMessages) return;
+
+    await loadMessages(selectedConversation.instance_name, selectedConversation.phone_number, true);
   };
 
   const sendMessage = async () => {
@@ -364,6 +439,10 @@ const WorkspaceChatAoVivo = () => {
 
       if (response.data.success) {
         setMessageText('');
+        // Reset paginação para carregar mensagens mais recentes
+        setMessages([]);
+        setMessagesOffset(0);
+        setHasMoreMessages(true);
         await loadMessages(instanceName, selectedConversation.phone_number);
         toast.success('Mensagem enviada!');
       } else {
@@ -477,6 +556,11 @@ const WorkspaceChatAoVivo = () => {
                             key={`${conversation.instance_name}-${conversation.phone_number}`}
                             onClick={() => {
                               setSelectedConversation(conversation);
+                              // Reset paginação para nova conversa
+                              setMessages([]);
+                              setMessagesOffset(0);
+                              setHasMoreMessages(true);
+                              // Carregar primeiras mensagens
                               loadMessages(conversation.instance_name, conversation.phone_number);
                             }}
                             className={`p-4 border-b border-sapphire-100 cursor-pointer hover:bg-blue-50 transition-colors ${
@@ -538,7 +622,13 @@ const WorkspaceChatAoVivo = () => {
                                     </span>
                                   )}
                                   <p className="font-medium text-midnight-950 truncate text-base">
-                                    {conversation.contact_name || `+${conversation.phone_number}`}
+                                    {(() => {
+                                      const conversationKey = `${conversation.instance_name}-${conversation.phone_number}`;
+                                      const evolutionContactName = conversationContactNames[conversationKey];
+
+                                      // Prioridade: 1. Nome da Evolution API, 2. Nome do banco, 3. Número
+                                      return evolutionContactName || conversation.contact_name || `+${conversation.phone_number}`;
+                                    })()}
                                   </p>
                                   {conversation.unread_count > 0 && (
                                     <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 flex-shrink-0">
@@ -628,7 +718,13 @@ const WorkspaceChatAoVivo = () => {
                             <div>
                               <div className="flex items-center gap-2">
                                 <h4 className="font-semibold text-midnight-950">
-                                  {selectedConversation.contact_name || selectedConversation.phone_number}
+                                  {(() => {
+                                    const conversationKey = `${selectedConversation.instance_name}-${selectedConversation.phone_number}`;
+                                    const evolutionContactName = conversationContactNames[conversationKey];
+
+                                    // Prioridade: 1. Nome da Evolution API, 2. Nome do banco, 3. Número
+                                    return evolutionContactName || selectedConversation.contact_name || selectedConversation.phone_number;
+                                  })()}
                                 </h4>
                                 {isGroupConversation(selectedConversation.phone_number) && (
                                   <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
@@ -644,8 +740,21 @@ const WorkspaceChatAoVivo = () => {
                         </div>
 
                         {/* Mensagens */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 max-h-[calc(100vh-420px)]">
-                          {messages.length === 0 ? (
+                        <div
+                          ref={messagesContainerRef}
+                          className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 max-h-[calc(100vh-420px)]"
+                        >
+                          {/* Indicador de carregamento no topo */}
+                          {loadingMessages && hasMoreMessages && (
+                            <div className="text-center py-2">
+                              <div className="inline-flex items-center gap-2 text-steel-500">
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-sapphire-600 border-t-transparent"></div>
+                                <span className="text-sm">Carregando mensagens...</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {messages.length === 0 && !loadingMessages ? (
                             <div className="text-center text-steel-500">
                               <p>Nenhuma mensagem encontrada</p>
                             </div>

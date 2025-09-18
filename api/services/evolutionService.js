@@ -946,22 +946,21 @@ class EvolutionService {
   }
 
   /**
-   * Buscar informações do contato
+   * Buscar informações do contato (perfil)
    */
   async fetchContact(instanceName, phoneNumber) {
     try {
       console.log(`👤 Buscando informações do contato ${phoneNumber} na instância ${instanceName}`);
 
-      const response = await axios.get(
-        `${this.baseURL}/chat/findContacts/${instanceName}`,
+      const response = await axios.post(
+        `${this.baseURL}/chat/fetchProfile/${instanceName}`,
+        {
+          number: phoneNumber
+        },
         {
           headers: {
-            'apikey': this.apiKey
-          },
-          params: {
-            where: JSON.stringify({
-              id: phoneNumber
-            })
+            'apikey': this.apiKey,
+            'Content-Type': 'application/json'
           },
           timeout: 30000
         }
