@@ -45,6 +45,8 @@ const WorkspaceChatAoVivo = () => {
   const [conversationProfileImages, setConversationProfileImages] = useState({});
   const [loadingConversationImages, setLoadingConversationImages] = useState({});
   const [conversationContactNames, setConversationContactNames] = useState({});
+  const [isPollingActive, setIsPollingActive] = useState(false);
+  const [lastMessageCheck, setLastMessageCheck] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
@@ -176,7 +178,7 @@ const WorkspaceChatAoVivo = () => {
     return () => messagesContainer.removeEventListener('scroll', handleScroll);
   }, [hasMoreMessages, loadingMessages, selectedConversation]);
 
-  // Polling para atualizar contadores de mensagens não lidas
+  // Polling para atualizar contadores de mensagens não lidas e conversas
   useEffect(() => {
     if (linkedInstances.length === 0) return;
 
@@ -187,10 +189,72 @@ const WorkspaceChatAoVivo = () => {
       } catch (error) {
         console.error('Erro ao atualizar contadores:', error);
       }
-    }, 10000); // Atualizar a cada 10 segundos
+    }, 5000); // Atualizar a cada 5 segundos
 
     return () => clearInterval(interval);
   }, [linkedInstances]);
+
+  // Polling para atualizar mensagens da conversa selecionada
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    setIsPollingActive(true);
+
+    const interval = setInterval(async () => {
+      try {
+        setLastMessageCheck(new Date());
+
+        // Buscar novas mensagens da conversa atual
+        const response = await axios.get(`${API_BASE_URL}/whatsapp-messages/${selectedConversation.instance_name}/${selectedConversation.phone_number}?limit=12&offset=0`);
+
+        if (response.data.success) {
+          const newMessages = response.data.data.messages || [];
+
+          // Verificar se há mensagens novas
+          if (newMessages.length > 0) {
+            if (messages.length === 0) {
+              // Se não há mensagens atuais, carregar as novas
+              setMessages(newMessages);
+            } else {
+              // Verificar se há mensagens realmente novas
+              const currentMessageIds = new Set(messages.map(msg => msg.message_id || msg.id));
+              const hasNewMessages = newMessages.some(msg => !currentMessageIds.has(msg.message_id || msg.id));
+
+              if (hasNewMessages) {
+                console.log('🔄 Nova mensagem detectada, atualizando...');
+
+                // Verificar se o usuário está no final da conversa para auto-scroll
+                const shouldAutoScroll = messagesContainerRef.current &&
+                  (messagesContainerRef.current.scrollTop + messagesContainerRef.current.clientHeight >=
+                   messagesContainerRef.current.scrollHeight - 100);
+
+                setMessages(newMessages);
+
+                // Auto scroll apenas se estava no final da conversa
+                if (shouldAutoScroll) {
+                  setTimeout(() => {
+                    if (messagesEndRef.current) {
+                      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }, 100);
+                }
+
+                // Marcar mensagens como lidas automaticamente
+                markMessagesAsRead(selectedConversation.instance_name, selectedConversation.phone_number);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao verificar novas mensagens:', error);
+      }
+    }, 3000); // Verificar a cada 3 segundos
+
+    return () => {
+      clearInterval(interval);
+      setIsPollingActive(false);
+    };
+  }, [selectedConversation, messages]);
 
   const loadWorkspaceData = async () => {
     try {
@@ -479,28 +543,60 @@ const WorkspaceChatAoVivo = () => {
       return;
     }
 
+    const messageToSend = messageText.trim();
+    setMessageText(''); // Limpar imediatamente para melhor UX
+
     try {
       const instanceName = selectedConversation.instance_name;
       const response = await axios.post(`${API_BASE_URL}/whatsapp-messages/send/${instanceName}`, {
         phoneNumber: selectedConversation.phone_number,
-        message: messageText.trim(),
+        message: messageToSend,
         messageType: 'text'
       });
 
       if (response.data.success) {
-        setMessageText('');
-        // Reset paginação para carregar mensagens mais recentes
-        setMessages([]);
-        setMessagesOffset(0);
-        setHasMoreMessages(true);
-        await loadMessages(instanceName, selectedConversation.phone_number);
+        // Adicionar mensagem enviada imediatamente ao estado local para aparecer instantaneamente
+        const sentMessage = {
+          id: `sent_${Date.now()}`,
+          message_id: response.data.data?.message_id || `sent_${Date.now()}`,
+          phone_number: selectedConversation.phone_number,
+          contact_name: selectedConversation.contact_name,
+          message_type: 'text',
+          content: messageToSend,
+          direction: 'outbound',
+          timestamp: new Date().toISOString(),
+          read_at: null,
+          delivered_at: null
+        };
+
+        // Adicionar a mensagem ao final da lista atual
+        setMessages(prev => [...prev, sentMessage]);
+
+        // Auto scroll para a nova mensagem
+        setTimeout(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+
+        // Atualizar a lista de conversas para refletir a nova última mensagem
+        setTimeout(async () => {
+          try {
+            await loadAllLinkedConversations(linkedInstances);
+          } catch (error) {
+            console.error('Erro ao atualizar conversas:', error);
+          }
+        }, 500);
+
         toast.success('Mensagem enviada!');
       } else {
         toast.error('Erro ao enviar mensagem');
+        setMessageText(messageToSend); // Restaurar texto se houve erro
       }
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       toast.error('Erro ao enviar mensagem');
+      setMessageText(messageToSend); // Restaurar texto se houve erro
     }
   };
 
@@ -736,55 +832,76 @@ const WorkspaceChatAoVivo = () => {
                       <>
                         {/* Header do Chat */}
                         <div className="p-4 border-b border-sapphire-200/30">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full overflow-hidden shadow-sapphire-glow border-2 border-sapphire-200">
-                              {loadingProfileImage ? (
-                                <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
-                                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                                </div>
-                              ) : profileImageUrl && !profileImageError ? (
-                                <img
-                                  src={profileImageUrl}
-                                  alt="Foto de perfil"
-                                  className="w-full h-full object-cover"
-                                  onError={() => {
-                                    setProfileImageError(true);
-                                    setProfileImageUrl(null);
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
-                                  <span className="text-white text-lg">
-                                    {isGroupConversation(selectedConversation.phone_number) ? '👥' :
-                                     (selectedConversation.contact_name ?
-                                      selectedConversation.contact_name.charAt(0).toUpperCase() :
-                                      selectedConversation.phone_number.charAt(0)
-                                     )
-                                    }
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-semibold text-midnight-950">
-                                  {(() => {
-                                    const conversationKey = `${selectedConversation.instance_name}-${selectedConversation.phone_number}`;
-                                    const evolutionContactName = conversationContactNames[conversationKey];
-
-                                    // Prioridade: 1. Nome da Evolution API, 2. Nome do banco, 3. Número
-                                    return evolutionContactName || selectedConversation.contact_name || selectedConversation.phone_number;
-                                  })()}
-                                </h4>
-                                {isGroupConversation(selectedConversation.phone_number) && (
-                                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                                    Grupo
-                                  </span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 rounded-full overflow-hidden shadow-sapphire-glow border-2 border-sapphire-200">
+                                {loadingProfileImage ? (
+                                  <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                                  </div>
+                                ) : profileImageUrl && !profileImageError ? (
+                                  <img
+                                    src={profileImageUrl}
+                                    alt="Foto de perfil"
+                                    className="w-full h-full object-cover"
+                                    onError={() => {
+                                      setProfileImageError(true);
+                                      setProfileImageUrl(null);
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
+                                    <span className="text-white text-lg">
+                                      {isGroupConversation(selectedConversation.phone_number) ? '👥' :
+                                       (selectedConversation.contact_name ?
+                                        selectedConversation.contact_name.charAt(0).toUpperCase() :
+                                        selectedConversation.phone_number.charAt(0)
+                                       )
+                                      }
+                                    </span>
+                                  </div>
                                 )}
                               </div>
-                              <p className="text-sm text-steel-600">
-                                {selectedConversation.contact_name ? selectedConversation.phone_number : getInstanceDisplayName(selectedConversation.instance_name)}
-                              </p>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-semibold text-midnight-950">
+                                    {(() => {
+                                      const conversationKey = `${selectedConversation.instance_name}-${selectedConversation.phone_number}`;
+                                      const evolutionContactName = conversationContactNames[conversationKey];
+
+                                      // Prioridade: 1. Nome da Evolution API, 2. Nome do banco, 3. Número
+                                      return evolutionContactName || selectedConversation.contact_name || selectedConversation.phone_number;
+                                    })()}
+                                  </h4>
+                                  {isGroupConversation(selectedConversation.phone_number) && (
+                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                      Grupo
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-steel-600">
+                                  {selectedConversation.contact_name ? selectedConversation.phone_number : getInstanceDisplayName(selectedConversation.instance_name)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Indicador de polling ativo */}
+                            <div className="flex items-center space-x-2">
+                              {isPollingActive && (
+                                <div className="flex items-center space-x-2 text-xs text-green-600">
+                                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                  <span>Tempo real</span>
+                                </div>
+                              )}
+                              {lastMessageCheck && (
+                                <div className="text-xs text-steel-500">
+                                  Última verificação: {lastMessageCheck.toLocaleTimeString('pt-BR', {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                  })}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>

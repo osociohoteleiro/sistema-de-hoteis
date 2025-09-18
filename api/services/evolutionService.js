@@ -984,6 +984,67 @@ class EvolutionService {
       };
     }
   }
+
+  /**
+   * Enviar mensagem via Evolution API
+   */
+  async sendMessage(instanceName, phoneNumber, message, messageType = 'text') {
+    try {
+      console.log(`📤 Enviando mensagem: ${instanceName} -> ${phoneNumber}`);
+
+      // Validações
+      if (!instanceName || !phoneNumber || !message) {
+        throw new Error('Instance name, phone number e message são obrigatórios');
+      }
+
+      // Preparar payload baseado no tipo de mensagem
+      let payload = {};
+      let endpoint = '';
+
+      switch (messageType.toLowerCase()) {
+        case 'text':
+        default:
+          endpoint = `/message/sendText/${instanceName}`;
+          payload = {
+            number: phoneNumber,
+            text: message
+          };
+          break;
+      }
+
+      const response = await axios.post(
+        `${this.baseURL}${endpoint}`,
+        payload,
+        {
+          headers: {
+            'apikey': this.apiKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        }
+      );
+
+      console.log(`✅ Mensagem enviada com sucesso: ${instanceName} -> ${phoneNumber}`);
+
+      return {
+        success: true,
+        data: response.data,
+        message: 'Mensagem enviada com sucesso'
+      };
+
+    } catch (error) {
+      console.error(`❌ Erro ao enviar mensagem ${instanceName} -> ${phoneNumber}:`, error);
+
+      return {
+        success: false,
+        error: {
+          message: error.response?.data?.message || error.message,
+          response: error.response?.data || null,
+          status: error.response?.status || null
+        }
+      };
+    }
+  }
 }
 
 module.exports = new EvolutionService();
