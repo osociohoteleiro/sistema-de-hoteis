@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import axios from 'axios';
+import { useSidebar } from '../contexts/SidebarContext';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -9,6 +10,7 @@ const WorkspaceSidebar = () => {
   const params = useParams();
   const workspaceUuid = params.workspaceUuid || params.workspaceId;
   const botUuid = params.botUuid;
+  const { isWorkspaceCollapsed, toggleWorkspaceSidebar, getWorkspaceSidebarPosition } = useSidebar();
   const [workspace, setWorkspace] = useState(null);
   const [bots, setBots] = useState([]);
   const [expandedMenus, setExpandedMenus] = useState({
@@ -120,17 +122,40 @@ const WorkspaceSidebar = () => {
   if (!workspaceUuid && !botUuid) return null;
 
   return (
-    <div className="w-64 bg-gradient-card-blue backdrop-blur-sm min-h-screen fixed left-64 top-0 z-30 border-r border-sapphire-200/30 shadow-blue-elegant">
+    <div
+      className={`${isWorkspaceCollapsed ? 'w-16' : 'w-64'} bg-gradient-card-blue backdrop-blur-sm min-h-screen fixed top-0 z-50 border-r border-sapphire-200/30 shadow-blue-elegant transition-width group`}
+      style={{ left: `${getWorkspaceSidebarPosition() * 4}px`, overflow: 'visible' }}
+    >
+      {/* Toggle Button */}
+      <button
+        onClick={toggleWorkspaceSidebar}
+        className="sidebar-toggle-btn bg-gradient-sapphire hover:bg-midnight-700 text-white rounded-full flex items-center justify-center shadow-sapphire-glow transition-minimal opacity-0 group-hover:opacity-100"
+        title={isWorkspaceCollapsed ? 'Expandir workspace' : 'Recolher workspace'}
+      >
+        <svg
+          className={`w-3 h-3 transition-transform-fast ${isWorkspaceCollapsed ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
       {/* Workspace Header */}
-      <div className="p-6 border-b border-sapphire-200/20">
+      <div className={`${isWorkspaceCollapsed ? 'p-4' : 'p-6'} border-b border-sapphire-200/20 transition-sidebar`}>
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sapphire-600 text-xs font-medium uppercase tracking-wider">Workspace</p>
-            <h2 className="text-midnight-950 font-semibold text-base mt-1">
-              {workspace?.name || workspace?.workspace_name || 'Carregando...'}
-            </h2>
+          <div className="overflow-hidden">
+            {!isWorkspaceCollapsed && (
+              <>
+                <p className="text-sapphire-600 text-xs font-medium uppercase tracking-wider whitespace-nowrap">Workspace</p>
+                <h2 className="text-midnight-950 font-semibold text-base mt-1 whitespace-nowrap">
+                  {workspace?.name || workspace?.workspace_name || 'Carregando...'}
+                </h2>
+              </>
+            )}
           </div>
-          <div className="w-8 h-8 bg-gradient-sapphire rounded-lg flex items-center justify-center shadow-sapphire-glow">
+          <div className="w-8 h-8 bg-gradient-sapphire rounded-lg flex items-center justify-center shadow-sapphire-glow flex-shrink-0">
             <span className="text-white text-xs font-bold">W</span>
           </div>
         </div>
@@ -138,109 +163,122 @@ const WorkspaceSidebar = () => {
 
       {/* Navigation Menu */}
       <nav className="mt-4">
-        <div className="px-4 space-y-2">
+        <div className={`${isWorkspaceCollapsed ? 'px-2' : 'px-4'} space-y-2 transition-sidebar`}>
 
           {/* Chat ao Vivo - Página principal */}
           {workspace?.workspace_uuid && (
             <Link
               to={`/workspace/${workspace.workspace_uuid}/chat-ao-vivo`}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+              className={`flex items-center space-x-3 ${isWorkspaceCollapsed ? 'px-2 justify-center' : 'px-4'} py-3 rounded-lg transition-minimal ${
                 isActive(`/workspace/${workspace.workspace_uuid}/chat-ao-vivo`)
                   ? 'bg-gradient-sapphire text-white shadow-blue-soft'
                   : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
               }`}
+              title={isWorkspaceCollapsed ? 'Chat ao Vivo' : ''}
             >
-              <span className="text-lg">💬</span>
-              <span className="text-sm font-medium">Chat ao Vivo</span>
-              <span className="ml-auto bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full font-semibold">Principal</span>
+              <span className="text-lg flex-shrink-0">💬</span>
+              {!isWorkspaceCollapsed && (
+                <>
+                  <span className="text-sm font-medium whitespace-nowrap">Chat ao Vivo</span>
+                  <span className="ml-auto bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full font-semibold">Principal</span>
+                </>
+              )}
             </Link>
           )}
 
           {/* Divisor */}
-          <div className="my-3 border-t border-sapphire-200/20"></div>
+          {!isWorkspaceCollapsed && <div className="my-3 border-t border-sapphire-200/20"></div>}
 
           {/* Gerenciar Bots */}
           {workspace?.workspace_uuid && (
             <Link
               to={`/workspace/${workspace.workspace_uuid}/bots`}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+              className={`flex items-center space-x-3 ${isWorkspaceCollapsed ? 'px-2 justify-center' : 'px-4'} py-3 rounded-lg transition-minimal ${
                 isActive(`/workspace/${workspace.workspace_uuid}/bots`)
                   ? 'bg-gradient-sapphire text-white shadow-blue-soft'
                   : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
               }`}
+              title={isWorkspaceCollapsed ? 'Gerenciar Bots' : ''}
             >
-              <span className="text-lg">🤖</span>
-              <span className="text-sm font-medium">Gerenciar Bots</span>
+              <span className="text-lg flex-shrink-0">🤖</span>
+              {!isWorkspaceCollapsed && (
+                <span className="text-sm font-medium whitespace-nowrap">Gerenciar Bots</span>
+              )}
             </Link>
           )}
 
           {/* Bots Individuais */}
-          <div>
-            <button
-              onClick={() => toggleMenu('bots')}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800 transition-minimal"
-            >
-              <div className="flex items-center space-x-3">
-                <span className="text-lg">🔧</span>
-                <span className="text-sm font-medium">Configurar Bots</span>
-              </div>
-              <svg
-                className={`w-4 h-4 transition-transform ${expandedMenus.bots ? 'rotate-90' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+          {!isWorkspaceCollapsed && (
+            <div>
+              <button
+                onClick={() => toggleMenu('bots')}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800 transition-minimal"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+                <div className="flex items-center space-x-3">
+                  <span className="text-lg">🔧</span>
+                  <span className="text-sm font-medium">Configurar Bots</span>
+                </div>
+                <svg
+                  className={`w-4 h-4 transition-transform ${expandedMenus.bots ? 'rotate-90' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             
-            {/* Submenu de Bots */}
-            {expandedMenus.bots && (
-              <div className="mt-1 ml-4 space-y-1">
-                {loading ? (
-                  <div className="px-4 py-2">
-                    <span className="text-xs text-steel-600">Carregando bots...</span>
-                  </div>
-                ) : bots.length === 0 ? (
-                  <div className="px-4 py-2">
-                    <span className="text-xs text-steel-600">Nenhum bot encontrado</span>
-                  </div>
-                ) : (
-                  bots.map((bot) => (
-                    <Link
-                      key={bot.bot_uuid || bot.uuid}
-                      to={`/bot/${bot.bot_uuid || bot.uuid}/flows`}
-                      className={`flex items-center space-x-2 px-4 py-2 rounded-md text-xs transition-minimal ${
-                        isActive(`/bot/${bot.bot_uuid || bot.uuid}/flows`)
-                          ? 'bg-gradient-sapphire text-white shadow-blue-soft'
-                          : 'text-steel-600 hover:bg-sapphire-50/30 hover:text-sapphire-700'
-                      }`}
-                    >
-                      <span>{getBotIcon(bot.bot_type)}</span>
-                      <span className="truncate">{bot.name}</span>
-                    </Link>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
+              {/* Submenu de Bots */}
+              {expandedMenus.bots && (
+                <div className="mt-1 ml-4 space-y-1">
+                  {loading ? (
+                    <div className="px-4 py-2">
+                      <span className="text-xs text-steel-600">Carregando bots...</span>
+                    </div>
+                  ) : bots.length === 0 ? (
+                    <div className="px-4 py-2">
+                      <span className="text-xs text-steel-600">Nenhum bot encontrado</span>
+                    </div>
+                  ) : (
+                    bots.map((bot) => (
+                      <Link
+                        key={bot.bot_uuid || bot.uuid}
+                        to={`/bot/${bot.bot_uuid || bot.uuid}/flows`}
+                        className={`flex items-center space-x-2 px-4 py-2 rounded-md text-xs transition-minimal ${
+                          isActive(`/bot/${bot.bot_uuid || bot.uuid}/flows`)
+                            ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                            : 'text-steel-600 hover:bg-sapphire-50/30 hover:text-sapphire-700'
+                        }`}
+                      >
+                        <span>{getBotIcon(bot.bot_type)}</span>
+                        <span className="truncate">{bot.name}</span>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
 
           {/* Divisor */}
-          <div className="my-3 border-t border-sapphire-200/20"></div>
+          {!isWorkspaceCollapsed && <div className="my-3 border-t border-sapphire-200/20"></div>}
 
           {/* Configurações da Workspace */}
           {workspace?.workspace_uuid && (
             <Link
               to={`/workspace/${workspace.workspace_uuid}/settings`}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+              className={`flex items-center space-x-3 ${isWorkspaceCollapsed ? 'px-2 justify-center' : 'px-4'} py-3 rounded-lg transition-minimal ${
                 isActive(`/workspace/${workspace.workspace_uuid}/settings`)
                   ? 'bg-gradient-sapphire text-white shadow-blue-soft'
                   : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
               }`}
+              title={isWorkspaceCollapsed ? 'Configurações' : ''}
             >
-              <span className="text-lg">⚙️</span>
-              <span className="text-sm font-medium">Configurações</span>
+              <span className="text-lg flex-shrink-0">⚙️</span>
+              {!isWorkspaceCollapsed && (
+                <span className="text-sm font-medium whitespace-nowrap">Configurações</span>
+              )}
             </Link>
           )}
 
@@ -248,14 +286,17 @@ const WorkspaceSidebar = () => {
           {workspace?.workspace_uuid && (
             <Link
               to={`/workspace/${workspace.workspace_uuid}/analytics`}
-              className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-minimal ${
+              className={`flex items-center space-x-3 ${isWorkspaceCollapsed ? 'px-2 justify-center' : 'px-4'} py-3 rounded-lg transition-minimal ${
                 isActive(`/workspace/${workspace.workspace_uuid}/analytics`)
                   ? 'bg-gradient-sapphire text-white shadow-blue-soft'
                   : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
               }`}
+              title={isWorkspaceCollapsed ? 'Analytics' : ''}
             >
-              <span className="text-lg">📊</span>
-              <span className="text-sm font-medium">Analytics</span>
+              <span className="text-lg flex-shrink-0">📊</span>
+              {!isWorkspaceCollapsed && (
+                <span className="text-sm font-medium whitespace-nowrap">Analytics</span>
+              )}
             </Link>
           )}
 
@@ -263,18 +304,27 @@ const WorkspaceSidebar = () => {
       </nav>
 
       {/* Footer Info */}
-      <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-sapphire-200/20">
-        <div className="flex flex-col space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-steel-600">Bots Ativos</span>
-            <span className="text-sapphire-600 font-semibold">{bots.filter(b => b.status === 'ACTIVE').length}</span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-steel-600">Total de Bots</span>
-            <span className="text-sapphire-600 font-semibold">{bots.length}</span>
+      {!isWorkspaceCollapsed && (
+        <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-sapphire-200/20 transition-sidebar">
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-steel-600 whitespace-nowrap">Bots Ativos</span>
+              <span className="text-sapphire-600 font-semibold">{bots.filter(b => b.status === 'ACTIVE').length}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-steel-600 whitespace-nowrap">Total de Bots</span>
+              <span className="text-sapphire-600 font-semibold">{bots.length}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Status indicator when collapsed */}
+      {isWorkspaceCollapsed && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+          <div className="w-2 h-2 bg-gradient-sapphire rounded-full shadow-sapphire-glow"></div>
+        </div>
+      )}
     </div>
   );
 };

@@ -48,7 +48,7 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-gradient-card-blue backdrop-blur-md border-b border-sapphire-200/30 px-8 py-6 relative z-50 shadow-blue-soft">
+    <header className="bg-gradient-card-blue backdrop-blur-md border-b border-sapphire-200/30 px-8 py-6 relative z-40 shadow-blue-soft">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-midnight-950 mb-1">
