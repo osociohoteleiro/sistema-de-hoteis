@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import Livechat from '../components/Livechat';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -27,7 +26,6 @@ const WorkspaceChatAoVivo = () => {
   const { workspaceUuid } = useParams();
   const [workspace, setWorkspace] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeSystem, setActiveSystem] = useState('evolution'); // 'evolution' ou 'cloud'
   const [instances, setInstances] = useState([]);
   const [instancesStatus, setInstancesStatus] = useState(new Map());
   const [instancesSummary, setInstancesSummary] = useState([]);
@@ -332,110 +330,20 @@ const WorkspaceChatAoVivo = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-6 shadow-blue-elegant">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Link
-                to="/workspaces"
-                className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
-              >
-                ← Voltar aos Workspaces
-              </Link>
-              <span className="text-steel-400">|</span>
-              <Link
-                to={`/workspace/${workspaceUuid}/bots`}
-                className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
-              >
-                Bots
-              </Link>
-              <span className="text-steel-400">|</span>
-              <Link
-                to={`/workspace/${workspaceUuid}/settings`}
-                className="text-sapphire-600 hover:text-sapphire-700 text-sm font-medium"
-              >
-                Configurações
-              </Link>
-            </div>
-            <h1 className="text-3xl font-bold text-midnight-950">
-              Chat ao Vivo - {workspace?.name || 'Workspace'}
-            </h1>
-            <p className="text-steel-700 mt-2">
-              {workspace ? `Hotel: ${workspace.hotel_nome}` : 'Central de atendimento em tempo real'}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full border border-green-200">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-semibold">Online</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Navegação entre sistemas */}
+      {/* Chat ao Vivo */}
       <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 shadow-blue-elegant">
-        <div className="border-b border-sapphire-200/30">
-          <nav className="flex space-x-8 px-8">
-            <button
-              onClick={() => setActiveSystem('evolution')}
-              className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
-                activeSystem === 'evolution'
-                  ? 'border-sapphire-500 text-sapphire-600'
-                  : 'border-transparent text-steel-600 hover:text-steel-800 hover:border-steel-300'
-              }`}
-            >
-              <span>📱</span>
-              <span>Evolution API</span>
-            </button>
-            <button
-              onClick={() => setActiveSystem('cloud')}
-              className={`flex items-center space-x-2 py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
-                activeSystem === 'cloud'
-                  ? 'border-sapphire-500 text-sapphire-600'
-                  : 'border-transparent text-steel-600 hover:text-steel-800 hover:border-steel-300'
-              }`}
-            >
-              <span>☁️</span>
-              <span>WhatsApp Cloud</span>
-            </button>
-          </nav>
-        </div>
-
-        <div className="p-8">
-          {activeSystem === 'evolution' && (
-            <div className="space-y-6">
-              {/* Status das Instâncias Vinculadas */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-midnight-950">Central Evolution API</h3>
-                  <p className="text-sm text-steel-600 mt-1">
-                    {linkedInstances.length === 0
-                      ? 'Nenhuma instância vinculada ao workspace'
-                      : `${linkedInstances.length} instância(s) vinculada(s): ${linkedInstances.join(', ')}`
-                    }
-                  </p>
-                </div>
-                <Link
-                  to={`/workspace/${workspaceUuid}/settings`}
-                  className="bg-sapphire-100 hover:bg-sapphire-200 text-sapphire-800 font-medium py-2 px-3 rounded-lg text-sm transition-minimal border border-sapphire-200"
-                >
-                  ⚙️ Configurar Instâncias
-                </Link>
-              </div>
-
-              {linkedInstances.length > 0 ? (
-                <div className="grid grid-cols-12 gap-6 h-96">
-                  {/* Lista de Conversas */}
-                  <div className="col-span-4 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle">
+        <div className="p-6">
+          <div className="space-y-6">
+            {linkedInstances.length > 0 ? (
+              <div className="grid grid-cols-12 gap-6 h-[calc(100vh-240px)]">
+                {/* Lista de Conversas */}
+                <div className="col-span-4 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle">
                     <div className="p-4 border-b border-sapphire-200/30">
                       <h4 className="font-semibold text-midnight-950">Conversas</h4>
                       <p className="text-sm text-steel-600">{conversations.length} conversa(s)</p>
                     </div>
-                    <div className="overflow-y-auto h-80">
+                    <div className="overflow-y-auto" style={{height: 'calc(100vh - 360px)'}}>
                       {conversations.length === 0 ? (
                         <div className="p-4 text-center text-steel-500">
                           <p>Nenhuma conversa encontrada</p>
@@ -482,7 +390,7 @@ const WorkspaceChatAoVivo = () => {
                   </div>
 
                   {/* Chat */}
-                  <div className="col-span-8 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle flex flex-col">
+                  <div className="col-span-8 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle flex flex-col h-full">
                     {!selectedConversation ? (
                       <div className="flex-1 flex items-center justify-center">
                         <div className="text-center">
@@ -510,7 +418,7 @@ const WorkspaceChatAoVivo = () => {
                         </div>
 
                         {/* Mensagens */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 max-h-[calc(100vh-420px)]">
                           {messages.length === 0 ? (
                             <div className="text-center text-steel-500">
                               <p>Nenhuma mensagem encontrada</p>
@@ -544,7 +452,7 @@ const WorkspaceChatAoVivo = () => {
                         </div>
 
                         {/* Input de Mensagem */}
-                        <div className="p-4 border-t border-sapphire-200/30">
+                        <div className="p-4 border-t border-sapphire-200/30 mt-auto flex-shrink-0">
                           <div className="flex items-center space-x-3">
                             <input
                               type="text"
@@ -571,32 +479,24 @@ const WorkspaceChatAoVivo = () => {
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="text-center py-16">
-                  <div className="w-16 h-16 bg-gradient-sapphire rounded-full flex items-center justify-center mx-auto mb-6 shadow-sapphire-glow">
-                    <span className="text-white text-2xl">⚙️</span>
-                  </div>
-                  <h4 className="text-xl font-semibold text-midnight-950 mb-4">Nenhuma instância vinculada</h4>
-                  <p className="text-steel-600 max-w-md mx-auto mb-6">
-                    Para receber mensagens aqui, você precisa vincular instâncias Evolution ao workspace.
-                  </p>
-                  <Link
-                    to={`/workspace/${workspaceUuid}/settings`}
-                    className="bg-gradient-sapphire hover:bg-midnight-700 text-white font-semibold py-3 px-8 rounded-lg transition-minimal shadow-sapphire-glow hover:shadow-blue-soft"
-                  >
-                    Configurar Instâncias
-                  </Link>
+            ) : (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 bg-gradient-sapphire rounded-full flex items-center justify-center mx-auto mb-6 shadow-sapphire-glow">
+                  <span className="text-white text-2xl">⚙️</span>
                 </div>
-              )}
-            </div>
-          )}
-
-          {activeSystem === 'cloud' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-midnight-950">Central WhatsApp Cloud</h3>
-              <Livechat />
-            </div>
-          )}
+                <h4 className="text-xl font-semibold text-midnight-950 mb-4">Nenhuma instância vinculada</h4>
+                <p className="text-steel-600 max-w-md mx-auto mb-6">
+                  Para receber mensagens aqui, você precisa vincular instâncias Evolution ao workspace.
+                </p>
+                <Link
+                  to={`/workspace/${workspaceUuid}/settings`}
+                  className="bg-gradient-sapphire hover:bg-midnight-700 text-white font-semibold py-3 px-8 rounded-lg transition-minimal shadow-sapphire-glow hover:shadow-blue-soft"
+                >
+                  Configurar Instâncias
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
