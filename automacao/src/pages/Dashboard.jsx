@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import RelationshipDashboard from '../components/RelationshipDashboard';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -91,6 +92,9 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
+      {/* Relationship Dashboard */}
+      <RelationshipDashboard compactMode={true} />
+
       {/* Welcome Section */}
       <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-8 shadow-blue-elegant">
         <div>
@@ -98,7 +102,7 @@ const Dashboard = () => {
             Sistema de Automação Professional
           </h1>
           <p className="text-steel-700 text-lg leading-relaxed">
-            Plataforma avançada para gerenciamento de fluxos de trabalho automatizados. 
+            Plataforma avançada para gerenciamento de fluxos de trabalho automatizados.
             Monitore, configure e otimize seus processos com máxima eficiência e sofisticação.
           </p>
         </div>

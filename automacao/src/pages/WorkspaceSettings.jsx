@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import InstanceStatusIndicator from '../components/InstanceStatusIndicator';
+import WorkspaceInstanceManager from '../components/WorkspaceInstanceManager';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -267,117 +269,11 @@ const WorkspaceSettings = () => {
         </div>
       </div>
 
-      {/* Seção Instâncias Evolution */}
-      <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 shadow-blue-elegant">
-        <div className="border-b border-sapphire-200/30 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-midnight-950">Instâncias Evolution API</h2>
-              <p className="text-steel-600 text-sm mt-1">
-                Vincule instâncias Evolution ao workspace para receber mensagens automaticamente no chat ao vivo
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-sm text-steel-600">
-                {linkedInstances.length} de {instances.length} instâncias vinculadas
-              </div>
-              <button
-                onClick={() => loadInstancesStatus(instances)}
-                disabled={loading}
-                className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-medium py-1 px-3 rounded-lg text-sm transition-minimal border border-blue-200 disabled:opacity-50"
-                title="Atualizar status das instâncias"
-              >
-                🔄 Status
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6">
-          {instances.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 bg-gradient-sapphire rounded-full flex items-center justify-center mx-auto mb-6 shadow-sapphire-glow">
-                <span className="text-white text-2xl">📱</span>
-              </div>
-              <h3 className="text-xl font-semibold text-midnight-950 mb-4">Nenhuma instância encontrada</h3>
-              <p className="text-steel-600 max-w-md mx-auto">
-                Não foram encontradas instâncias Evolution API. Certifique-se de que o serviço Evolution está rodando.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {instances.map((instance) => {
-                const instanceName = instance.name || instance.instanceName;
-                const status = getInstanceStatus(instance);
-                const isLinked = linkedInstances.includes(instanceName);
-
-                return (
-                  <div
-                    key={instanceName}
-                    className={`bg-white/80 backdrop-blur-sm rounded-lg border p-6 shadow-blue-subtle transition-all duration-300 ${
-                      isLinked
-                        ? 'border-sapphire-300/70 ring-2 ring-sapphire-200/50'
-                        : 'border-sapphire-200/50 hover:border-sapphire-300/50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shadow-sapphire-glow ${
-                          isLinked ? 'bg-gradient-sapphire' : 'bg-steel-200'
-                        }`}>
-                          <span className={`text-lg ${isLinked ? 'text-white' : 'text-steel-600'}`}>📱</span>
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-midnight-950 text-sm">{instanceName}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(status)}`}>
-                              {getStatusIcon(status)} {status}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="text-xs text-steel-600">
-                        <div>Criada em: {new Date(instance.createdAt || instance.created_at || Date.now()).toLocaleDateString('pt-BR')}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-steel-700">
-                          {isLinked ? 'Vinculada ao workspace' : 'Não vinculada'}
-                        </span>
-                        <button
-                          onClick={() => handleInstanceToggle(instanceName)}
-                          disabled={savingLinks}
-                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 ${
-                            isLinked
-                              ? 'bg-red-500 hover:bg-red-600 text-white focus:ring-red-400/50'
-                              : 'bg-gradient-sapphire hover:bg-sapphire-600 text-white focus:ring-sapphire-400/50'
-                          } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                          {savingLinks ? '...' : (isLinked ? 'Desvincular' : 'Vincular')}
-                        </button>
-                      </div>
-
-                      {isLinked && (
-                        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <span className="text-green-600 text-sm">✅</span>
-                            <span className="text-green-800 text-xs font-medium">
-                              Mensagens aparecerão no chat ao vivo
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Gerenciamento Avançado de Instâncias */}
+      <WorkspaceInstanceManager
+        workspaceUuid={workspaceUuid}
+        workspace={workspace}
+      />
 
       {/* Seção WhatsApp Cloud (futura) */}
       <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 shadow-blue-elegant">

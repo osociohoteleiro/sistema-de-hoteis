@@ -1,37 +1,36 @@
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import WorkspaceSidebar from './WorkspaceSidebar';
 import Header from './Header';
+import Breadcrumbs from './Breadcrumbs';
+import { useSidebar } from '../contexts/SidebarContext';
 
 const Layout = () => {
-  const location = useLocation();
-  
-  // Verificar se estamos numa rota de workspace que deve mostrar a segunda sidebar
-  const isWorkspaceRoute = () => {
-    const workspaceRoutes = [
-      '/workspace/',
-      '/bot/'
-    ];
-    return workspaceRoutes.some(route => location.pathname.includes(route));
-  };
+  const { isWorkspaceVisible, getMainContentMargin } = useSidebar();
 
-  const shouldShowWorkspaceSidebar = isWorkspaceRoute();
-  const mainContentMargin = shouldShowWorkspaceSidebar ? 'ml-128' : 'ml-64';
+  // Calcular margem dinâmica baseada nos estados das sidebars
+  const mainContentMargin = `ml-${getMainContentMargin()}`;
 
   return (
     <div className="min-h-screen bg-gradient-blue-depth">
-      
+
       {/* Primary Sidebar */}
       <Sidebar />
-      
+
       {/* Workspace Sidebar (conditional) */}
-      {shouldShowWorkspaceSidebar && <WorkspaceSidebar />}
-      
+      {isWorkspaceVisible && <WorkspaceSidebar />}
+
       {/* Main Content Area */}
-      <div className={`${mainContentMargin} relative`}>
+      <div
+        className="relative transition-margin"
+        style={{ marginLeft: `${getMainContentMargin() * 4}px` }}
+      >
         {/* Header */}
         <Header />
-        
+
+        {/* Breadcrumbs */}
+        <Breadcrumbs />
+
         {/* Page Content */}
         <main className="p-8">
           <Outlet />

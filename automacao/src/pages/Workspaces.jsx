@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import RelationshipDashboard from '../components/RelationshipDashboard';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -110,22 +111,8 @@ const Workspaces = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-6 shadow-blue-elegant">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-midnight-950">Workspaces</h1>
-            <p className="text-steel-700 mt-2">
-              Gerencie os espaços de trabalho organizados por hotel
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-steel-700">
-              {filteredWorkspaces.length} workspace{filteredWorkspaces.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-        </div>
-      </div>
+      {/* Relationship Dashboard */}
+      <RelationshipDashboard showWorkspaces={true} />
 
       {/* Filtros */}
       <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 p-6 shadow-blue-elegant">
