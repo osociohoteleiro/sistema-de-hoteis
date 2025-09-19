@@ -20,7 +20,8 @@
       "Bash(tasklist)",
       "Bash(cmd /c:*)",
       "Bash(npm install:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

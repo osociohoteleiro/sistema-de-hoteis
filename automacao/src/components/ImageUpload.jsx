@@ -53,9 +53,9 @@ const ImageUpload = ({ value, onChange, label = 'Arquivo', className = '', works
           setPreview(result.url);
         }
 
-        // Notificar componente pai
+        // Notificar componente pai sem enviar automaticamente
         if (onChange) {
-          console.log('🔄 ImageUpload: Notificando componente pai com resultado:', result);
+          console.log('🔄 ImageUpload: Notificando componente pai com resultado (sem envio automático):', result);
           onChange(result);
         }
       }

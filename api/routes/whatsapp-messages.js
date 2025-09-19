@@ -225,7 +225,8 @@ router.get('/:instanceName/:phoneNumber', async (req, res) => {
         direction,
         timestamp,
         read_at,
-        delivered_at
+        delivered_at,
+        caption
       FROM whatsapp_messages
       WHERE instance_name = $1 AND phone_number = $2
       ORDER BY timestamp DESC
@@ -268,28 +269,61 @@ router.get('/:instanceName/:phoneNumber', async (req, res) => {
  */
 async function saveMessage(messageData) {
   try {
-    // Inserir mensagem
-    await db.query(`
+    // Extrair dados da mensagem
+    const {
+      message_id: messageId,
+      instance_name: instanceName,
+      phone_number: phoneNumber,
+      contact_name: contactName,
+      message_type: messageType,
+      content,
+      media_url: mediaUrl,
+      direction,
+      timestamp,
+      read_at: readAt,
+      delivered_at: deliveredAt,
+      raw_data: rawData,
+      caption
+    } = messageData;
+
+    // Inserir mensagem (com caption se o campo existir)
+    let insertQuery = `
       INSERT INTO whatsapp_messages (
         message_id, instance_name, phone_number, contact_name,
         message_type, content, media_url, direction, timestamp,
         read_at, delivered_at, raw_data
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-      ON CONFLICT (message_id) DO NOTHING
-    `, [
-      messageData.message_id,
-      messageData.instance_name,
-      messageData.phone_number,
-      messageData.contact_name,
-      messageData.message_type,
-      messageData.content,
-      messageData.media_url,
-      messageData.direction,
-      messageData.timestamp,
-      messageData.read_at,
-      messageData.delivered_at,
-      JSON.stringify(messageData.raw_data)
-    ]);
+    `;
+    let insertValues = [
+      messageId, instanceName, phoneNumber, contactName,
+      messageType, content, mediaUrl, direction, timestamp,
+      readAt, deliveredAt, JSON.stringify(rawData)
+    ];
+
+    // Verificar se a coluna caption existe, se não, criá-la
+    try {
+      const columnCheck = await db.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'whatsapp_messages' AND column_name = 'caption'
+      `);
+
+      if (columnCheck.length === 0) {
+        // Campo caption não existe, vamos criá-lo
+        console.log('📝 Criando campo caption na tabela whatsapp_messages...');
+        await db.query(`ALTER TABLE whatsapp_messages ADD COLUMN caption TEXT`);
+        console.log('✅ Campo caption criado com sucesso!');
+      }
+
+      // Agora sempre incluir caption na query
+      insertQuery += `, caption`;
+      insertValues.push(caption || '');
+    } catch (error) {
+      console.log('Erro ao verificar/criar coluna caption, continuando sem ela:', error.message);
+    }
+
+    insertQuery += `) VALUES (${insertValues.map((_, i) => `$${i + 1}`).join(', ')})
+      ON CONFLICT (message_id) DO NOTHING`;
+
+    await db.query(insertQuery, insertValues);
 
     // Atualizar ou criar contato
     await db.query(`
@@ -468,6 +502,7 @@ router.get('/instances-summary', async (req, res) => {
     });
   }
 });
+
 
 // Exportar função helper para uso em webhooks
 module.exports = router;

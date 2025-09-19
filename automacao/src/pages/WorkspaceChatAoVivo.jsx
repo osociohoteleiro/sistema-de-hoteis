@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import ImageUpload from '../components/ImageUpload';
+import MediaCaptionModal from '../components/MediaCaptionModal';
 import { convertToBase64, getMediaType } from '../utils/imageUpload';
 
 const API_BASE_URL = 'http://localhost:3003/api';
@@ -51,6 +52,8 @@ const WorkspaceChatAoVivo = () => {
   const [lastMessageCheck, setLastMessageCheck] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [showCaptionModal, setShowCaptionModal] = useState(false);
+  const [pendingFileData, setPendingFileData] = useState(null);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
@@ -758,7 +761,7 @@ const WorkspaceChatAoVivo = () => {
     }
   };
 
-  const sendFileMessage = async (uploadResult) => {
+  const sendFileMessage = async (uploadResult, caption = '') => {
     if (!uploadResult || !selectedConversation) {
       return;
     }
@@ -857,7 +860,7 @@ const WorkspaceChatAoVivo = () => {
         number: selectedConversation.phone_number,
         mediatype: finalMediaType.toLowerCase(),
         filename: finalFileName,
-        caption: '',
+        caption: caption || '',
         media: mediaBase64,
         workspaceName: workspace?.name || 'default'
       };
@@ -882,9 +885,10 @@ const WorkspaceChatAoVivo = () => {
           phone_number: selectedConversation.phone_number,
           contact_name: selectedConversation.contact_name,
           message_type: 'media',
-          content: uploadResult.originalName || finalFileName || 'Arquivo',
+          content: caption || uploadResult.originalName || finalFileName || 'Arquivo',
           media_url: response.data.data?.media_url || uploadResult.url, // ✅ Usar URL do S3 se disponível
           media_type: uploadResult.mediaType || finalMediaType,
+          caption: caption || '', // ✅ Incluir legenda separadamente
           direction: 'outbound',
           timestamp: new Date().toISOString(),
           read_at: null,
@@ -965,10 +969,22 @@ const WorkspaceChatAoVivo = () => {
 
   const handleFileUpload = (uploadResult) => {
     if (uploadResult) {
-      setSelectedFile(uploadResult);
-      // Enviar automaticamente após upload
-      sendFileMessage(uploadResult);
+      // Armazenar dados do arquivo e abrir modal de legenda
+      setPendingFileData(uploadResult);
+      setShowCaptionModal(true);
     }
+  };
+
+  const handleSendWithCaption = async (fileData, caption) => {
+    setShowCaptionModal(false);
+    setPendingFileData(null);
+    setSelectedFile(fileData);
+    await sendFileMessage(fileData, caption);
+  };
+
+  const handleCloseCaptionModal = () => {
+    setShowCaptionModal(false);
+    setPendingFileData(null);
   };
 
   const getInstanceStatus = (instance) => {
@@ -1437,8 +1453,16 @@ const WorkspaceChatAoVivo = () => {
                                           </div>
                                         )}
 
-                                        {/* Timestamp para mídia */}
+                                        {/* Legenda e Timestamp para mídia */}
                                         <div className="px-4 pb-2">
+                                          {/* Exibir legenda se existir */}
+                                          {message.caption && message.caption.trim() && (
+                                            <p className={`text-sm mb-2 ${
+                                              message.direction === 'outbound' ? 'text-white' : 'text-gray-800'
+                                            }`}>
+                                              {message.caption}
+                                            </p>
+                                          )}
                                           <p className={`text-xs ${
                                             message.direction === 'outbound' ? 'text-blue-100' : 'text-steel-500'
                                           }`}>
@@ -1616,6 +1640,14 @@ const WorkspaceChatAoVivo = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Legenda para Mídia */}
+      <MediaCaptionModal
+        isOpen={showCaptionModal}
+        onClose={handleCloseCaptionModal}
+        fileData={pendingFileData}
+        onSend={handleSendWithCaption}
+      />
     </div>
   );
 };

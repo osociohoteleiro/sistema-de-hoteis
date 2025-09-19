@@ -801,6 +801,7 @@ router.post('/message/sendMedia/:instanceName', async (req, res) => {
           media_url: s3Result.success ? s3Result.url : null, // ✅ URL do S3 salva no banco
           direction: 'outbound',
           timestamp: new Date(),
+          caption: caption || '', // ✅ Incluir legenda
           raw_data: {
             ...result.data,
             s3_info: s3Result.success ? {
