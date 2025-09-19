@@ -186,6 +186,24 @@ const WorkspaceSidebar = () => {
             </Link>
           )}
 
+          {/* Leads */}
+          {workspace?.workspace_uuid && (
+            <Link
+              to={`/workspace/${workspace.workspace_uuid}/leads`}
+              className={`flex items-center space-x-3 ${isWorkspaceCollapsed ? 'px-2 justify-center' : 'px-4'} py-3 rounded-lg transition-minimal ${
+                isActive(`/workspace/${workspace.workspace_uuid}/leads`)
+                  ? 'bg-gradient-sapphire text-white shadow-blue-soft'
+                  : 'text-steel-700 hover:bg-sapphire-50/50 hover:text-sapphire-800'
+              }`}
+              title={isWorkspaceCollapsed ? 'Leads' : ''}
+            >
+              <span className="text-lg flex-shrink-0">👥</span>
+              {!isWorkspaceCollapsed && (
+                <span className="text-sm font-medium whitespace-nowrap">Leads</span>
+              )}
+            </Link>
+          )}
+
           {/* Divisor */}
           {!isWorkspaceCollapsed && <div className="my-3 border-t border-sapphire-200/20"></div>}
 

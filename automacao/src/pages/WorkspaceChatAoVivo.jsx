@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import ImageUpload from '../components/ImageUpload';
@@ -26,7 +26,8 @@ const makeRequestWithRetry = async (url, maxRetries = 3) => {
 };
 
 const WorkspaceChatAoVivo = () => {
-  const { workspaceUuid } = useParams();
+  const { workspaceUuid, instanceName, phoneNumber } = useParams();
+  const navigate = useNavigate();
   const [workspace, setWorkspace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState([]);
@@ -48,6 +49,7 @@ const WorkspaceChatAoVivo = () => {
   const [conversationProfileImages, setConversationProfileImages] = useState({});
   const [loadingConversationImages, setLoadingConversationImages] = useState({});
   const [conversationContactNames, setConversationContactNames] = useState({});
+  const [currentProfileRequest, setCurrentProfileRequest] = useState(null);
   const [isPollingActive, setIsPollingActive] = useState(false);
   const [lastMessageCheck, setLastMessageCheck] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -63,6 +65,13 @@ const WorkspaceChatAoVivo = () => {
     loadWorkspaceData();
   }, [workspaceUuid]);
 
+  // Carregar conversa específica quando instanceName e phoneNumber forem fornecidos
+  useEffect(() => {
+    if (instanceName && phoneNumber && conversations.length > 0) {
+      loadSpecificConversation();
+    }
+  }, [instanceName, phoneNumber, conversations]);
+
   // Auto scroll para a última mensagem apenas quando carregar nova conversa ou enviar mensagem
   useEffect(() => {
     if (messagesEndRef.current && selectedConversation && messages.length > 0) {
@@ -75,15 +84,34 @@ const WorkspaceChatAoVivo = () => {
 
   // Reset profile image error when conversation changes and load profile picture
   useEffect(() => {
-    setProfileImageError(false);
-    setProfileImageUrl(null);
-
     if (selectedConversation) {
-      loadProfilePicture(selectedConversation.instance_name, selectedConversation.phone_number);
+      // Verificar se já temos a imagem carregada na lista de conversas
+      const conversationKey = `${selectedConversation.instance_name}-${selectedConversation.phone_number}`;
+      const existingImage = conversationProfileImages[conversationKey];
+
+      if (existingImage) {
+        // Reutilizar a imagem já carregada
+        console.log('🔄 Reutilizando imagem já carregada para o header:', { conversationKey, existingImage });
+        setProfileImageUrl(existingImage);
+        setProfileImageError(false);
+        setLoadingProfileImage(false);
+      } else {
+        // Só buscar se não tiver a imagem
+        console.log('🔍 Imagem não encontrada, buscando para o header:', conversationKey);
+        setProfileImageError(false);
+        setProfileImageUrl(null);
+        loadProfilePicture(selectedConversation.instance_name, selectedConversation.phone_number);
+      }
+
       // Marcar mensagens como lidas quando abrir a conversa
       markMessagesAsRead(selectedConversation.instance_name, selectedConversation.phone_number);
+    } else {
+      // Limpar estados quando não há conversa selecionada
+      setProfileImageError(false);
+      setProfileImageUrl(null);
+      setLoadingProfileImage(false);
     }
-  }, [selectedConversation]);
+  }, [selectedConversation, conversationProfileImages]);
 
   const loadProfilePicture = async (instanceName, phoneNumber) => {
     if (!instanceName || !phoneNumber) return;
@@ -116,28 +144,51 @@ const WorkspaceChatAoVivo = () => {
       return;
     }
 
+    // Criar identificador único para esta request
+    const requestId = `${cleanInstanceName}-${cleanPhoneNumber}-${Date.now()}`;
+    setCurrentProfileRequest(requestId);
+
     try {
       setLoadingProfileImage(true);
+      console.log('🖼️ Carregando foto para:', { cleanInstanceName, cleanPhoneNumber, requestId });
 
       // Buscar informações completas do contato (foto e nome)
       const encodedInstanceName = encodeURIComponent(cleanInstanceName);
       const response = await axios.get(`${API_BASE_URL}/evolution/contact/${encodedInstanceName}/${cleanPhoneNumber}`);
 
+      // Verificar se esta ainda é a requisição atual (prevenir race conditions)
+      if (currentProfileRequest !== requestId) {
+        console.log('🚫 Ignorando resposta de requisição obsoleta:', { requestId, current: currentProfileRequest });
+        return;
+      }
+
       if (response.data.success && response.data.data) {
         const contactData = response.data.data;
 
         if (contactData.picture) {
+          // Atualizar tanto o header quanto o cache das conversas
+          const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
           setProfileImageUrl(contactData.picture);
-          console.log('Foto de perfil do contato encontrada:', phoneNumber, contactData.picture);
+          setConversationProfileImages(prev => ({
+            ...prev,
+            [conversationKey]: contactData.picture
+          }));
+          console.log('✅ Foto de perfil do contato encontrada e armazenada:', { phoneNumber: cleanPhoneNumber, requestId, picture: contactData.picture, conversationKey });
         } else {
           setProfileImageError(true);
-          console.log('Foto de perfil do contato não encontrada para:', phoneNumber);
+          console.log('❌ Foto de perfil do contato não encontrada para:', { phoneNumber: cleanPhoneNumber, requestId });
         }
       } else {
         setProfileImageError(true);
-        console.log('Resposta inválida ao buscar informações do contato para:', phoneNumber);
+        console.log('❌ Resposta inválida ao buscar informações do contato para:', { phoneNumber: cleanPhoneNumber, requestId });
       }
     } catch (error) {
+      // Verificar se esta ainda é a requisição atual antes de processar erro
+      if (currentProfileRequest !== requestId) {
+        console.log('🚫 Ignorando erro de requisição obsoleta:', { requestId, current: currentProfileRequest });
+        return;
+      }
+
       // Tratar casos específicos de erro da Evolution API
       if (error.response?.status === 400) {
         const errorData = error.response?.data;
@@ -154,12 +205,17 @@ const WorkspaceChatAoVivo = () => {
           instanceName: cleanInstanceName,
           phoneNumber: cleanPhoneNumber,
           status: error.response?.status,
-          message: error.message
+          message: error.message,
+          requestId
         });
         setProfileImageError(true);
       }
     } finally {
-      setLoadingProfileImage(false);
+      // Limpar o loading apenas se esta ainda é a requisição atual
+      if (currentProfileRequest === requestId) {
+        setLoadingProfileImage(false);
+        setCurrentProfileRequest(null);
+      }
     }
   };
 
@@ -625,6 +681,94 @@ const WorkspaceChatAoVivo = () => {
     }
   };
 
+  const loadSpecificConversation = async () => {
+    try {
+      console.log('🔍 Carregando conversa específica:', { instanceName, phoneNumber });
+      console.log('📋 Conversations disponíveis:', conversations.map(c => ({ instance: c.instance_name, phone: c.phone_number })));
+
+      // Decodificar os parâmetros da URL
+      const decodedInstanceName = decodeURIComponent(instanceName);
+      const decodedPhoneNumber = decodeURIComponent(phoneNumber);
+
+      console.log('🔓 Parâmetros decodificados:', { decodedInstanceName, decodedPhoneNumber });
+
+      // Buscar a conversa correspondente na lista de conversas
+      const conversation = conversations.find(conv =>
+        conv.instance_name === decodedInstanceName &&
+        conv.phone_number === decodedPhoneNumber
+      );
+
+      if (conversation) {
+        console.log('💬 Conversa encontrada, selecionando:', conversation);
+        console.log('🎯 Selected conversation será:', {
+          instance: conversation.instance_name,
+          phone: conversation.phone_number,
+          contact: conversation.contact_name
+        });
+
+        // Verificar se é uma conversa diferente antes de trocar
+        const isDifferentConversation = !selectedConversation ||
+          selectedConversation.instance_name !== conversation.instance_name ||
+          selectedConversation.phone_number !== conversation.phone_number;
+
+        if (isDifferentConversation) {
+          console.log('🔄 Trocando para conversa diferente');
+          setSelectedConversation(conversation);
+          // Reset apenas paginação para nova conversa
+          setMessages([]);
+          setMessagesOffset(0);
+          setHasMoreMessages(true);
+          // Carregar mensagens
+          loadMessages(conversation.instance_name, conversation.phone_number);
+        } else {
+          console.log('✅ Conversa já selecionada, mantendo estado');
+        }
+      } else {
+        console.warn('⚠️ Conversa não encontrada na lista de conversas');
+        console.warn('🔍 Tentando encontrar:', { decodedInstanceName, decodedPhoneNumber });
+        toast.error('Conversa não encontrada');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar conversa específica:', error);
+      toast.error('Erro ao carregar conversa');
+    }
+  };
+
+  const selectConversation = (conversation) => {
+    console.log('🎯 Selecionando conversa e atualizando URL:', conversation);
+
+    // Verificar se é uma conversa diferente
+    const isDifferentConversation = !selectedConversation ||
+      selectedConversation.instance_name !== conversation.instance_name ||
+      selectedConversation.phone_number !== conversation.phone_number;
+
+    if (!isDifferentConversation) {
+      console.log('✅ Conversa já selecionada, apenas atualizando URL');
+      const encodedInstanceName = encodeURIComponent(conversation.instance_name);
+      const encodedPhoneNumber = encodeURIComponent(conversation.phone_number);
+      navigate(`/workspace/${workspaceUuid}/chat-ao-vivo/${encodedInstanceName}/${encodedPhoneNumber}`, { replace: true });
+      return;
+    }
+
+    console.log('🔄 Selecionando nova conversa');
+
+    // Atualizar URL para refletir a conversa selecionada
+    const encodedInstanceName = encodeURIComponent(conversation.instance_name);
+    const encodedPhoneNumber = encodeURIComponent(conversation.phone_number);
+    navigate(`/workspace/${workspaceUuid}/chat-ao-vivo/${encodedInstanceName}/${encodedPhoneNumber}`, { replace: true });
+
+    // Atualizar estado da conversa selecionada
+    setSelectedConversation(conversation);
+
+    // Reset paginação para nova conversa
+    setMessages([]);
+    setMessagesOffset(0);
+    setHasMoreMessages(true);
+
+    // Carregar primeiras mensagens
+    loadMessages(conversation.instance_name, conversation.phone_number);
+  };
+
   const loadMessages = async (instanceName, phoneNumber, isLoadMore = false) => {
     if (loadingMessages) return;
 
@@ -634,11 +778,14 @@ const WorkspaceChatAoVivo = () => {
       const limit = 12;
       const offset = isLoadMore ? messagesOffset : 0;
 
-      const response = await axios.get(`${API_BASE_URL}/whatsapp-messages/${instanceName}/${phoneNumber}?limit=${limit}&offset=${offset}`);
+      const url = `${API_BASE_URL}/whatsapp-messages/${instanceName}/${phoneNumber}?limit=${limit}&offset=${offset}`;
+
+      const response = await axios.get(url);
 
       if (response.data.success) {
         const newMessages = response.data.data.messages || [];
         const pagination = response.data.data.pagination || {};
+
 
         if (isLoadMore) {
           // Adicionar mensagens mais antigas no início do array
@@ -1142,9 +1289,9 @@ ${messageToSend}`;
         <div className="p-6">
           <div className="space-y-6">
             {linkedInstances.length > 0 ? (
-              <div className="grid grid-cols-12 gap-6 h-[calc(100vh-240px)]">
+              <div className="flex gap-6 h-[calc(100vh-240px)]">
                 {/* Lista de Conversas */}
-                <div className="col-span-4 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle">
+                <div className="w-full max-w-[400px] flex-shrink-0 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle">
                     <div className="p-4 border-b border-sapphire-200/30">
                       <div className="flex items-center justify-between">
                         <div>
@@ -1174,15 +1321,7 @@ ${messageToSend}`;
                         conversations.map((conversation) => (
                           <div
                             key={`${conversation.instance_name}-${conversation.phone_number}`}
-                            onClick={() => {
-                              setSelectedConversation(conversation);
-                              // Reset paginação para nova conversa
-                              setMessages([]);
-                              setMessagesOffset(0);
-                              setHasMoreMessages(true);
-                              // Carregar primeiras mensagens
-                              loadMessages(conversation.instance_name, conversation.phone_number);
-                            }}
+                            onClick={() => selectConversation(conversation)}
                             className={`p-4 border-b border-sapphire-100 cursor-pointer hover:bg-blue-50 transition-colors ${
                               selectedConversation?.phone_number === conversation.phone_number && selectedConversation?.instance_name === conversation.instance_name ? 'bg-blue-100' : ''
                             }`}
@@ -1292,7 +1431,7 @@ ${messageToSend}`;
                   </div>
 
                   {/* Chat */}
-                  <div className="col-span-8 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle flex flex-col h-full">
+                  <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-lg border border-sapphire-200/50 shadow-blue-subtle flex flex-col h-full">
                     {!selectedConversation ? (
                       <div className="flex-1 flex items-center justify-center">
                         <div className="text-center">
@@ -1616,6 +1755,7 @@ ${messageToSend}`;
                                     )}
                                     </div>
                                   </div>
+                                </div>
                               ))}
                               <div ref={messagesEndRef} />
                             </>
@@ -1634,13 +1774,19 @@ ${messageToSend}`;
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs text-blue-600 font-medium mb-1">Respondendo a:</p>
-                                  <p className="text-sm text-gray-700 truncate">
-                                    {replyingTo.message_type === 'text' ?
-                                      replyingTo.content :
-                                      `${replyingTo.message_type === 'image' ? '🖼️' :
-                                        replyingTo.message_type === 'video' ? '🎥' :
-                                        replyingTo.message_type === 'audio' ? '🎵' : '📄'} ${replyingTo.content || 'Arquivo'}`
-                                    }
+                                  <p className="text-sm text-gray-700 break-words max-h-12 overflow-hidden leading-4">
+                                    {(() => {
+                                      const content = replyingTo.message_type === 'text' ?
+                                        replyingTo.content :
+                                        `${replyingTo.message_type === 'image' ? '🖼️' :
+                                          replyingTo.message_type === 'video' ? '🎥' :
+                                          replyingTo.message_type === 'audio' ? '🎵' : '📄'} ${replyingTo.content || 'Arquivo'}`;
+
+                                      // Limitar a 120 caracteres para evitar overflow
+                                      return content?.length > 120 ?
+                                        content.substring(0, 120) + '...' :
+                                        content;
+                                    })()}
                                   </p>
                                   <p className="text-xs text-gray-500 mt-1">
                                     {new Date(replyingTo.timestamp).toLocaleTimeString('pt-BR', {

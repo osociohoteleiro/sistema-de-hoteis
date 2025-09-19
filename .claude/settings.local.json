@@ -21,7 +21,9 @@
       "Bash(cmd /c:*)",
       "Bash(npm install:*)",
       "Bash(python:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(PORT=3004 npm run dev)"
     ],
     "deny": [],
     "ask": []

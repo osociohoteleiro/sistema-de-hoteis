@@ -368,6 +368,10 @@ console.log('🔄 Carregando workspace-instances routes...');
 const workspaceInstancesRoutes = require('./routes/workspace-instances');
 console.log('✅ Workspace-instances routes carregadas');
 
+console.log('🔄 Carregando leads routes...');
+const leadsRoutes = require('./routes/leads');
+console.log('✅ Leads routes carregadas');
+
 // Rotas da API
 app.use('/api/data-import', dataImportRoutes);
 app.use('/api/auth', authRoutes);
@@ -402,6 +406,7 @@ app.use('/api/hotel-sites', hotelSitesRoutes);
 app.use('/api/app-configurations', appConfigurationsRoutes);
 app.use('/api/whatsapp-messages', whatsappMessagesRoutes);
 app.use('/api/workspace-instances', workspaceInstancesRoutes);
+app.use('/api/leads', leadsRoutes);
 
 app.use('/api/migrate', migrateRoutes); // Habilitado temporariamente
 

@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Workspaces from './pages/Workspaces';
 import WorkspaceBots from './pages/WorkspaceBots';
 import WorkspaceChatAoVivo from './pages/WorkspaceChatAoVivo';
+import WorkspaceLeads from './pages/WorkspaceLeads';
 import WorkspaceSettings from './pages/WorkspaceSettings';
 import BotFlows from './pages/BotFlows';
 import WhatsAppCloud from './pages/WhatsAppCloudOAuth';
@@ -38,6 +39,12 @@ function App() {
 
           {/* Workspace Chat ao Vivo (rota padrão do workspace) */}
           <Route path="workspace/:workspaceUuid/chat-ao-vivo" element={<WorkspaceChatAoVivo />} />
+
+          {/* Workspace Chat ao Vivo com Lead específico */}
+          <Route path="workspace/:workspaceUuid/chat-ao-vivo/:instanceName/:phoneNumber" element={<WorkspaceChatAoVivo />} />
+
+          {/* Workspace Leads */}
+          <Route path="workspace/:workspaceUuid/leads" element={<WorkspaceLeads />} />
 
           {/* Workspace Bots */}
           <Route path="workspace/:workspaceUuid/bots" element={<WorkspaceBots />} />
