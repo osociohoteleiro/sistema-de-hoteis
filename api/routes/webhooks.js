@@ -469,11 +469,15 @@ async function saveIncomingMessage(messageData) {
             JSON.stringify(messageData.raw_data)
         ]);
 
+        // 🚀 NOVA LÓGICA: Criar/Atualizar contato com lógica Inbound melhorada
+        const isNewInboundContact = await handleInboundContactCreation(messageData);
+
         // Atualizar ou criar contato
         await db.query(`
             INSERT INTO whatsapp_contacts (
-                instance_name, phone_number, contact_name, last_message_at, message_count, unread_count
-            ) VALUES ($1, $2, $3, $4, 1, $5)
+                instance_name, phone_number, contact_name, last_message_at, message_count, unread_count,
+                lead_source, lead_status, last_sync_at
+            ) VALUES ($1, $2, $3, $4, 1, $5, $6, $7, NOW())
             ON CONFLICT (instance_name, phone_number)
             DO UPDATE SET
                 contact_name = COALESCE(EXCLUDED.contact_name, whatsapp_contacts.contact_name),
@@ -486,7 +490,9 @@ async function saveIncomingMessage(messageData) {
             messageData.phone_number,
             messageData.contact_name,
             messageData.timestamp,
-            messageData.direction === 'inbound' ? 1 : 0 // Só incrementar não lidas se for mensagem recebida
+            messageData.direction === 'inbound' ? 1 : 0, // Só incrementar não lidas se for mensagem recebida
+            messageData.direction === 'inbound' ? 'WHATSAPP_INBOUND' : 'WHATSAPP_OUTBOUND',
+            messageData.direction === 'inbound' ? 'NEW' : 'CONTACTED'
         ]);
 
         console.log(`💾 Mensagem salva: ${messageData.message_id}`);
@@ -893,5 +899,60 @@ router.get('/queue/stats', async (req, res) => {
         });
     }
 });
+
+/**
+ * 🚀 NOVA FUNÇÃO: Gerenciar criação de contato Inbound com dados da Evolution API
+ */
+async function handleInboundContactCreation(messageData) {
+    try {
+        // Só processar mensagens Inbound (recebidas)
+        if (messageData.direction !== 'inbound') {
+            return false;
+        }
+
+        const { instance_name, phone_number } = messageData;
+
+        // Verificar se é um contato novo (não existe na tabela)
+        const existingContact = await db.query(`
+            SELECT id, profile_picture_url, contact_name, last_sync_at
+            FROM whatsapp_contacts
+            WHERE instance_name = $1 AND phone_number = $2
+        `, [instance_name, phone_number]);
+
+        const isNewContact = existingContact.length === 0;
+
+        // Se é um contato novo ou não tem foto/nome, buscar dados completos da Evolution API
+        if (isNewContact || !existingContact[0]?.profile_picture_url || !existingContact[0]?.contact_name) {
+            console.log(`🆕 Novo contato Inbound detectado: ${phone_number}, buscando dados completos...`);
+
+            // Usar o ContactsCacheService para buscar dados (que já tem rate limiting)
+            const contactsCacheService = require('../services/contactsCacheService');
+            const cacheService = new contactsCacheService();
+
+            const contactInfo = await cacheService.getContactInfo(instance_name, phone_number);
+
+            if (contactInfo.success && contactInfo.data) {
+                console.log(`✅ Dados do contato Inbound obtidos: ${phone_number}`, {
+                    name: contactInfo.data.name,
+                    hasPicture: !!contactInfo.data.picture,
+                    cached: contactInfo.cached
+                });
+
+                // Se obteve dados novos, atualizar o messageData para incluir informações mais completas
+                if (contactInfo.data.name && !messageData.contact_name) {
+                    messageData.contact_name = contactInfo.data.name;
+                }
+
+                return true; // Indica que foi processado como novo contato Inbound
+            }
+        }
+
+        return isNewContact;
+
+    } catch (error) {
+        console.error('❌ Erro ao processar contato Inbound:', error);
+        return false; // Falhar silenciosamente para não interromper o fluxo principal
+    }
+}
 
 module.exports = router;

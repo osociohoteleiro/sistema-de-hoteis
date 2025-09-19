@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import ImageUpload from '../components/ImageUpload';
 import MediaCaptionModal from '../components/MediaCaptionModal';
 import { convertToBase64, getMediaType } from '../utils/imageUpload';
+import websocketService from '../services/websocketService';
+import WebSocketStats from '../components/WebSocketStats';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -58,12 +60,34 @@ const WorkspaceChatAoVivo = () => {
   const [pendingFileData, setPendingFileData] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
   const [showReplyPreview, setShowReplyPreview] = useState(false);
+
+  // 🚀 WEBSOCKET STATES
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const [useWebSocket, setUseWebSocket] = useState(true); // Toggle para ativar/desativar WebSocket
+  const [webSocketStatus, setWebSocketStatus] = useState(null); // Status detalhado da conexão
+  const [connectionQuality, setConnectionQuality] = useState('unknown');
+  const [isFallbackMode, setIsFallbackMode] = useState(false);
+
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
   useEffect(() => {
     loadWorkspaceData();
   }, [workspaceUuid]);
+
+  // 🚀 WEBSOCKET CONNECTION - Conectar quando o workspace for carregado
+  useEffect(() => {
+    if (workspaceUuid && useWebSocket) {
+      initializeWebSocket();
+    }
+
+    // Cleanup na desmontagem do componente
+    return () => {
+      if (useWebSocket) {
+        websocketService.disconnect();
+      }
+    };
+  }, [workspaceUuid, useWebSocket]);
 
   // Carregar conversa específica quando instanceName e phoneNumber forem fornecidos
   useEffect(() => {
@@ -72,15 +96,34 @@ const WorkspaceChatAoVivo = () => {
     }
   }, [instanceName, phoneNumber, conversations]);
 
-  // Auto scroll para a última mensagem apenas quando carregar nova conversa ou enviar mensagem
-  useEffect(() => {
-    if (messagesEndRef.current && selectedConversation && messages.length > 0) {
-      // Só fazer auto-scroll se for uma nova conversa (offset === 12) ou se enviou uma mensagem
-      if (messagesOffset <= 12) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      }
+  // Função para forçar scroll para baixo sempre
+  const forceScrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      const container = messagesContainerRef.current;
+      container.scrollTop = container.scrollHeight;
     }
-  }, [messages, selectedConversation, messagesOffset]);
+  };
+
+  // Auto scroll SEMPRE que houver mensagens e conversa selecionada
+  useEffect(() => {
+    if (messagesContainerRef.current && selectedConversation && messages.length > 0) {
+      // Forçar scroll em múltiplos momentos para garantir
+      setTimeout(forceScrollToBottom, 0);
+      setTimeout(forceScrollToBottom, 100);
+      setTimeout(forceScrollToBottom, 300);
+      setTimeout(forceScrollToBottom, 500);
+      setTimeout(forceScrollToBottom, 1000);
+    }
+  }, [messages, selectedConversation]);
+
+  // Scroll adicional quando trocar de conversa
+  useEffect(() => {
+    if (selectedConversation && messages.length > 0) {
+      setTimeout(forceScrollToBottom, 100);
+      setTimeout(forceScrollToBottom, 500);
+      setTimeout(forceScrollToBottom, 1000);
+    }
+  }, [selectedConversation]);
 
   // Reset profile image error when conversation changes and load profile picture
   useEffect(() => {
@@ -100,7 +143,7 @@ const WorkspaceChatAoVivo = () => {
         console.log('🔍 Imagem não encontrada, buscando para o header:', conversationKey);
         setProfileImageError(false);
         setProfileImageUrl(null);
-        loadProfilePicture(selectedConversation.instance_name, selectedConversation.phone_number);
+        loadProfilePictureWithPriority(selectedConversation.instance_name, selectedConversation.phone_number);
       }
 
       // Marcar mensagens como lidas quando abrir a conversa
@@ -113,7 +156,86 @@ const WorkspaceChatAoVivo = () => {
     }
   }, [selectedConversation, conversationProfileImages]);
 
-  const loadProfilePicture = async (instanceName, phoneNumber) => {
+  // 🚀 NOVA FUNÇÃO: Buscar foto priorizando banco principal
+  const loadProfilePictureWithPriority = async (instanceName, phoneNumber) => {
+    if (!instanceName || !phoneNumber) return;
+
+    // Validar e sanitizar parâmetros
+    const cleanInstanceName = instanceName.trim();
+    const cleanPhoneNumber = phoneNumber.replace(/\D/g, '');
+
+    if (!cleanInstanceName || !cleanPhoneNumber) {
+      console.warn('⚠️ Parâmetros inválidos para loadProfilePictureWithPriority');
+      return;
+    }
+
+    const requestId = `${cleanInstanceName}-${cleanPhoneNumber}-${Date.now()}`;
+    setCurrentProfileRequest(requestId);
+
+    try {
+      setLoadingProfileImage(true);
+      console.log('🔍 Buscando foto com prioridade do banco principal:', { cleanInstanceName, cleanPhoneNumber, requestId });
+
+      // 1. PRIMEIRA PRIORIDADE: Buscar do banco principal (whatsapp_contacts)
+      try {
+        const workspaceContactResponse = await axios.get(`${API_BASE_URL}/leads/${workspaceUuid}`);
+
+        if (workspaceContactResponse.data.success && workspaceContactResponse.data.data?.leads) {
+          const contact = workspaceContactResponse.data.data.leads.find(lead =>
+            lead.phone_number === cleanPhoneNumber &&
+            lead.instance_name === cleanInstanceName &&
+            lead.profile_picture_url
+          );
+
+          if (contact && contact.profile_picture_url) {
+            // Verificar se ainda é a requisição atual
+            if (currentProfileRequest !== requestId) {
+              console.log('🚫 Ignorando resposta obsoleta (banco principal)');
+              return;
+            }
+
+            const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
+            setProfileImageUrl(contact.profile_picture_url);
+            setConversationProfileImages(prev => ({
+              ...prev,
+              [conversationKey]: contact.profile_picture_url
+            }));
+
+            if (contact.contact_name) {
+              setConversationContactNames(prev => ({
+                ...prev,
+                [conversationKey]: contact.contact_name
+              }));
+            }
+
+            console.log('✅ Foto encontrada no banco principal:', {
+              phoneNumber: cleanPhoneNumber,
+              lastSync: contact.last_sync_at,
+              picture: contact.profile_picture_url?.substring(0, 50) + '...'
+            });
+            setLoadingProfileImage(false);
+            setCurrentProfileRequest(null);
+            return; // Sucesso, não continuar para próximas prioridades
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro ao buscar no banco principal, tentando cache:', error.message);
+      }
+
+      // 2. SEGUNDA PRIORIDADE: Cache (contacts_cache) - chama função existente
+      await loadProfilePictureFromCache(cleanInstanceName, cleanPhoneNumber, requestId);
+
+    } catch (error) {
+      console.error('❌ Erro geral ao carregar foto:', error);
+      if (currentProfileRequest === requestId) {
+        setProfileImageError(true);
+        setLoadingProfileImage(false);
+        setCurrentProfileRequest(null);
+      }
+    }
+  };
+
+  const loadProfilePictureFromCache = async (instanceName, phoneNumber, requestId = null) => {
     if (!instanceName || !phoneNumber) return;
 
     // Validar e sanitizar parâmetros
@@ -144,17 +266,19 @@ const WorkspaceChatAoVivo = () => {
       return;
     }
 
-    // Criar identificador único para esta request
-    const requestId = `${cleanInstanceName}-${cleanPhoneNumber}-${Date.now()}`;
-    setCurrentProfileRequest(requestId);
+    // Se requestId não foi fornecido, criar um novo (para uso independente)
+    if (!requestId) {
+      requestId = `${cleanInstanceName}-${cleanPhoneNumber}-${Date.now()}`;
+      setCurrentProfileRequest(requestId);
+    }
 
     try {
       setLoadingProfileImage(true);
-      console.log('🖼️ Carregando foto para:', { cleanInstanceName, cleanPhoneNumber, requestId });
+      console.log('🖼️ Carregando foto via cache inteligente:', { cleanInstanceName, cleanPhoneNumber, requestId });
 
-      // Buscar informações completas do contato (foto e nome)
+      // 🚀 NOVA IMPLEMENTAÇÃO: Usar cache inteligente
       const encodedInstanceName = encodeURIComponent(cleanInstanceName);
-      const response = await axios.get(`${API_BASE_URL}/evolution/contact/${encodedInstanceName}/${cleanPhoneNumber}`);
+      const response = await axios.get(`${API_BASE_URL}/contacts-cache/${encodedInstanceName}/${cleanPhoneNumber}`);
 
       // Verificar se esta ainda é a requisição atual (prevenir race conditions)
       if (currentProfileRequest !== requestId) {
@@ -173,14 +297,29 @@ const WorkspaceChatAoVivo = () => {
             ...prev,
             [conversationKey]: contactData.picture
           }));
-          console.log('✅ Foto de perfil do contato encontrada e armazenada:', { phoneNumber: cleanPhoneNumber, requestId, picture: contactData.picture, conversationKey });
+
+          // Salvar nome também se disponível
+          if (contactData.name) {
+            setConversationContactNames(prev => ({
+              ...prev,
+              [conversationKey]: contactData.name
+            }));
+          }
+
+          console.log('✅ Foto de perfil via cache:', {
+            phoneNumber: cleanPhoneNumber,
+            requestId,
+            cached: response.data.cached,
+            freshData: response.data.freshData,
+            picture: contactData.picture?.substring(0, 50) + '...'
+          });
         } else {
           setProfileImageError(true);
-          console.log('❌ Foto de perfil do contato não encontrada para:', { phoneNumber: cleanPhoneNumber, requestId });
+          console.log('❌ Foto de perfil não encontrada via cache:', { phoneNumber: cleanPhoneNumber, requestId });
         }
       } else {
         setProfileImageError(true);
-        console.log('❌ Resposta inválida ao buscar informações do contato para:', { phoneNumber: cleanPhoneNumber, requestId });
+        console.log('❌ Resposta inválida do cache:', { phoneNumber: cleanPhoneNumber, requestId, error: response.data.error });
       }
     } catch (error) {
       // Verificar se esta ainda é a requisição atual antes de processar erro
@@ -189,25 +328,40 @@ const WorkspaceChatAoVivo = () => {
         return;
       }
 
-      // Tratar casos específicos de erro da Evolution API
-      if (error.response?.status === 400) {
-        const errorData = error.response?.data;
-        if (errorData?.error?.response?.message?.[0]?.exists === false) {
-          console.log(`📞 Contato ${cleanPhoneNumber} não existe no WhatsApp (${cleanInstanceName})`);
-          // Marcar como erro de imagem, mas não logar erro crítico
-          setProfileImageError(true);
+      // Se o cache falhar, fallback para Evolution API direta (com rate limiting)
+      console.warn(`⚠️ Cache falhou, usando fallback com rate limit:`, error.message);
+
+      // Rate limiting: só tentar Evolution API se passou tempo suficiente
+      const now = Date.now();
+      const lastAttemptKey = `last_attempt_${cleanInstanceName}_${cleanPhoneNumber}`;
+      const lastAttempt = localStorage.getItem(lastAttemptKey);
+
+      if (lastAttempt && now - parseInt(lastAttempt) < 300000) { // 5 minutos
+        console.log('🚫 Rate limit local: aguardando cooldown');
+        setProfileImageError(true);
+        return;
+      }
+
+      // Salvar timestamp da tentativa
+      localStorage.setItem(lastAttemptKey, now.toString());
+
+      // Fallback para Evolution API direta
+      try {
+        const fallbackResponse = await axios.get(`${API_BASE_URL}/evolution/contact/${encodedInstanceName}/${cleanPhoneNumber}`);
+
+        if (fallbackResponse.data.success && fallbackResponse.data.data?.picture) {
+          const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
+          setProfileImageUrl(fallbackResponse.data.data.picture);
+          setConversationProfileImages(prev => ({
+            ...prev,
+            [conversationKey]: fallbackResponse.data.data.picture
+          }));
+          console.log('✅ Fallback Evolution API funcionou');
         } else {
-          console.warn(`⚠️ Erro 400 ao buscar foto do contato ${cleanPhoneNumber}:`, errorData);
           setProfileImageError(true);
         }
-      } else {
-        console.error(`❌ Erro ao buscar informações do contato:`, {
-          instanceName: cleanInstanceName,
-          phoneNumber: cleanPhoneNumber,
-          status: error.response?.status,
-          message: error.message,
-          requestId
-        });
+      } catch (fallbackError) {
+        console.error('❌ Fallback Evolution API também falhou:', fallbackError.message);
         setProfileImageError(true);
       }
     } finally {
@@ -259,9 +413,9 @@ const WorkspaceChatAoVivo = () => {
     try {
       setLoadingConversationImages(prev => ({ ...prev, [conversationKey]: true }));
 
-      // Buscar informações completas do contato (nome e foto)
+      // 🚀 NOVA IMPLEMENTAÇÃO: Usar cache inteligente
       const encodedInstanceName = encodeURIComponent(cleanInstanceName);
-      const contactResponse = await axios.get(`${API_BASE_URL}/evolution/contact/${encodedInstanceName}/${cleanPhoneNumber}`);
+      const contactResponse = await axios.get(`${API_BASE_URL}/contacts-cache/${encodedInstanceName}/${cleanPhoneNumber}`);
 
       if (contactResponse.data.success && contactResponse.data.data) {
         const contactData = contactResponse.data.data;
@@ -282,25 +436,59 @@ const WorkspaceChatAoVivo = () => {
           }));
         }
 
-        console.log(`Informações do contato carregadas: ${phoneNumber} - Nome: ${contactData.name}`);
+        console.log(`✅ Informações do contato via cache: ${phoneNumber}`, {
+          name: contactData.name,
+          hasPicture: !!contactData.picture,
+          cached: contactResponse.data.cached,
+          freshData: contactResponse.data.freshData
+        });
       }
     } catch (error) {
-      // Tratar casos específicos de erro da Evolution API
-      if (error.response?.status === 400) {
-        const errorData = error.response?.data;
-        if (errorData?.error?.response?.message?.[0]?.exists === false) {
-          console.log(`📞 Contato ${cleanPhoneNumber} não existe no WhatsApp (${cleanInstanceName})`);
-          // Não mostrar erro para contatos que não existem
-        } else {
-          console.warn(`⚠️ Erro 400 ao buscar contato ${cleanPhoneNumber}:`, errorData);
+      // Se o cache falhar, usar rate limiting local e NÃO fazer fallback
+      // para reduzir drasticamente requisições para Evolution API
+      console.warn(`⚠️ Cache falhou para contato ${cleanPhoneNumber}, pulando Evolution API direta`, error.message);
+
+      // Rate limiting local: só tentar se passou tempo suficiente
+      const now = Date.now();
+      const lastAttemptKey = `last_contact_attempt_${cleanInstanceName}_${cleanPhoneNumber}`;
+      const lastAttempt = localStorage.getItem(lastAttemptKey);
+
+      // 15 minutos de cooldown para evitar spam
+      if (lastAttempt && now - parseInt(lastAttempt) < 900000) {
+        console.log(`🚫 Rate limit local para contato ${cleanPhoneNumber}: aguardando cooldown de 15min`);
+        return;
+      }
+
+      // Apenas em casos MUITO específicos, tentar Evolution API
+      if (cleanPhoneNumber.length >= 10 && cleanPhoneNumber.length <= 13) {
+        // Salvar timestamp da tentativa
+        localStorage.setItem(lastAttemptKey, now.toString());
+
+        try {
+          const fallbackResponse = await axios.get(`${API_BASE_URL}/evolution/contact/${encodedInstanceName}/${cleanPhoneNumber}`);
+
+          if (fallbackResponse.data.success && fallbackResponse.data.data) {
+            const contactData = fallbackResponse.data.data;
+
+            if (contactData.name) {
+              setConversationContactNames(prev => ({
+                ...prev,
+                [conversationKey]: contactData.name
+              }));
+            }
+
+            if (contactData.picture) {
+              setConversationProfileImages(prev => ({
+                ...prev,
+                [conversationKey]: contactData.picture
+              }));
+            }
+
+            console.log(`✅ Fallback Evolution API para ${phoneNumber} funcionou`);
+          }
+        } catch (fallbackError) {
+          console.error(`❌ Fallback também falhou para ${cleanPhoneNumber}:`, fallbackError.message);
         }
-      } else {
-        console.error(`❌ Erro ao buscar informações do contato ${cleanPhoneNumber}:`, {
-          instanceName: cleanInstanceName,
-          phoneNumber: cleanPhoneNumber,
-          status: error.response?.status,
-          message: error.message
-        });
       }
     } finally {
       setLoadingConversationImages(prev => ({ ...prev, [conversationKey]: false }));
@@ -308,11 +496,28 @@ const WorkspaceChatAoVivo = () => {
   };
 
   // Carregar informações dos contatos das conversas quando a lista de conversas mudar
+  // 🚀 OTIMIZAÇÃO: Usar throttling e batch processing
   useEffect(() => {
     if (conversations.length > 0) {
-      conversations.forEach(conversation => {
-        loadConversationContactInfo(conversation.instance_name, conversation.phone_number);
+      // Limitar a 5 contatos por vez para evitar sobrecarga
+      const limitedConversations = conversations.slice(0, 5);
+
+      // Processar com delay entre cada requisição
+      limitedConversations.forEach((conversation, index) => {
+        setTimeout(() => {
+          loadConversationContactInfo(conversation.instance_name, conversation.phone_number);
+        }, index * 500); // 500ms de delay entre cada requisição
       });
+
+      // Processar o restante com delay maior
+      if (conversations.length > 5) {
+        const remainingConversations = conversations.slice(5);
+        remainingConversations.forEach((conversation, index) => {
+          setTimeout(() => {
+            loadConversationContactInfo(conversation.instance_name, conversation.phone_number);
+          }, 5000 + (index * 1000)); // Começar após 5s, 1s entre cada
+        });
+      }
     }
   }, [conversations]);
 
@@ -334,8 +539,19 @@ const WorkspaceChatAoVivo = () => {
   }, [hasMoreMessages, loadingMessages, selectedConversation]);
 
   // Polling para atualizar contadores de mensagens não lidas e conversas
+  // 🚀 OTIMIZAÇÃO: Usar WebSocket quando disponível, polling como fallback
   useEffect(() => {
     if (linkedInstances.length === 0) return;
+
+    // Ajustar polling baseado no status do WebSocket
+    let pollingInterval;
+    if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
+      pollingInterval = 300000; // 5 minutos - apenas backup
+    } else if (isFallbackMode) {
+      pollingInterval = 15000; // 15 segundos - fallback ativo
+    } else {
+      pollingInterval = 30000; // 30 segundos - padrão
+    }
 
     const interval = setInterval(async () => {
       try {
@@ -344,14 +560,29 @@ const WorkspaceChatAoVivo = () => {
       } catch (error) {
         console.error('Erro ao atualizar contadores:', error);
       }
-    }, 5000); // Atualizar a cada 5 segundos
+    }, pollingInterval);
+
+    // Se WebSocket estiver ativo e não em fallback, inscrever em todas as instâncias
+    if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
+      linkedInstances.forEach(async (instance) => {
+        await subscribeToInstanceWebSocket(instance.instance_name);
+      });
+    }
 
     return () => clearInterval(interval);
-  }, [linkedInstances]);
+  }, [linkedInstances, useWebSocket, isWebSocketConnected, isFallbackMode]);
 
   // Polling para atualizar mensagens da conversa selecionada
+  // 🚀 OTIMIZAÇÃO: Desativar polling completamente quando WebSocket estiver ativo
   useEffect(() => {
     if (!selectedConversation) return;
+
+    // Se WebSocket estiver ativo e não em fallback, reduzir polling significativamente
+    if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
+      console.log('📡 WebSocket ativo - polling de mensagens reduzido');
+      setIsPollingActive(false);
+      return;
+    }
 
     setIsPollingActive(true);
 
@@ -376,7 +607,7 @@ const WorkspaceChatAoVivo = () => {
               const hasNewMessages = newMessages.some(msg => !currentMessageIds.has(msg.message_id || msg.id));
 
               if (hasNewMessages) {
-                console.log('🔄 Nova mensagem detectada, atualizando...');
+                console.log('🔄 Nova mensagem detectada via polling...');
 
                 // Verificar se o usuário está no final da conversa para auto-scroll
                 const shouldAutoScroll = messagesContainerRef.current &&
@@ -387,11 +618,7 @@ const WorkspaceChatAoVivo = () => {
 
                 // Auto scroll apenas se estava no final da conversa
                 if (shouldAutoScroll) {
-                  setTimeout(() => {
-                    if (messagesEndRef.current) {
-                      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }, 100);
+                  setTimeout(forceScrollToBottom, 100);
                 }
 
                 // Marcar mensagens como lidas automaticamente
@@ -403,13 +630,155 @@ const WorkspaceChatAoVivo = () => {
       } catch (error) {
         console.error('Erro ao verificar novas mensagens:', error);
       }
-    }, 3000); // Verificar a cada 3 segundos
+    }, 10000); // Polling como fallback quando WebSocket não estiver disponível
 
     return () => {
       clearInterval(interval);
       setIsPollingActive(false);
     };
-  }, [selectedConversation, messages]);
+  }, [selectedConversation, messages, useWebSocket, isWebSocketConnected, isFallbackMode]);
+
+  // 🚀 WEBSOCKET FUNCTIONS
+  const initializeWebSocket = async () => {
+    try {
+      console.log('🔄 Inicializando WebSocket para workspace:', workspaceUuid);
+
+      // Conectar ao WebSocket
+      await websocketService.connect(workspaceUuid);
+      setIsWebSocketConnected(true);
+
+      // Configurar listeners para eventos
+      setupWebSocketListeners();
+
+      console.log('✅ WebSocket inicializado com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao inicializar WebSocket:', error);
+      setIsWebSocketConnected(false);
+      // Fallback para polling se WebSocket falhar
+      setUseWebSocket(false);
+    }
+  };
+
+  const setupWebSocketListeners = () => {
+    // Listener para novas mensagens
+    const removeNewMessageListener = websocketService.addEventListener('new-message', (data) => {
+      console.log('💬 Nova mensagem via WebSocket:', data);
+
+      if (data.message && data.instance) {
+        const newMessage = data.message;
+
+        // Verificar se é da conversa atual
+        if (selectedConversation &&
+            selectedConversation.instance_name === data.instance &&
+            selectedConversation.phone_number === newMessage.phoneNumber) {
+
+          // Adicionar mensagem à lista atual
+          setMessages(prevMessages => {
+            const messageExists = prevMessages.some(msg =>
+              (msg.message_id || msg.id) === newMessage.messageId
+            );
+
+            if (!messageExists) {
+              const formattedMessage = {
+                id: newMessage.messageId,
+                message_id: newMessage.messageId,
+                instance_name: newMessage.instanceName,
+                phone_number: newMessage.phoneNumber,
+                message_type: newMessage.messageType || 'text',
+                content: newMessage.content,
+                direction: newMessage.fromMe ? 'outbound' : 'inbound',
+                timestamp: newMessage.timestamp,
+                status: newMessage.status || 'delivered',
+                raw_data: newMessage.raw
+              };
+
+              return [...prevMessages, formattedMessage];
+            }
+
+            return prevMessages;
+          });
+
+          // Auto scroll
+          setTimeout(forceScrollToBottom, 100);
+
+          // Marcar como lida se não for nossa mensagem
+          if (!newMessage.fromMe) {
+            markMessagesAsRead(data.instance, newMessage.phoneNumber);
+          }
+        }
+
+        // Atualizar lista de conversas (nova mensagem pode criar nova conversa)
+        if (linkedInstances.length > 0) {
+          loadAllLinkedConversations(linkedInstances);
+        }
+      }
+    });
+
+    // Listener para atualizações de mensagem
+    const removeMessageUpdateListener = websocketService.addEventListener('message-update', (data) => {
+      console.log('📝 Atualização de mensagem via WebSocket:', data);
+      // TODO: Implementar atualização de status de mensagem
+    });
+
+    // Listener para atualizações de conexão
+    const removeConnectionUpdateListener = websocketService.addEventListener('connection-update', (data) => {
+      console.log('🔗 Atualização de conexão via WebSocket:', data);
+      // TODO: Atualizar status de conexão na interface
+    });
+
+    // Listener para status de conexão
+    const removeConnectionStatusListener = websocketService.addEventListener('connection-status', (data) => {
+      console.log('📊 Status de conexão WebSocket:', data);
+      setWebSocketStatus(data);
+    });
+
+    // Listener para modo fallback
+    const removeFallbackModeListener = websocketService.addEventListener('fallback-mode', (data) => {
+      console.log('⚠️ Modo fallback ativado:', data);
+      setIsFallbackMode(data.enabled);
+      if (data.enabled) {
+        toast.error(
+          data.permanent
+            ? 'WebSocket falhou - usando modo polling permanente'
+            : 'WebSocket instável - usando polling temporário'
+        );
+      }
+    });
+
+    // Listener para qualidade da conexão
+    const removeConnectionHealthListener = websocketService.addEventListener('connection-health', (data) => {
+      setConnectionQuality(data.quality);
+    });
+
+    // Cleanup dos listeners quando o componente for desmontado
+    return () => {
+      removeNewMessageListener();
+      removeMessageUpdateListener();
+      removeConnectionUpdateListener();
+      removeConnectionStatusListener();
+      removeFallbackModeListener();
+      removeConnectionHealthListener();
+    };
+  };
+
+  const subscribeToInstanceWebSocket = async (instanceName) => {
+    if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
+      try {
+        const success = await websocketService.subscribeToInstance(instanceName, true);
+        if (!success) {
+          console.warn(`⚠️ Falha ao inscrever na instância ${instanceName}`);
+        }
+      } catch (error) {
+        console.error(`❌ Erro ao inscrever na instância ${instanceName}:`, error);
+      }
+    }
+  };
+
+  const markMessagesAsReadWebSocket = (instanceName, phoneNumber) => {
+    if (useWebSocket && isWebSocketConnected) {
+      websocketService.markMessagesAsRead(instanceName, phoneNumber);
+    }
+  };
 
   const loadWorkspaceData = async () => {
     try {
@@ -714,7 +1083,7 @@ const WorkspaceChatAoVivo = () => {
         if (isDifferentConversation) {
           console.log('🔄 Trocando para conversa diferente');
           setSelectedConversation(conversation);
-          // Reset apenas paginação para nova conversa
+          // Reset paginação para nova conversa (igual ao selectConversation)
           setMessages([]);
           setMessagesOffset(0);
           setHasMoreMessages(true);
@@ -818,19 +1187,25 @@ const WorkspaceChatAoVivo = () => {
 
   const markMessagesAsRead = async (instanceName, phoneNumber) => {
     try {
-      const response = await axios.put(`${API_BASE_URL}/whatsapp-messages/mark-read/${instanceName}/${phoneNumber}`);
+      // 🚀 Usar WebSocket se disponível, senão usar API tradicional
+      if (useWebSocket && isWebSocketConnected) {
+        markMessagesAsReadWebSocket(instanceName, phoneNumber);
+      } else {
+        const response = await axios.put(`${API_BASE_URL}/whatsapp-messages/mark-read/${instanceName}/${phoneNumber}`);
 
-      if (response.data.success) {
-        // Atualizar contador local na lista de conversas
-        setConversations(prev => prev.map(conv => {
-          if (conv.instance_name === instanceName && conv.phone_number === phoneNumber) {
-            return { ...conv, unread_count: 0 };
-          }
-          return conv;
-        }));
-
-        console.log(`✅ Mensagens marcadas como lidas: ${phoneNumber}`);
+        if (response.data.success) {
+          console.log(`✅ Mensagens marcadas como lidas via API: ${phoneNumber}`);
+        }
       }
+
+      // Atualizar contador local na lista de conversas
+      setConversations(prev => prev.map(conv => {
+        if (conv.instance_name === instanceName && conv.phone_number === phoneNumber) {
+          return { ...conv, unread_count: 0 };
+        }
+        return conv;
+      }));
+
     } catch (error) {
       console.error('Erro ao marcar mensagens como lidas:', error);
     }
@@ -883,11 +1258,7 @@ const WorkspaceChatAoVivo = () => {
         setMessages(prev => [...prev, sentMessage]);
 
         // Auto scroll para a nova mensagem
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-          }
-        }, 100);
+        setTimeout(forceScrollToBottom, 100);
 
         // Atualizar a lista de conversas para refletir a nova última mensagem
         setTimeout(async () => {
@@ -1048,11 +1419,7 @@ const WorkspaceChatAoVivo = () => {
         setMessages(prev => [...prev, sentMessage]);
 
         // Auto scroll para a nova mensagem
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-          }
-        }, 100);
+        setTimeout(forceScrollToBottom, 100);
 
         // Limpar arquivo selecionado
         setSelectedFile(null);
@@ -1194,11 +1561,7 @@ ${messageToSend}`;
         handleCancelReply();
 
         // Auto scroll para a nova mensagem
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-          }
-        }, 100);
+        setTimeout(forceScrollToBottom, 100);
 
         // Atualizar a lista de conversas
         setTimeout(async () => {
@@ -1283,6 +1646,11 @@ ${messageToSend}`;
 
   return (
     <div className="space-y-6">
+      {/* Estatísticas e Monitoramento WebSocket */}
+      <WebSocketStats
+        isVisible={useWebSocket}
+        workspaceUuid={workspaceUuid}
+      />
 
       {/* Chat ao Vivo */}
       <div className="bg-gradient-card-blue backdrop-blur-md rounded-xl border border-sapphire-200/40 shadow-blue-elegant">
@@ -1498,15 +1866,63 @@ ${messageToSend}`;
                               </div>
                             </div>
 
-                            {/* Indicador de polling ativo */}
-                            <div className="flex items-center space-x-2">
-                              {isPollingActive && (
+                            {/* Indicador de conectividade WebSocket/Polling */}
+                            <div className="flex items-center space-x-3">
+                              {useWebSocket && isWebSocketConnected && !isFallbackMode ? (
+                                <div className="flex items-center space-x-2 text-xs text-blue-600">
+                                  <div className={`w-2 h-2 rounded-full animate-pulse ${
+                                    connectionQuality === 'good' ? 'bg-blue-500' :
+                                    connectionQuality === 'poor' ? 'bg-yellow-500' : 'bg-blue-500'
+                                  }`}></div>
+                                  <span className="font-medium">WebSocket Ativo</span>
+                                  {connectionQuality === 'poor' && (
+                                    <span className="text-yellow-600">(Lento)</span>
+                                  )}
+                                </div>
+                              ) : useWebSocket && isFallbackMode ? (
+                                <div className="flex items-center space-x-2 text-xs text-orange-600">
+                                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                                  <span className="font-medium">Modo Fallback</span>
+                                  {webSocketStatus?.permanent ? (
+                                    <span className="text-red-600">(Permanente)</span>
+                                  ) : (
+                                    <span className="text-orange-600">(Temporário)</span>
+                                  )}
+                                </div>
+                              ) : useWebSocket && !isWebSocketConnected ? (
+                                <div className="flex items-center space-x-2 text-xs text-yellow-600">
+                                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                                  <span className="font-medium">Reconectando...</span>
+                                  {webSocketStatus?.attempt && (
+                                    <span>({webSocketStatus.attempt}/{webSocketStatus.maxAttempts})</span>
+                                  )}
+                                </div>
+                              ) : isPollingActive ? (
                                 <div className="flex items-center space-x-2 text-xs text-green-600">
                                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                  <span>Tempo real</span>
+                                  <span className="font-medium">Polling Ativo</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center space-x-2 text-xs text-steel-500">
+                                  <div className="w-2 h-2 bg-steel-400 rounded-full"></div>
+                                  <span>Desconectado</span>
                                 </div>
                               )}
-                              {lastMessageCheck && (
+
+                              {/* Botão de reconexão manual quando necessário */}
+                              {useWebSocket && (!isWebSocketConnected || isFallbackMode) && (
+                                <button
+                                  onClick={() => {
+                                    console.log('🔄 Reconexão manual solicitada');
+                                    websocketService.reconnect();
+                                  }}
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                                  title="Tentar reconectar WebSocket"
+                                >
+                                  Reconectar
+                                </button>
+                              )}
+                              {lastMessageCheck && !isWebSocketConnected && (
                                 <div className="text-xs text-steel-500">
                                   Última verificação: {lastMessageCheck.toLocaleTimeString('pt-BR', {
                                     hour: '2-digit',

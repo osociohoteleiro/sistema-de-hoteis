@@ -736,4 +736,286 @@ router.get('/:workspaceUuid/:leadId/details', async (req, res) => {
   }
 });
 
+/**
+ * 🚀 NOVO ENDPOINT: POST /api/leads/:workspaceUuid/:leadId/sync-whatsapp
+ * Sincronizar dados do lead com Evolution API (atualizar foto de perfil e nome)
+ */
+router.post('/:workspaceUuid/:leadId/sync-whatsapp', async (req, res) => {
+  try {
+    const { workspaceUuid, leadId } = req.params;
+
+    console.log(`🔄 Sincronizando dados do WhatsApp para lead ${leadId}`);
+
+    // Verificar se o lead existe e obter informações básicas
+    const leadQuery = await db.query(`
+      SELECT c.id, c.instance_name, c.phone_number, c.contact_name, c.profile_picture_url, c.last_sync_at
+      FROM whatsapp_contacts c
+      INNER JOIN workspace_instances wi ON c.instance_name = wi.instance_name
+      WHERE wi.workspace_uuid = $1 AND c.id = $2
+    `, [workspaceUuid, leadId]);
+
+    if (leadQuery.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Lead não encontrado'
+      });
+    }
+
+    const lead = leadQuery[0];
+    const { instance_name, phone_number } = lead;
+
+    // Usar ContactsCacheService para buscar dados atualizados (respeitando rate limiting)
+    const ContactsCacheService = require('../services/contactsCacheService');
+    const cacheService = new ContactsCacheService();
+
+    const contactInfo = await cacheService.getContactInfo(instance_name, phone_number);
+
+    if (!contactInfo.success) {
+      return res.status(400).json({
+        success: false,
+        error: contactInfo.error || 'Não foi possível obter dados do WhatsApp',
+        rateLimited: contactInfo.rateLimited || false
+      });
+    }
+
+    // Verificar se há dados novos para atualizar
+    const newData = contactInfo.data;
+    let hasUpdates = false;
+    const updates = [];
+    const updateValues = [];
+    let paramCount = 1;
+
+    // Verificar se o nome mudou
+    if (newData.name && newData.name !== lead.contact_name) {
+      updates.push(`contact_name = $${paramCount++}`);
+      updateValues.push(newData.name);
+      hasUpdates = true;
+    }
+
+    // Verificar se a foto mudou
+    if (newData.picture && newData.picture !== lead.profile_picture_url) {
+      updates.push(`profile_picture_url = $${paramCount++}`);
+      updateValues.push(newData.picture);
+      hasUpdates = true;
+    }
+
+    // Sempre atualizar o timestamp de sincronização
+    updates.push(`last_sync_at = NOW()`);
+    updateValues.push(leadId);
+
+    let updatedLead = lead;
+
+    if (hasUpdates || true) { // Sempre atualizar last_sync_at
+      const updateQuery = `
+        UPDATE whatsapp_contacts
+        SET ${updates.join(', ')}
+        WHERE id = $${paramCount}
+        RETURNING *
+      `;
+
+      const updateResult = await db.query(updateQuery, updateValues);
+      updatedLead = updateResult[0];
+
+      console.log(`✅ Lead sincronizado: ${leadId}`, {
+        nameUpdated: newData.name !== lead.contact_name,
+        pictureUpdated: newData.picture !== lead.profile_picture_url,
+        cached: contactInfo.cached
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        lead: updatedLead,
+        changes: {
+          nameUpdated: newData.name && newData.name !== lead.contact_name,
+          pictureUpdated: newData.picture && newData.picture !== lead.profile_picture_url,
+          lastSyncAt: updatedLead.last_sync_at
+        },
+        cached: contactInfo.cached,
+        cacheAge: contactInfo.cacheAge
+      },
+      message: hasUpdates ? 'Dados atualizados com sucesso' : 'Dados já estão atualizados'
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao sincronizar lead:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * 🚀 NOVO ENDPOINT: POST /api/leads/auto-sync-outdated
+ * Sincronização automática de contatos com dados desatualizados
+ */
+router.post('/auto-sync-outdated', async (req, res) => {
+  try {
+    const { daysOld = 7, maxContacts = 50 } = req.body;
+
+    console.log(`🔄 Iniciando sincronização automática de contatos antigos (>${daysOld} dias)`);
+
+    // Buscar contatos que não foram sincronizados há X dias
+    const outdatedContacts = await db.query(`
+      SELECT
+        c.id, c.instance_name, c.phone_number, c.contact_name,
+        c.profile_picture_url, c.last_sync_at,
+        wi.workspace_uuid,
+        EXTRACT(EPOCH FROM (NOW() - COALESCE(c.last_sync_at, c.created_at))) / 86400 as days_old
+      FROM whatsapp_contacts c
+      INNER JOIN workspace_instances wi ON c.instance_name = wi.instance_name
+      WHERE
+        (c.last_sync_at IS NULL OR c.last_sync_at < NOW() - INTERVAL '${daysOld} days')
+        AND c.phone_number NOT LIKE '%@g.us'
+        AND LENGTH(c.phone_number) BETWEEN 8 AND 15
+      ORDER BY COALESCE(c.last_sync_at, c.created_at) ASC
+      LIMIT $1
+    `, [maxContacts]);
+
+    if (outdatedContacts.length === 0) {
+      return res.json({
+        success: true,
+        message: 'Nenhum contato precisa de sincronização',
+        data: {
+          processed: 0,
+          updated: 0,
+          errors: 0
+        }
+      });
+    }
+
+    console.log(`📋 Encontrados ${outdatedContacts.length} contatos para sincronização`);
+
+    // Processar contatos em lotes para evitar sobrecarga
+    const ContactsCacheService = require('../services/contactsCacheService');
+    const cacheService = new ContactsCacheService();
+
+    const results = {
+      processed: 0,
+      updated: 0,
+      errors: 0,
+      details: []
+    };
+
+    for (let i = 0; i < outdatedContacts.length; i++) {
+      const contact = outdatedContacts[i];
+
+      try {
+        console.log(`🔄 Processando ${i + 1}/${outdatedContacts.length}: ${contact.phone_number}`);
+
+        // Usar ContactsCacheService para buscar dados atualizados
+        const contactInfo = await cacheService.getContactInfo(contact.instance_name, contact.phone_number);
+
+        if (contactInfo.success && contactInfo.data) {
+          const newData = contactInfo.data;
+          let hasUpdates = false;
+          const updates = [];
+          const updateValues = [];
+          let paramCount = 1;
+
+          // Verificar se o nome mudou
+          if (newData.name && newData.name !== contact.contact_name) {
+            updates.push(`contact_name = $${paramCount++}`);
+            updateValues.push(newData.name);
+            hasUpdates = true;
+          }
+
+          // Verificar se a foto mudou
+          if (newData.picture && newData.picture !== contact.profile_picture_url) {
+            updates.push(`profile_picture_url = $${paramCount++}`);
+            updateValues.push(newData.picture);
+            hasUpdates = true;
+          }
+
+          // Sempre atualizar timestamp de sincronização
+          updates.push(`last_sync_at = NOW()`);
+          updateValues.push(contact.id);
+
+          if (updates.length > 0) {
+            const updateQuery = `
+              UPDATE whatsapp_contacts
+              SET ${updates.join(', ')}
+              WHERE id = $${paramCount}
+            `;
+
+            await db.query(updateQuery, updateValues);
+
+            if (hasUpdates) {
+              results.updated++;
+              console.log(`✅ Contato atualizado: ${contact.phone_number}`);
+            }
+          }
+
+          results.details.push({
+            phone_number: contact.phone_number,
+            instance_name: contact.instance_name,
+            nameUpdated: newData.name && newData.name !== contact.contact_name,
+            pictureUpdated: newData.picture && newData.picture !== contact.profile_picture_url,
+            daysOld: Math.round(contact.days_old),
+            cached: contactInfo.cached
+          });
+
+        } else if (contactInfo.rateLimited) {
+          console.log(`⏳ Rate limited para ${contact.phone_number}, pulando`);
+          results.details.push({
+            phone_number: contact.phone_number,
+            instance_name: contact.instance_name,
+            error: 'Rate limited',
+            daysOld: Math.round(contact.days_old)
+          });
+        } else {
+          console.log(`❌ Erro ao sincronizar ${contact.phone_number}: ${contactInfo.error}`);
+          results.errors++;
+          results.details.push({
+            phone_number: contact.phone_number,
+            instance_name: contact.instance_name,
+            error: contactInfo.error,
+            daysOld: Math.round(contact.days_old)
+          });
+        }
+
+        results.processed++;
+
+        // Delay entre requisições para respeitar rate limits (apenas se não veio do cache)
+        if (!contactInfo.cached && i < outdatedContacts.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 segundos
+        }
+
+      } catch (error) {
+        console.error(`❌ Erro ao processar contato ${contact.phone_number}:`, error);
+        results.errors++;
+        results.details.push({
+          phone_number: contact.phone_number,
+          instance_name: contact.instance_name,
+          error: error.message,
+          daysOld: Math.round(contact.days_old)
+        });
+      }
+    }
+
+    console.log(`✅ Sincronização automática concluída:`, {
+      processed: results.processed,
+      updated: results.updated,
+      errors: results.errors
+    });
+
+    res.json({
+      success: true,
+      message: `Sincronização concluída: ${results.updated} contatos atualizados de ${results.processed} processados`,
+      data: results
+    });
+
+  } catch (error) {
+    console.error('❌ Erro na sincronização automática:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor',
+      message: error.message
+    });
+  }
+});
+
 module.exports = router;

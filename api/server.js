@@ -445,6 +445,19 @@ app.use('/api/webhook-config', webhookConfigRoutes);
 
 app.use('/api/migrate', migrateRoutes); // Habilitado temporariamente
 
+// 🚀 NOVO ENDPOINT: Health check para scripts automáticos
+app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: process.env.npm_package_version || '1.0.0'
+  });
+});
+
+console.log('📍 Todas as rotas carregadas');
+
 // Inicializar WebSocket Service
 const websocketService = require('./services/websocketService');
 websocketService.initialize(server);

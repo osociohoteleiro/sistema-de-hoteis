@@ -22,6 +22,8 @@ const EditLeadModal = ({ isOpen, onClose, lead, onLeadUpdated }) => {
   const [loading, setLoading] = useState(false);
   const [tags, setTags] = useState([]);
   const [customFields, setCustomFields] = useState([]);
+  const [syncingWhatsApp, setSyncingWhatsApp] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
 
   useEffect(() => {
     if (isOpen && lead) {
@@ -44,6 +46,9 @@ const EditLeadModal = ({ isOpen, onClose, lead, onLeadUpdated }) => {
       tags: lead.tags ? lead.tags.map(tag => tag.id) : [],
       custom_fields: lead.custom_fields || {}
     });
+
+    // Definir informação de última sincronização
+    setLastSyncAt(lead.last_sync_at || null);
   };
 
   const loadTags = async () => {
@@ -98,6 +103,70 @@ const EditLeadModal = ({ isOpen, onClose, lead, onLeadUpdated }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSyncWhatsApp = async () => {
+    setSyncingWhatsApp(true);
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/leads/${workspaceUuid}/${lead.id}/sync-whatsapp`);
+
+      if (response.data.success) {
+        const { lead: updatedLead, changes } = response.data.data;
+
+        // Atualizar formulário com novos dados se houve mudanças
+        if (changes.nameUpdated && updatedLead.contact_name) {
+          setFormData(prev => ({
+            ...prev,
+            contact_name: updatedLead.contact_name
+          }));
+        }
+
+        // Atualizar timestamp de sincronização
+        setLastSyncAt(updatedLead.last_sync_at);
+
+        // Notificar sobre mudanças
+        if (changes.nameUpdated || changes.pictureUpdated) {
+          toast.success(
+            `Dados atualizados: ${changes.nameUpdated ? 'Nome' : ''}${changes.nameUpdated && changes.pictureUpdated ? ' e ' : ''}${changes.pictureUpdated ? 'Foto de perfil' : ''}`
+          );
+        } else {
+          toast.success('Dados verificados - já estão atualizados');
+        }
+
+        // Notificar componente pai sobre a atualização
+        if (onLeadUpdated) {
+          onLeadUpdated(updatedLead);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao sincronizar com WhatsApp:', error);
+      const errorMessage = error.response?.data?.error || 'Erro ao sincronizar dados';
+
+      if (error.response?.data?.rateLimited) {
+        toast.error('Aguarde alguns minutos antes de tentar novamente (proteção anti-banimento)');
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setSyncingWhatsApp(false);
+    }
+  };
+
+  const formatLastSync = (timestamp) => {
+    if (!timestamp) return 'Nunca sincronizado';
+
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return 'Há menos de 1 minuto';
+    if (diffMins < 60) return `Há ${diffMins} minuto${diffMins > 1 ? 's' : ''}`;
+    if (diffHours < 24) return `Há ${diffHours} hora${diffHours > 1 ? 's' : ''}`;
+    return `Há ${diffDays} dia${diffDays > 1 ? 's' : ''}`;
   };
 
   const handleTagToggle = (tagId) => {
@@ -364,6 +433,39 @@ const EditLeadModal = ({ isOpen, onClose, lead, onLeadUpdated }) => {
               className="w-full px-3 py-2 border border-sapphire-200 rounded-lg focus:ring-2 focus:ring-sapphire-500 focus:border-sapphire-500"
               placeholder="Notas adicionais sobre o lead..."
             />
+          </div>
+
+          {/* 🚀 NOVA SEÇÃO: Sincronização com WhatsApp */}
+          <div className="pt-6 border-t border-steel-200">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-blue-900 flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                    </svg>
+                    Sincronizar dados do WhatsApp
+                  </h4>
+                  <p className="text-xs text-blue-700">
+                    {formatLastSync(lastSyncAt)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncWhatsApp}
+                  disabled={syncingWhatsApp || loading}
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors flex items-center space-x-2 disabled:opacity-50"
+                >
+                  {syncingWhatsApp && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  )}
+                  <span>{syncingWhatsApp ? 'Sincronizando...' : 'Atualizar dados'}</span>
+                </button>
+              </div>
+              <p className="text-xs text-blue-600">
+                Busca nome e foto de perfil atualizados do WhatsApp (respeita limite de requisições para evitar banimento)
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center justify-end space-x-3 pt-4 border-t border-steel-200">
