@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import AddWorkspaceModal from './Modals/AddWorkspaceModal';
+import EditWorkspaceModal from './Modals/EditWorkspaceModal';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -17,6 +19,16 @@ const RelationshipDashboard = ({ showWorkspaces = true, compactMode = false }) =
       totalInstances: 0
     },
     loading: true
+  });
+
+  const [addWorkspaceModal, setAddWorkspaceModal] = useState({
+    isOpen: false,
+    hotel: null
+  });
+
+  const [editWorkspaceModal, setEditWorkspaceModal] = useState({
+    isOpen: false,
+    workspace: null
   });
 
   useEffect(() => {
@@ -90,6 +102,44 @@ const RelationshipDashboard = ({ showWorkspaces = true, compactMode = false }) =
       console.error('Erro ao carregar dados de relacionamento:', error);
       setData(prev => ({ ...prev, loading: false }));
     }
+  };
+
+  const handleOpenAddWorkspace = (hotel) => {
+    setAddWorkspaceModal({
+      isOpen: true,
+      hotel: hotel
+    });
+  };
+
+  const handleCloseAddWorkspace = () => {
+    setAddWorkspaceModal({
+      isOpen: false,
+      hotel: null
+    });
+  };
+
+  const handleWorkspaceAdded = (newWorkspace) => {
+    // Recarregar dados para refletir a nova workspace
+    loadRelationshipData();
+  };
+
+  const handleOpenEditWorkspace = (workspace) => {
+    setEditWorkspaceModal({
+      isOpen: true,
+      workspace: workspace
+    });
+  };
+
+  const handleCloseEditWorkspace = () => {
+    setEditWorkspaceModal({
+      isOpen: false,
+      workspace: null
+    });
+  };
+
+  const handleWorkspaceUpdated = (updatedWorkspace) => {
+    // Recarregar dados para refletir as alterações
+    loadRelationshipData();
   };
 
   if (data.loading) {
@@ -264,33 +314,60 @@ const RelationshipDashboard = ({ showWorkspaces = true, compactMode = false }) =
                           </p>
                         </div>
                       </div>
+
+                      <button
+                        onClick={() => handleOpenAddWorkspace(hotel)}
+                        className="flex items-center space-x-2 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-lg transition-colors shadow-sm hover:shadow-md"
+                        title="Adicionar nova workspace"
+                      >
+                        <span className="text-sm">➕</span>
+                        <span>Adicionar Workspace</span>
+                      </button>
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                       {hotel.workspaces.map((workspace) => (
-                        <Link
+                        <div
                           key={workspace.id}
-                          to={`/workspace/${workspace.workspace_uuid}/chat-ao-vivo`}
-                          className="block p-3 bg-white/50 border border-sapphire-200/30 rounded-lg hover:bg-sapphire-50/50 hover:border-sapphire-300/50 transition-all duration-200 group"
-                          onClick={() => localStorage.setItem('selectedWorkspace', JSON.stringify(workspace))}
+                          className="p-3 bg-white/50 border border-sapphire-200/30 rounded-lg hover:bg-sapphire-50/50 hover:border-sapphire-300/50 transition-all duration-200 group"
                         >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-6 h-6 bg-emerald-100 rounded flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <span className="text-sm">💼</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-midnight-950 truncate">
-                                {workspace.name}
+                          <div className="flex items-center justify-between">
+                            <Link
+                              to={`/workspace/${workspace.workspace_uuid}/chat-ao-vivo`}
+                              className="flex items-center space-x-3 flex-1 min-w-0"
+                              onClick={() => localStorage.setItem('selectedWorkspace', JSON.stringify(workspace))}
+                            >
+                              <div className="w-6 h-6 bg-emerald-100 rounded flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <span className="text-sm">💼</span>
                               </div>
-                              <div className="text-xs text-steel-600 mt-1">
-                                {workspace.bots_count || 0} bots • {workspace.instances_count || 0} instâncias
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-midnight-950 truncate">
+                                  {workspace.name}
+                                </div>
+                                <div className="text-xs text-steel-600 mt-1">
+                                  {workspace.bots_count || 0} bots • {workspace.instances_count || 0} instâncias
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <div className={`w-2 h-2 rounded-full ${workspace.active ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                            </div>
+                              <div className="flex-shrink-0">
+                                <div className={`w-2 h-2 rounded-full ${workspace.active ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                              </div>
+                            </Link>
+
+                            {/* Botão de edição */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditWorkspace(workspace);
+                              }}
+                              className="ml-2 p-1.5 text-steel-500 hover:text-sapphire-600 hover:bg-sapphire-100 rounded transition-colors"
+                              title="Editar workspace"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
                           </div>
-                        </Link>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -300,6 +377,22 @@ const RelationshipDashboard = ({ showWorkspaces = true, compactMode = false }) =
           </div>
         </div>
       )}
+
+      {/* Modal para adicionar workspace */}
+      <AddWorkspaceModal
+        isOpen={addWorkspaceModal.isOpen}
+        onClose={handleCloseAddWorkspace}
+        hotel={addWorkspaceModal.hotel}
+        onWorkspaceAdded={handleWorkspaceAdded}
+      />
+
+      {/* Modal para editar workspace */}
+      <EditWorkspaceModal
+        isOpen={editWorkspaceModal.isOpen}
+        onClose={handleCloseEditWorkspace}
+        workspace={editWorkspaceModal.workspace}
+        onWorkspaceUpdated={handleWorkspaceUpdated}
+      />
     </div>
   );
 };

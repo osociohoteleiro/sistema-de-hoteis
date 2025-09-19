@@ -143,6 +143,11 @@ const Breadcrumbs = () => {
 
   const breadcrumbItems = getBreadcrumbItems();
 
+  // Não mostrar breadcrumbs na página de chat ao vivo
+  if (location.pathname.includes('/chat-ao-vivo')) {
+    return null;
+  }
+
   if (breadcrumbItems.length <= 1) {
     return null; // Não mostrar breadcrumbs para páginas simples
   }
@@ -204,17 +209,6 @@ const Breadcrumbs = () => {
           </div>
         )}
 
-        {/* User permissions indicator */}
-        {contextData.workspace && (
-          <div className="ml-auto flex items-center space-x-2">
-            <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full border border-green-200">
-              <span className="flex items-center space-x-1">
-                <span>🔓</span>
-                <span>Acesso Total</span>
-              </span>
-            </div>
-          </div>
-        )}
       </div>
     </nav>
   );

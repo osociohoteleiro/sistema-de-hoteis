@@ -201,3 +201,26 @@ taskkill /f /im node.exe
 - `DEPLOY-INDEPENDENTE.md` - Guia completo do novo sistema de deploy
 - `/scripts/` - Scripts de deploy e rollback
 - Sempre responda em portugues br. Sempre analise todo o contexto da aplicação antes de alterar o código, para evitar desfazer partes importantes que já estão funcionando e evitar loop de desenvolvimento
+
+## Padrões Obrigatórios de Desenvolvimento
+
+### UUIDs nas URLs
+- **OBRIGATÓRIO**: Toda URL da aplicação deve usar UUID ao invés de ID numérico
+- **Formato**: `/workspace/{workspace_uuid}/chat-ao-vivo` (CORRETO)
+- **Evitar**: `/workspace/{workspace_id}/bots` (INCORRETO)
+- **Padrão**: Workspaces, bots, hotéis e todos recursos principais usam UUID
+- **Validação**: Sempre validar se o UUID está presente e é válido antes de fazer requisições
+
+### Estrutura de Navegação do Workspace
+- **Página principal**: `/workspace/{uuid}/chat-ao-vivo` (redirecionamento padrão)
+- **Gerenciamento**: `/workspace/{uuid}/bots`
+- **Configuração**: `/workspace/{uuid}/configuracoes`
+- **Chat ao Vivo**: É a interface principal de trabalho no workspace
+- **Fluxo**: Usuário entra no workspace → vai direto para chat ao vivo
+
+### Interface de Mensagens Integrada
+- **Chat ao Vivo**: Interface unificada dentro do workspace
+- **Evolution API**: Integrada na aba "Evolution API"
+- **WhatsApp Cloud**: Integrada na aba "WhatsApp Cloud"
+- **Localização**: `/workspace/{uuid}/chat-ao-vivo` (não mais `/whatsapp`)
+- **Contexto**: Sempre dentro do workspace específico

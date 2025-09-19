@@ -1045,6 +1045,149 @@ class EvolutionService {
       };
     }
   }
+
+  /**
+   * Enviar mídia via Evolution API
+   */
+  async sendMedia(instanceName, phoneNumber, mediaData) {
+    try {
+      console.log(`📤 sendMedia INÍCIO: ${instanceName} -> ${phoneNumber}`, {
+        instanceName,
+        phoneNumber,
+        mediaDataKeys: mediaData ? Object.keys(mediaData) : null,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validações
+      if (!instanceName || !phoneNumber || !mediaData) {
+        const errorMsg = 'Instance name, phone number e mediaData são obrigatórios';
+        console.error('❌ Validação inicial falhou:', {
+          hasInstanceName: !!instanceName,
+          hasPhoneNumber: !!phoneNumber,
+          hasMediaData: !!mediaData
+        });
+        throw new Error(errorMsg);
+      }
+
+      const { mediaType, fileName, caption, media } = mediaData;
+
+      // Validações detalhadas
+      if (!mediaType || !fileName || !media) {
+        console.error('❌ Validação falhou - dados obrigatórios:', {
+          hasMediaType: !!mediaType,
+          hasFileName: !!fileName,
+          hasMedia: !!media,
+          mediaType,
+          fileName,
+          mediaLength: media ? media.length : 0
+        });
+        throw new Error('mediaType, fileName e media são obrigatórios');
+      }
+
+      // Validar tamanho do base64
+      if (media.length > 50000000) { // ~37MB após base64 (50MB * 0.75)
+        throw new Error('Arquivo muito grande - máximo 37MB');
+      }
+
+      // Validar se é base64 válido
+      if (!/^[A-Za-z0-9+/]+=*$/.test(media)) {
+        throw new Error('Media deve estar em formato base64 válido');
+      }
+
+      const endpoint = `/message/sendMedia/${instanceName}`;
+      // Usar formato correto da Evolution API (sem wrapper mediaMessage)
+      let payload = {
+        number: phoneNumber,
+        mediatype: mediaType.toLowerCase(), // Evolution API espera minúsculo
+        filename: fileName,
+        caption: caption || '',
+        media
+      };
+
+      console.log(`📤 Enviando ${mediaType} para ${phoneNumber}:`, {
+        fileName,
+        hasMedia: !!media,
+        mediaLength: media ? media.length : 0,
+        timestamp: new Date().toISOString(),
+        endpoint: `${this.baseURL}${endpoint}`,
+        payloadKeys: Object.keys(payload),
+        mediatype: payload.mediatype
+      });
+
+      // Enviar requisição para Evolution API
+      const response = await axios.post(
+        `${this.baseURL}${endpoint}`,
+        payload,
+        {
+          headers: {
+            'apikey': this.apiKey,
+            'Content-Type': 'application/json'
+          },
+          timeout: 60000 // Timeout maior para arquivos
+        }
+      );
+
+      console.log(`✅ Mídia enviada com sucesso: ${instanceName} -> ${phoneNumber}`);
+
+      return {
+        success: true,
+        data: response.data,
+        message: 'Mídia enviada com sucesso'
+      };
+
+    } catch (error) {
+      console.error(`❌ Erro final ao enviar mídia ${instanceName} -> ${phoneNumber}:`, {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        },
+        stack: error.stack,
+        fullError: error
+      });
+
+      let errorMessage = 'Erro ao enviar mídia';
+
+      // Análise detalhada do erro
+      if (error.response?.status === 400) {
+        if (error.response.data?.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.data?.response?.message?.[0]?.[0]) {
+          errorMessage = error.response.data.response.message[0][0];
+        } else {
+          errorMessage = 'Dados inválidos para envio de mídia';
+        }
+      } else if (error.response?.status === 401) {
+        errorMessage = 'Não autorizado - verifique a API key da instância';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Instância não encontrada ou endpoint inválido';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Erro interno do servidor Evolution API';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      return {
+        success: false,
+        error: {
+          message: errorMessage,
+          response: error.response?.data || null,
+          status: error.response?.status || null,
+          details: {
+            endpoint: `${this.baseURL}/message/sendMedia/${instanceName}`,
+            phoneNumber,
+            mediaType: mediaData?.mediaType || 'unknown'
+          }
+        }
+      };
+    }
+  }
 }
 
 module.exports = new EvolutionService();

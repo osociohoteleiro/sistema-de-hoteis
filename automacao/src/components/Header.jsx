@@ -1,8 +1,10 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
+import WorkspaceSelector from './WorkspaceSelector';
 
 const Header = () => {
   const location = useLocation();
+  const params = useParams();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
 
@@ -50,14 +52,19 @@ const Header = () => {
   return (
     <header className="bg-gradient-card-blue backdrop-blur-md border-b border-sapphire-200/30 px-8 py-6 relative z-40 shadow-blue-soft">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-midnight-950 mb-1">
-            {getPageTitle()}
-          </h1>
-          <p className="text-steel-600 text-sm">
-            {getPageDescription()}
-          </p>
-        </div>
+        {/* Se estamos em uma workspace, mostrar seletor, senão mostrar título normal */}
+        {params.workspaceUuid ? (
+          <WorkspaceSelector />
+        ) : (
+          <div>
+            <h1 className="text-2xl font-semibold text-midnight-950 mb-1">
+              {getPageTitle()}
+            </h1>
+            <p className="text-steel-600 text-sm">
+              {getPageDescription()}
+            </p>
+          </div>
+        )}
         
         <div className="flex items-center space-x-4">
           {/* Notification Bell */}

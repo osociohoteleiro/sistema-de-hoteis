@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
+import { SidebarProvider } from './contexts/SidebarContext';
 import Dashboard from './pages/Dashboard';
 import Workspaces from './pages/Workspaces';
 import WorkspaceBots from './pages/WorkspaceBots';
@@ -22,7 +23,8 @@ const Settings = () => (
 function App() {
   return (
     <Router>
-      <Routes>
+      <SidebarProvider>
+        <Routes>
         {/* Rotas principais dentro do Layout */}
         <Route path="/" element={<Layout />}>
           {/* Redirecionar root para dashboard */}
@@ -84,8 +86,9 @@ function App() {
             </div>
           </div>
         } />
-      </Routes>
-      
+        </Routes>
+      </SidebarProvider>
+
       {/* Toast Notifications */}
       <Toaster
         position="top-right"

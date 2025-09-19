@@ -38,4 +38,36 @@
   .transition-minimal {
     transition: all 0.15s ease;
   }
+
+  /* Sidebar-specific transitions */
+  .transition-sidebar {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-width {
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-margin {
+    transition: margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .transition-left {
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Smooth transform animations */
+  .transition-transform-fast {
+    transition: transform 0.2s ease;
+  }
+
+  /* Sidebar toggle button positioning */
+  .sidebar-toggle-btn {
+    position: absolute;
+    top: 1rem;
+    right: -0.75rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    z-index: 9999;
+  }
 }
