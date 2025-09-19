@@ -63,8 +63,8 @@ const WorkspaceLeads = () => {
         setLeads(leadsData);
         setSummary(prev => ({ ...prev, ...response.data.data.summary }));
 
-        // Carregar nomes dos contatos para cada lead
-        loadLeadContactNames(leadsData);
+        // 🚀 OTIMIZADO: Priorizar dados do banco, evitar requisições desnecessárias
+        loadLeadContactNamesOptimized(leadsData);
       }
     } catch (error) {
       console.error('Erro ao carregar leads:', error);
@@ -101,9 +101,9 @@ const WorkspaceLeads = () => {
         newLoadingStates[leadKey] = true;
         setLoadingLeadImages(prev => ({ ...prev, [leadKey]: true }));
 
-        // Buscar informações do contato via Evolution API
+        // 🚀 CORRIGIDO: Usar cache inteligente ao invés de Evolution API direta
         const encodedInstanceName = encodeURIComponent(cleanInstanceName);
-        const response = await axios.get(`${API_BASE_URL}/evolution/contact/${encodedInstanceName}/${cleanPhoneNumber}`);
+        const response = await axios.get(`${API_BASE_URL}/contacts-cache/${encodedInstanceName}/${cleanPhoneNumber}`);
 
         if (response.data.success && response.data.data) {
           const contactData = response.data.data;
@@ -111,13 +111,13 @@ const WorkspaceLeads = () => {
           // Salvar nome do contato
           if (contactData.name) {
             newContactNames[leadKey] = contactData.name;
-            console.log(`✅ Nome encontrado para ${lead.phone_number}: ${contactData.name}`);
+            console.log(`✅ Nome encontrado via cache para ${lead.phone_number}: ${contactData.name} (cached: ${response.data.cached})`);
           }
 
           // Salvar foto de perfil
           if (contactData.picture) {
             newProfileImages[leadKey] = contactData.picture;
-            console.log(`✅ Foto encontrada para ${lead.phone_number}: ${contactData.picture}`);
+            console.log(`✅ Foto encontrada via cache para ${lead.phone_number} (cached: ${response.data.cached})`);
           }
         }
       } catch (error) {
@@ -145,6 +145,127 @@ const WorkspaceLeads = () => {
       console.log('🔄 Atualizando fotos:', newProfileImages);
       setLeadProfileImages(prev => ({ ...prev, ...newProfileImages }));
     }
+  };
+
+  // 🚀 VERSÃO OTIMIZADA: Prioriza dados do banco, evita requisições desnecessárias
+  const loadLeadContactNamesOptimized = async (leadsData) => {
+    console.log('🚀 loadLeadContactNamesOptimized iniciado com', leadsData.length, 'leads');
+
+    const newContactNames = {};
+    const newProfileImages = {};
+    const leadsNeedingCache = [];
+
+    // 1ª FASE: Usar dados já disponíveis do banco (prioridade máxima)
+    for (const lead of leadsData) {
+      const leadKey = `${lead.instance_name}-${lead.phone_number}`;
+
+      // ✅ Se já tem contact_name no banco, usar ele
+      if (lead.contact_name && lead.contact_name.trim()) {
+        newContactNames[leadKey] = lead.contact_name;
+        console.log(`✅ Nome do banco para ${lead.phone_number}: ${lead.contact_name}`);
+      }
+
+      // ✅ Se já tem profile_pic_url no banco, usar ela
+      if (lead.profile_pic_url && lead.profile_pic_url.trim()) {
+        newProfileImages[leadKey] = lead.profile_pic_url;
+        console.log(`✅ Foto do banco para ${lead.phone_number}`);
+      }
+
+      // 📝 Se faltar algum dado, adicionar à lista para buscar no cache
+      if (!lead.contact_name || !lead.profile_pic_url) {
+        leadsNeedingCache.push({ lead, leadKey });
+      }
+    }
+
+    // Atualizar estados com dados já disponíveis do banco
+    if (Object.keys(newContactNames).length > 0) {
+      console.log('🔄 Atualizando nomes do banco:', newContactNames);
+      setLeadContactNames(prev => ({ ...prev, ...newContactNames }));
+    }
+    if (Object.keys(newProfileImages).length > 0) {
+      console.log('🔄 Atualizando fotos do banco:', newProfileImages);
+      setLeadProfileImages(prev => ({ ...prev, ...newProfileImages }));
+    }
+
+    // 2ª FASE: Buscar no cache apenas para leads que precisam (limitado a 10 por vez)
+    if (leadsNeedingCache.length > 0) {
+      console.log(`📋 ${leadsNeedingCache.length} leads precisam de dados do cache`);
+
+      // Limitar a 10 requisições por vez para evitar sobrecarga
+      const batchSize = 10;
+      const batch = leadsNeedingCache.slice(0, batchSize);
+
+      const cacheContactNames = {};
+      const cacheProfileImages = {};
+
+      for (const { lead, leadKey } of batch) {
+        // Verificar se já está carregando
+        if (loadingLeadImages[leadKey]) {
+          continue;
+        }
+
+        try {
+          const cleanInstanceName = lead.instance_name.trim();
+          const cleanPhoneNumber = lead.phone_number.replace(/\D/g, '');
+
+          if (!cleanInstanceName || !cleanPhoneNumber) continue;
+
+          // Marcar como carregando
+          setLoadingLeadImages(prev => ({ ...prev, [leadKey]: true }));
+
+          // Buscar no cache inteligente
+          const encodedInstanceName = encodeURIComponent(cleanInstanceName);
+          const response = await axios.get(`${API_BASE_URL}/contacts-cache/${encodedInstanceName}/${cleanPhoneNumber}`);
+
+          if (response.data.success && response.data.data) {
+            const contactData = response.data.data;
+
+            // Apenas atualizar se não temos no banco
+            if (!lead.contact_name && contactData.name) {
+              cacheContactNames[leadKey] = contactData.name;
+              console.log(`✅ Nome encontrado via cache para ${lead.phone_number}: ${contactData.name} (cached: ${response.data.cached})`);
+            }
+
+            if (!lead.profile_pic_url && contactData.picture) {
+              cacheProfileImages[leadKey] = contactData.picture;
+              console.log(`✅ Foto encontrada via cache para ${lead.phone_number} (cached: ${response.data.cached})`);
+            }
+          }
+        } catch (error) {
+          // Ignorar erros de contatos não encontrados
+          if (error.response?.status !== 400) {
+            console.warn(`Erro ao buscar informações do contato ${lead.phone_number}:`, error.message);
+          }
+        } finally {
+          // Remover loading
+          setLoadingLeadImages(prev => {
+            const newState = { ...prev };
+            delete newState[leadKey];
+            return newState;
+          });
+        }
+      }
+
+      // Atualizar estados com dados do cache
+      if (Object.keys(cacheContactNames).length > 0) {
+        console.log('🔄 Atualizando nomes do cache:', cacheContactNames);
+        setLeadContactNames(prev => ({ ...prev, ...cacheContactNames }));
+      }
+      if (Object.keys(cacheProfileImages).length > 0) {
+        console.log('🔄 Atualizando fotos do cache:', cacheProfileImages);
+        setLeadProfileImages(prev => ({ ...prev, ...cacheProfileImages }));
+      }
+
+      // Se ainda há mais leads para processar, agendar para próximo ciclo
+      if (leadsNeedingCache.length > batchSize) {
+        console.log(`⏰ Restam ${leadsNeedingCache.length - batchSize} leads para processar no próximo ciclo`);
+        setTimeout(() => {
+          loadLeadContactNamesOptimized(leadsNeedingCache.slice(batchSize).map(item => item.lead));
+        }, 2000); // Aguardar 2 segundos antes do próximo lote
+      }
+    }
+
+    console.log('🎯 loadLeadContactNamesOptimized concluído');
   };
 
   const loadSummary = async () => {
@@ -257,18 +378,18 @@ const WorkspaceLeads = () => {
 
   const getLeadDisplayName = (lead) => {
     const leadKey = `${lead.instance_name}-${lead.phone_number}`;
-    const evolutionContactName = leadContactNames[leadKey];
+    const cacheContactName = leadContactNames[leadKey];
 
     console.log(`🔍 getLeadDisplayName para ${lead.phone_number}:`, {
       leadKey,
-      evolutionContactName,
+      cacheContactName,
       leadContactName: lead.contact_name,
       allNames: leadContactNames
     });
 
-    // Prioridade: 1. Nome da Evolution API, 2. Nome do banco, 3. Número
-    const finalName = evolutionContactName || lead.contact_name || `+${lead.phone_number}`;
-    console.log(`📝 Nome final para ${lead.phone_number}: ${finalName}`);
+    // 🚀 PRIORIDADE OTIMIZADA: 1. Nome do banco, 2. Nome do cache, 3. Número
+    const finalName = lead.contact_name || cacheContactName || `+${lead.phone_number}`;
+    console.log(`📝 Nome final para ${lead.phone_number}: ${finalName} (origem: ${lead.contact_name ? 'banco' : cacheContactName ? 'cache' : 'número'})`);
 
     return finalName;
   };
@@ -534,7 +655,8 @@ const WorkspaceLeads = () => {
               <tbody className="divide-y divide-sapphire-200/20">
                 {sortLeads(leads).map((lead) => {
                   const leadKey = `${lead.instance_name}-${lead.phone_number}`;
-                  const profilePictureUrl = leadProfileImages[leadKey];
+                  // 🚀 PRIORIZAR FOTO DO BANCO: 1. Banco, 2. Cache, 3. Loading
+                  const profilePictureUrl = lead.profile_pic_url || leadProfileImages[leadKey];
                   const isLoadingImage = loadingLeadImages[leadKey];
 
                   return (

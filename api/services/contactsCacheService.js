@@ -291,7 +291,7 @@ class ContactsCacheService {
     try {
       // Verificar se o contato existe na tabela whatsapp_contacts
       const existingContact = await db.query(`
-        SELECT id, profile_picture_url, contact_name, last_sync_at
+        SELECT id, profile_pic_url, contact_name, last_sync_at
         FROM whatsapp_contacts
         WHERE instance_name = $1 AND phone_number = $2
       `, [instanceName, phoneNumber]);
@@ -311,8 +311,8 @@ class ContactsCacheService {
         }
 
         // Verificar se foto precisa ser atualizada
-        if (contactData.picture && contactData.picture !== contact.profile_picture_url) {
-          updateFields.push(`profile_picture_url = $${paramCount++}`);
+        if (contactData.picture && contactData.picture !== contact.profile_pic_url) {
+          updateFields.push(`profile_pic_url = $${paramCount++}`);
           updateValues.push(contactData.picture);
           needsUpdate = true;
         }

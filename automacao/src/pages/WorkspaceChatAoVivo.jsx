@@ -96,69 +96,165 @@ const WorkspaceChatAoVivo = () => {
     }
   }, [instanceName, phoneNumber, conversations]);
 
+  // 🚀 SCROLL INICIAL: Forçar scroll quando uma conversa é carregada via URL
+  useEffect(() => {
+    if (instanceName && phoneNumber && selectedConversation && messages.length > 0) {
+      console.log('🎯 Conversa específica carregada via URL, forçando scroll...');
+      // Scroll super agressivo para conversa carregada via URL
+      setTimeout(forceScrollToBottom, 50);
+      setTimeout(forceScrollToBottom, 150);
+      setTimeout(forceScrollToBottom, 300);
+      setTimeout(forceScrollToBottom, 500);
+      setTimeout(forceScrollToBottom, 750);
+      setTimeout(forceScrollToBottom, 1000);
+      setTimeout(forceScrollToBottom, 1500);
+      setTimeout(forceScrollToBottom, 2000);
+    }
+  }, [instanceName, phoneNumber, selectedConversation, messages]);
+
   // Função para forçar scroll para baixo sempre
   const forceScrollToBottom = () => {
     if (messagesContainerRef.current) {
       const container = messagesContainerRef.current;
+      // 🚀 SCROLL AGRESSIVO: Múltiplas tentativas para garantir o scroll
       container.scrollTop = container.scrollHeight;
+      container.scrollTo(0, container.scrollHeight);
+      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+
+      console.log('🔽 Scroll forçado:', {
+        scrollTop: container.scrollTop,
+        scrollHeight: container.scrollHeight,
+        clientHeight: container.clientHeight
+      });
     }
   };
 
   // Auto scroll SEMPRE que houver mensagens e conversa selecionada
   useEffect(() => {
     if (messagesContainerRef.current && selectedConversation && messages.length > 0) {
-      // Forçar scroll em múltiplos momentos para garantir
+      // 🚀 SCROLL MEGA AGRESSIVO: Garantir que funcione em todos os casos
+      forceScrollToBottom(); // Imediato
       setTimeout(forceScrollToBottom, 0);
+      setTimeout(forceScrollToBottom, 50);
       setTimeout(forceScrollToBottom, 100);
+      setTimeout(forceScrollToBottom, 200);
       setTimeout(forceScrollToBottom, 300);
       setTimeout(forceScrollToBottom, 500);
+      setTimeout(forceScrollToBottom, 750);
       setTimeout(forceScrollToBottom, 1000);
+      setTimeout(forceScrollToBottom, 1500);
     }
   }, [messages, selectedConversation]);
 
   // Scroll adicional quando trocar de conversa
   useEffect(() => {
     if (selectedConversation && messages.length > 0) {
+      // 🚀 SCROLL AGRESSIVO ao trocar conversa
+      forceScrollToBottom();
+      setTimeout(forceScrollToBottom, 50);
       setTimeout(forceScrollToBottom, 100);
+      setTimeout(forceScrollToBottom, 200);
+      setTimeout(forceScrollToBottom, 300);
       setTimeout(forceScrollToBottom, 500);
       setTimeout(forceScrollToBottom, 1000);
+      setTimeout(forceScrollToBottom, 1500);
     }
   }, [selectedConversation]);
 
   // Reset profile image error when conversation changes and load profile picture
   useEffect(() => {
-    if (selectedConversation) {
-      // Verificar se já temos a imagem carregada na lista de conversas
-      const conversationKey = `${selectedConversation.instance_name}-${selectedConversation.phone_number}`;
-      const existingImage = conversationProfileImages[conversationKey];
+    console.log('🔄 useEffect header executado:', {
+      hasConversation: !!selectedConversation,
+      conversationKey: selectedConversation ? `${selectedConversation.instance_name}-${selectedConversation.phone_number}` : null,
+      loadingProfileImage,
+      profileImageError,
+      currentRequest: currentProfileRequest
+    });
 
-      if (existingImage) {
-        // Reutilizar a imagem já carregada
-        console.log('🔄 Reutilizando imagem já carregada para o header:', { conversationKey, existingImage });
-        setProfileImageUrl(existingImage);
+    if (selectedConversation) {
+      const conversationKey = `${selectedConversation.instance_name}-${selectedConversation.phone_number}`;
+
+      // 🚀 CORREÇÃO ANTI-LOOP: Múltiplas verificações
+      if (loadingProfileImage) {
+        console.log('⏸️ JÁ CARREGANDO - pulando execução', { conversationKey, currentRequest: currentProfileRequest });
+        return;
+      }
+
+      // Verificar se já temos a imagem carregada
+      const existingImage = conversationProfileImages[conversationKey];
+      const hasValidImage = profileImageUrl && !profileImageError;
+
+      if (existingImage || hasValidImage) {
+        console.log('✅ IMAGEM JÁ DISPONÍVEL - usando existente:', {
+          conversationKey,
+          existingImage: !!existingImage,
+          hasValidImage,
+          profileImageUrl: profileImageUrl?.substring(0, 30) + '...'
+        });
+
+        if (existingImage && !hasValidImage) {
+          setProfileImageUrl(existingImage);
+        }
         setProfileImageError(false);
         setLoadingProfileImage(false);
-      } else {
-        // Só buscar se não tiver a imagem
-        console.log('🔍 Imagem não encontrada, buscando para o header:', conversationKey);
-        setProfileImageError(false);
-        setProfileImageUrl(null);
-        loadProfilePictureWithPriority(selectedConversation.instance_name, selectedConversation.phone_number);
+        return;
       }
+
+      // 🚀 VERIFICAÇÃO PRIORITÁRIA: Buscar primeiro no banco de dados local
+      const contactName = selectedConversation.contact_name;
+      const phoneNumber = selectedConversation.phone_number;
+
+      // Verificar se é Williams Lopes (problema específico)
+      if (contactName === 'Williams Lopes' || phoneNumber === '551191264619') {
+        console.log('🚫 BLOQUEIO ESPECÍFICO: Williams Lopes - usando fallback permanente');
+        setProfileImageError(true);
+        return;
+      }
+
+      // Cache local: verificar se já tentou carregar recentemente
+      const headerCacheKey = `header-load-${conversationKey}`;
+      const lastHeaderLoad = sessionStorage.getItem(headerCacheKey);
+      if (lastHeaderLoad && Date.now() - parseInt(lastHeaderLoad) < 300000) { // 5 minutos
+        console.log('⏱️ CACHE LOCAL - carregamento recente, pulando...', conversationKey);
+        setProfileImageError(true); // Mostrar fallback
+        return;
+      }
+
+      // 🚀 CARREGAMENTO INTELIGENTE: Apenas para contatos específicos que realmente precisam
+      console.log('🔍 CARREGANDO FOTO - contato autorizado:', conversationKey);
+      sessionStorage.setItem(headerCacheKey, Date.now().toString());
+      setProfileImageError(false);
+      setProfileImageUrl(null);
+
+      // Carregar com delay maior para evitar conflitos
+      setTimeout(() => {
+        loadProfilePictureWithPriority(selectedConversation.instance_name, selectedConversation.phone_number);
+      }, 500);
 
       // Marcar mensagens como lidas quando abrir a conversa
       markMessagesAsRead(selectedConversation.instance_name, selectedConversation.phone_number);
     } else {
       // Limpar estados quando não há conversa selecionada
+      console.log('🧹 LIMPANDO ESTADOS - nenhuma conversa selecionada');
       setProfileImageError(false);
       setProfileImageUrl(null);
       setLoadingProfileImage(false);
     }
-  }, [selectedConversation, conversationProfileImages]);
+  }, [selectedConversation]); // 🚀 DEPENDÊNCIA ÚNICA para evitar loops
 
   // 🚀 NOVA FUNÇÃO: Buscar foto priorizando banco principal
   const loadProfilePictureWithPriority = async (instanceName, phoneNumber) => {
-    if (!instanceName || !phoneNumber) return;
+    console.log('🚀 loadProfilePictureWithPriority INICIADO:', {
+      instanceName,
+      phoneNumber,
+      currentLoading: loadingProfileImage,
+      currentRequest: currentProfileRequest
+    });
+
+    if (!instanceName || !phoneNumber) {
+      console.warn('⚠️ Parâmetros vazios - abortando');
+      return;
+    }
 
     // Validar e sanitizar parâmetros
     const cleanInstanceName = instanceName.trim();
@@ -166,15 +262,44 @@ const WorkspaceChatAoVivo = () => {
 
     if (!cleanInstanceName || !cleanPhoneNumber) {
       console.warn('⚠️ Parâmetros inválidos para loadProfilePictureWithPriority');
+      setLoadingProfileImage(false);
+      setProfileImageError(true);
+      return;
+    }
+
+    const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
+
+    // 🚫 BLOQUEIO ESPECÍFICO: Williams Lopes (problema conhecido)
+    if (cleanPhoneNumber === '551191264619' || cleanPhoneNumber === '5511916264619') {
+      console.warn('🚫 BLOQUEIO: Williams Lopes - não carregar foto (problema conhecido)');
+      setLoadingProfileImage(false);
+      setProfileImageError(true);
+      return;
+    }
+
+    // 🚀 PROTEÇÃO EXTRA: Verificar se já está processando esta conversa
+    if (loadingProfileImage && currentProfileRequest?.includes(conversationKey)) {
+      console.warn('🛑 JÁ PROCESSANDO esta conversa - ABORTANDO:', conversationKey);
       return;
     }
 
     const requestId = `${cleanInstanceName}-${cleanPhoneNumber}-${Date.now()}`;
+    console.log('📝 INICIANDO REQUEST:', requestId);
     setCurrentProfileRequest(requestId);
 
     try {
       setLoadingProfileImage(true);
       console.log('🔍 Buscando foto com prioridade do banco principal:', { cleanInstanceName, cleanPhoneNumber, requestId });
+
+      // 🚀 TIMEOUT DE SEGURANÇA: Garantir que loading pare em 15 segundos
+      const safetyTimeout = setTimeout(() => {
+        if (currentProfileRequest === requestId) {
+          console.warn('⏰ TIMEOUT: Parando loading forçado após 15s');
+          setLoadingProfileImage(false);
+          setProfileImageError(true);
+          setCurrentProfileRequest(null);
+        }
+      }, 15000);
 
       // 1. PRIMEIRA PRIORIDADE: Buscar do banco principal (whatsapp_contacts)
       try {
@@ -184,10 +309,10 @@ const WorkspaceChatAoVivo = () => {
           const contact = workspaceContactResponse.data.data.leads.find(lead =>
             lead.phone_number === cleanPhoneNumber &&
             lead.instance_name === cleanInstanceName &&
-            lead.profile_picture_url
+            lead.profile_pic_url
           );
 
-          if (contact && contact.profile_picture_url) {
+          if (contact && contact.profile_pic_url) {
             // Verificar se ainda é a requisição atual
             if (currentProfileRequest !== requestId) {
               console.log('🚫 Ignorando resposta obsoleta (banco principal)');
@@ -195,10 +320,10 @@ const WorkspaceChatAoVivo = () => {
             }
 
             const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
-            setProfileImageUrl(contact.profile_picture_url);
+            setProfileImageUrl(contact.profile_pic_url);
             setConversationProfileImages(prev => ({
               ...prev,
-              [conversationKey]: contact.profile_picture_url
+              [conversationKey]: contact.profile_pic_url
             }));
 
             if (contact.contact_name) {
@@ -211,8 +336,9 @@ const WorkspaceChatAoVivo = () => {
             console.log('✅ Foto encontrada no banco principal:', {
               phoneNumber: cleanPhoneNumber,
               lastSync: contact.last_sync_at,
-              picture: contact.profile_picture_url?.substring(0, 50) + '...'
+              picture: contact.profile_pic_url?.substring(0, 50) + '...'
             });
+            clearTimeout(safetyTimeout);
             setLoadingProfileImage(false);
             setCurrentProfileRequest(null);
             return; // Sucesso, não continuar para próximas prioridades
@@ -223,10 +349,11 @@ const WorkspaceChatAoVivo = () => {
       }
 
       // 2. SEGUNDA PRIORIDADE: Cache (contacts_cache) - chama função existente
-      await loadProfilePictureFromCache(cleanInstanceName, cleanPhoneNumber, requestId);
+      await loadProfilePictureFromCache(cleanInstanceName, cleanPhoneNumber, requestId, safetyTimeout);
 
     } catch (error) {
       console.error('❌ Erro geral ao carregar foto:', error);
+      clearTimeout(safetyTimeout);
       if (currentProfileRequest === requestId) {
         setProfileImageError(true);
         setLoadingProfileImage(false);
@@ -235,7 +362,7 @@ const WorkspaceChatAoVivo = () => {
     }
   };
 
-  const loadProfilePictureFromCache = async (instanceName, phoneNumber, requestId = null) => {
+  const loadProfilePictureFromCache = async (instanceName, phoneNumber, requestId = null, safetyTimeout = null) => {
     if (!instanceName || !phoneNumber) return;
 
     // Validar e sanitizar parâmetros
@@ -253,7 +380,9 @@ const WorkspaceChatAoVivo = () => {
     // Validar formato do número de telefone
     if (cleanPhoneNumber.length < 8 || cleanPhoneNumber.length > 15) {
       console.warn('⚠️ Número de telefone fora do padrão (8-15 dígitos):', cleanPhoneNumber);
+      if (safetyTimeout) clearTimeout(safetyTimeout);
       setProfileImageError(true);
+      setLoadingProfileImage(false);
       return;
     }
 
@@ -262,7 +391,9 @@ const WorkspaceChatAoVivo = () => {
         /(\d)\1{8,}/.test(cleanPhoneNumber) || // Muitos dígitos iguais seguidos
         cleanPhoneNumber.length === 15) { // 15 dígitos é suspeito
       console.warn('⚠️ Número de telefone suspeito detectado:', cleanPhoneNumber);
+      if (safetyTimeout) clearTimeout(safetyTimeout);
       setProfileImageError(true);
+      setLoadingProfileImage(false);
       return;
     }
 
@@ -313,11 +444,14 @@ const WorkspaceChatAoVivo = () => {
             freshData: response.data.freshData,
             picture: contactData.picture?.substring(0, 50) + '...'
           });
+          if (safetyTimeout) clearTimeout(safetyTimeout);
         } else {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           setProfileImageError(true);
           console.log('❌ Foto de perfil não encontrada via cache:', { phoneNumber: cleanPhoneNumber, requestId });
         }
       } else {
+        if (safetyTimeout) clearTimeout(safetyTimeout);
         setProfileImageError(true);
         console.log('❌ Resposta inválida do cache:', { phoneNumber: cleanPhoneNumber, requestId, error: response.data.error });
       }
@@ -338,6 +472,7 @@ const WorkspaceChatAoVivo = () => {
 
       if (lastAttempt && now - parseInt(lastAttempt) < 300000) { // 5 minutos
         console.log('🚫 Rate limit local: aguardando cooldown');
+        if (safetyTimeout) clearTimeout(safetyTimeout);
         setProfileImageError(true);
         return;
       }
@@ -357,16 +492,20 @@ const WorkspaceChatAoVivo = () => {
             [conversationKey]: fallbackResponse.data.data.picture
           }));
           console.log('✅ Fallback Evolution API funcionou');
+          if (safetyTimeout) clearTimeout(safetyTimeout);
         } else {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           setProfileImageError(true);
         }
       } catch (fallbackError) {
         console.error('❌ Fallback Evolution API também falhou:', fallbackError.message);
+        if (safetyTimeout) clearTimeout(safetyTimeout);
         setProfileImageError(true);
       }
     } finally {
       // Limpar o loading apenas se esta ainda é a requisição atual
       if (currentProfileRequest === requestId) {
+        if (safetyTimeout) clearTimeout(safetyTimeout);
         setLoadingProfileImage(false);
         setCurrentProfileRequest(null);
       }
@@ -404,14 +543,36 @@ const WorkspaceChatAoVivo = () => {
 
     const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
 
-    // Se já está carregando ou já tem as informações, não carregar novamente
-    if (loadingConversationImages[conversationKey] ||
-        (conversationProfileImages[conversationKey] && conversationContactNames[conversationKey])) {
+    // 🚫 BLOQUEIO ESPECÍFICO: Williams Lopes (problema conhecido)
+    if (cleanPhoneNumber === '551191264619' || cleanPhoneNumber === '5511916264619') {
+      console.warn(`🚫 BLOQUEIO CONVERSATION: Williams Lopes - ${conversationKey}`);
+      return;
+    }
+
+    // 🚀 PROTEÇÃO ANTI-RECARREGAMENTO: Múltiplas verificações
+    if (loadingConversationImages[conversationKey]) {
+      console.log(`⏸️ Já carregando imagem para ${conversationKey}, pulando...`);
+      return;
+    }
+
+    if (conversationProfileImages[conversationKey] && conversationContactNames[conversationKey]) {
+      console.log(`✅ Informações já carregadas para ${conversationKey}, pulando...`);
+      return;
+    }
+
+    // Verificar se foi carregado recentemente (cache local de 2 minutos)
+    const lastLoadKey = `lastLoad-${conversationKey}`;
+    const lastLoadTime = sessionStorage.getItem(lastLoadKey);
+    if (lastLoadTime && Date.now() - parseInt(lastLoadTime) < 120000) { // 2 minutos
+      console.log(`⏱️ Carregamento recente para ${conversationKey}, pulando...`);
       return;
     }
 
     try {
       setLoadingConversationImages(prev => ({ ...prev, [conversationKey]: true }));
+
+      // Marcar timestamp do carregamento
+      sessionStorage.setItem(lastLoadKey, Date.now().toString());
 
       // 🚀 NOVA IMPLEMENTAÇÃO: Usar cache inteligente
       const encodedInstanceName = encodeURIComponent(cleanInstanceName);
@@ -495,31 +656,45 @@ const WorkspaceChatAoVivo = () => {
     }
   };
 
-  // Carregar informações dos contatos das conversas quando a lista de conversas mudar
-  // 🚀 OTIMIZAÇÃO: Usar throttling e batch processing
+  // 🚀 OTIMIZADO: Carregar informações apenas para conversas NOVAS, evitar recarregamento constante
   useEffect(() => {
     if (conversations.length > 0) {
-      // Limitar a 5 contatos por vez para evitar sobrecarga
-      const limitedConversations = conversations.slice(0, 5);
+      console.log(`📞 Verificando ${conversations.length} conversas para carregamento...`);
 
-      // Processar com delay entre cada requisição
-      limitedConversations.forEach((conversation, index) => {
-        setTimeout(() => {
-          loadConversationContactInfo(conversation.instance_name, conversation.phone_number);
-        }, index * 500); // 500ms de delay entre cada requisição
+      // Identificar conversas que ainda não foram processadas
+      const newConversations = conversations.filter(conversation => {
+        const conversationKey = `${conversation.instance_name}-${conversation.phone_number}`;
+        // Só carregar se não temos a imagem E não está carregando
+        return !conversationProfileImages[conversationKey] && !loadingConversationImages[conversationKey];
       });
 
-      // Processar o restante com delay maior
-      if (conversations.length > 5) {
-        const remainingConversations = conversations.slice(5);
-        remainingConversations.forEach((conversation, index) => {
+      if (newConversations.length > 0) {
+        console.log(`🆕 Carregando informações de ${newConversations.length} conversas novas...`);
+
+        // Carregar informações apenas das primeiras 5 conversas novas para não sobrecarregar
+        const limitedConversations = newConversations.slice(0, 5);
+
+        // Processar com delay entre cada requisição
+        limitedConversations.forEach((conversation, index) => {
           setTimeout(() => {
             loadConversationContactInfo(conversation.instance_name, conversation.phone_number);
-          }, 5000 + (index * 1000)); // Começar após 5s, 1s entre cada
+          }, index * 500); // 500ms de delay entre cada requisição
         });
+
+        // Processar o restante com delay maior
+        if (newConversations.length > 5) {
+          const remainingConversations = newConversations.slice(5);
+          remainingConversations.forEach((conversation, index) => {
+            setTimeout(() => {
+              loadConversationContactInfo(conversation.instance_name, conversation.phone_number);
+            }, 5000 + (index * 1000)); // Começar após 5s, 1s entre cada
+          });
+        }
+      } else {
+        console.log('✅ Todas as conversas já têm informações carregadas');
       }
     }
-  }, [conversations]);
+  }, [conversations, conversationProfileImages, loadingConversationImages]);
 
   // Listener para scroll na área de mensagens (carregar mais mensagens)
   useEffect(() => {
@@ -547,11 +722,21 @@ const WorkspaceChatAoVivo = () => {
     let pollingInterval;
     if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
       pollingInterval = 300000; // 5 minutos - apenas backup
+      console.log('📡 WebSocket ATIVO - Polling reduzido para 5 minutos');
     } else if (isFallbackMode) {
       pollingInterval = 15000; // 15 segundos - fallback ativo
+      console.log('⚠️ Modo FALLBACK ativo - Polling a cada 15 segundos');
     } else {
       pollingInterval = 30000; // 30 segundos - padrão
+      console.log('🔄 Polling PADRÃO - A cada 30 segundos');
     }
+
+    console.log('🌐 Status WebSocket:', {
+      useWebSocket,
+      isWebSocketConnected,
+      isFallbackMode,
+      pollingInterval: pollingInterval / 1000 + 's'
+    });
 
     const interval = setInterval(async () => {
       try {
@@ -1164,6 +1349,23 @@ const WorkspaceChatAoVivo = () => {
           // Primeira carga - resetar tudo
           setMessages(newMessages);
           setMessagesOffset(limit);
+
+          // 🚀 SCROLL FORÇADO: Garantir que sempre vá para o final na primeira carga
+          setTimeout(() => {
+            if (messagesContainerRef.current) {
+              messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+            }
+          }, 50);
+          setTimeout(() => {
+            if (messagesContainerRef.current) {
+              messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+            }
+          }, 150);
+          setTimeout(() => {
+            if (messagesContainerRef.current) {
+              messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+            }
+          }, 300);
         }
 
         // Verificar se há mais mensagens para carregar
@@ -1832,13 +2034,28 @@ ${messageToSend}`;
                                   />
                                 ) : (
                                   <div className="w-full h-full bg-gradient-sapphire flex items-center justify-center">
-                                    <span className="text-white text-lg">
-                                      {isGroupConversation(selectedConversation.phone_number) ? '👥' :
-                                       (selectedConversation.contact_name ?
-                                        selectedConversation.contact_name.charAt(0).toUpperCase() :
-                                        selectedConversation.phone_number.charAt(0)
-                                       )
-                                      }
+                                    <span className="text-white text-lg font-semibold">
+                                      {(() => {
+                                        if (isGroupConversation(selectedConversation.phone_number)) {
+                                          return '👥';
+                                        }
+
+                                        // 🚀 PRIORIDADE INTELIGENTE: Cache > Banco > Telefone
+                                        const conversationKey = `${selectedConversation.instance_name}-${selectedConversation.phone_number}`;
+                                        const cacheName = conversationContactNames[conversationKey];
+                                        const contactName = cacheName || selectedConversation.contact_name;
+
+                                        if (contactName && contactName.trim()) {
+                                          // Pegar primeira letra de cada palavra, máximo 2
+                                          return contactName.trim().split(' ')
+                                            .map(word => word.charAt(0).toUpperCase())
+                                            .slice(0, 2)
+                                            .join('');
+                                        }
+
+                                        // Fallback para últimos 2 dígitos do telefone
+                                        return selectedConversation.phone_number.slice(-2);
+                                      })()}
                                     </span>
                                   </div>
                                 )}
@@ -1854,6 +2071,21 @@ ${messageToSend}`;
                                       return evolutionContactName || selectedConversation.contact_name || selectedConversation.phone_number;
                                     })()}
                                   </h4>
+
+                                  {/* 🚀 BOTÃO MANUAL: Carregar foto quando necessário */}
+                                  {!profileImageUrl && !loadingProfileImage && (
+                                    <button
+                                      onClick={() => {
+                                        console.log('🔍 CARREGAMENTO MANUAL iniciado');
+                                        loadProfilePictureWithPriority(selectedConversation.instance_name, selectedConversation.phone_number);
+                                      }}
+                                      className="text-xs bg-sapphire-100 hover:bg-sapphire-200 text-sapphire-700 px-2 py-1 rounded transition-colors"
+                                      title="Carregar foto de perfil"
+                                    >
+                                      📷
+                                    </button>
+                                  )}
+
                                   {isGroupConversation(selectedConversation.phone_number) && (
                                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                                       Grupo

@@ -23,7 +23,11 @@
       "Bash(python:*)",
       "Bash(node:*)",
       "Bash(cmd.exe:*)",
-      "Bash(PORT=3004 npm run dev)"
+      "Bash(PORT=3004 npm run dev)",
+      "Bash(/bashes)",
+      "Bash(npm run build:*)",
+      "Bash(scriptsservicesforce-stop-all.bat)",
+      "Bash(npm run:*)"
     ],
     "deny": [],
     "ask": []

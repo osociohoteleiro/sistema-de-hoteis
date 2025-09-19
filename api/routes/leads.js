@@ -37,7 +37,8 @@ router.get('/:workspaceUuid', async (req, res) => {
         c.lead_source,
         c.assigned_to,
         c.notes,
-        c.custom_fields
+        c.custom_fields,
+        c.last_sync_at
       FROM whatsapp_contacts c
       INNER JOIN workspace_instances wi ON c.instance_name = wi.instance_name
       LEFT JOIN whatsapp_messages m ON (
@@ -748,7 +749,7 @@ router.post('/:workspaceUuid/:leadId/sync-whatsapp', async (req, res) => {
 
     // Verificar se o lead existe e obter informações básicas
     const leadQuery = await db.query(`
-      SELECT c.id, c.instance_name, c.phone_number, c.contact_name, c.profile_picture_url, c.last_sync_at
+      SELECT c.id, c.instance_name, c.phone_number, c.contact_name, c.profile_pic_url, c.last_sync_at
       FROM whatsapp_contacts c
       INNER JOIN workspace_instances wi ON c.instance_name = wi.instance_name
       WHERE wi.workspace_uuid = $1 AND c.id = $2
@@ -765,8 +766,7 @@ router.post('/:workspaceUuid/:leadId/sync-whatsapp', async (req, res) => {
     const { instance_name, phone_number } = lead;
 
     // Usar ContactsCacheService para buscar dados atualizados (respeitando rate limiting)
-    const ContactsCacheService = require('../services/contactsCacheService');
-    const cacheService = new ContactsCacheService();
+    const cacheService = require('../services/contactsCacheService');
 
     const contactInfo = await cacheService.getContactInfo(instance_name, phone_number);
 
@@ -793,8 +793,8 @@ router.post('/:workspaceUuid/:leadId/sync-whatsapp', async (req, res) => {
     }
 
     // Verificar se a foto mudou
-    if (newData.picture && newData.picture !== lead.profile_picture_url) {
-      updates.push(`profile_picture_url = $${paramCount++}`);
+    if (newData.picture && newData.picture !== lead.profile_pic_url) {
+      updates.push(`profile_pic_url = $${paramCount++}`);
       updateValues.push(newData.picture);
       hasUpdates = true;
     }
@@ -818,7 +818,7 @@ router.post('/:workspaceUuid/:leadId/sync-whatsapp', async (req, res) => {
 
       console.log(`✅ Lead sincronizado: ${leadId}`, {
         nameUpdated: newData.name !== lead.contact_name,
-        pictureUpdated: newData.picture !== lead.profile_picture_url,
+        pictureUpdated: newData.picture !== lead.profile_pic_url,
         cached: contactInfo.cached
       });
     }
@@ -829,7 +829,7 @@ router.post('/:workspaceUuid/:leadId/sync-whatsapp', async (req, res) => {
         lead: updatedLead,
         changes: {
           nameUpdated: newData.name && newData.name !== lead.contact_name,
-          pictureUpdated: newData.picture && newData.picture !== lead.profile_picture_url,
+          pictureUpdated: newData.picture && newData.picture !== lead.profile_pic_url,
           lastSyncAt: updatedLead.last_sync_at
         },
         cached: contactInfo.cached,
@@ -862,7 +862,7 @@ router.post('/auto-sync-outdated', async (req, res) => {
     const outdatedContacts = await db.query(`
       SELECT
         c.id, c.instance_name, c.phone_number, c.contact_name,
-        c.profile_picture_url, c.last_sync_at,
+        c.profile_pic_url, c.last_sync_at,
         wi.workspace_uuid,
         EXTRACT(EPOCH FROM (NOW() - COALESCE(c.last_sync_at, c.created_at))) / 86400 as days_old
       FROM whatsapp_contacts c
@@ -890,8 +890,7 @@ router.post('/auto-sync-outdated', async (req, res) => {
     console.log(`📋 Encontrados ${outdatedContacts.length} contatos para sincronização`);
 
     // Processar contatos em lotes para evitar sobrecarga
-    const ContactsCacheService = require('../services/contactsCacheService');
-    const cacheService = new ContactsCacheService();
+    const cacheService = require('../services/contactsCacheService');
 
     const results = {
       processed: 0,
@@ -924,8 +923,8 @@ router.post('/auto-sync-outdated', async (req, res) => {
           }
 
           // Verificar se a foto mudou
-          if (newData.picture && newData.picture !== contact.profile_picture_url) {
-            updates.push(`profile_picture_url = $${paramCount++}`);
+          if (newData.picture && newData.picture !== contact.profile_pic_url) {
+            updates.push(`profile_pic_url = $${paramCount++}`);
             updateValues.push(newData.picture);
             hasUpdates = true;
           }
@@ -953,7 +952,7 @@ router.post('/auto-sync-outdated', async (req, res) => {
             phone_number: contact.phone_number,
             instance_name: contact.instance_name,
             nameUpdated: newData.name && newData.name !== contact.contact_name,
-            pictureUpdated: newData.picture && newData.picture !== contact.profile_picture_url,
+            pictureUpdated: newData.picture && newData.picture !== contact.profile_pic_url,
             daysOld: Math.round(contact.days_old),
             cached: contactInfo.cached
           });

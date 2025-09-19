@@ -425,4 +425,68 @@ async function createTableIfNotExists() {
     }
 }
 
+/**
+ * POST /api/workspace-instances/validate
+ * Validar se uma instância pertence ao workspace e está ativa
+ */
+router.post('/validate', async (req, res) => {
+    try {
+        const { instanceName, workspaceUuid } = req.body;
+
+        if (!instanceName || !workspaceUuid) {
+            return res.status(400).json({
+                success: false,
+                error: 'instanceName e workspaceUuid são obrigatórios',
+                isValid: false
+            });
+        }
+
+        console.log(`🔍 Validando instância ${instanceName} para workspace ${workspaceUuid}`);
+
+        // Verificar se a instância está vinculada ao workspace
+        const query = `
+            SELECT id, instance_name, custom_name, created_at
+            FROM workspace_instances
+            WHERE workspace_uuid = $1 AND instance_name = $2
+        `;
+
+        const result = await db.query(query, [workspaceUuid, instanceName]);
+
+        if (!result || result.length === 0) {
+            console.log(`⚠️ Instância ${instanceName} não encontrada no workspace ${workspaceUuid}`);
+            return res.json({
+                success: true,
+                isValid: false,
+                reason: 'Instância não vinculada ao workspace',
+                instanceName,
+                workspaceUuid
+            });
+        }
+
+        // TODO: Aqui podemos adicionar validações adicionais:
+        // - Verificar se a instância está ativa na Evolution API
+        // - Verificar se a instância não foi removida
+        // - Verificar permissões do usuário
+
+        console.log(`✅ Instância ${instanceName} é válida para o workspace ${workspaceUuid}`);
+
+        res.json({
+            success: true,
+            isValid: true,
+            instanceData: result[0],
+            instanceName,
+            workspaceUuid
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao validar instância:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno do servidor',
+            details: error.message,
+            isValid: false
+        });
+    }
+});
+
 module.exports = router;
