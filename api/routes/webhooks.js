@@ -370,16 +370,28 @@ async function processEvolutionMessage(instanceName, messageData) {
                 phoneNumber = cleanPhoneNumber(message.remoteJid);
             }
 
-            // Extrair texto da mensagem
+            // Extrair texto e informações de mídia da mensagem
+            let mediaInfo = null;
+            let messageType = 'text';
+
             if (message.message) {
                 messageText = extractMessageText(message.message);
+                mediaInfo = extractMediaInfo(message.message);
+
+                if (mediaInfo) {
+                    messageType = mediaInfo.type;
+                }
             } else if (message.text) {
                 messageText = message.text;
             } else if (message.body) {
                 messageText = message.body;
             }
 
-            console.log(`💬 Nova mensagem de ${phoneNumber}: ${messageText}`);
+            console.log(`💬 Nova mensagem de ${phoneNumber}:`, {
+                text: messageText,
+                type: messageType,
+                hasMedia: !!mediaInfo
+            });
 
             // Preparar dados da mensagem para salvar
             const messageDataToSave = {
@@ -387,8 +399,9 @@ async function processEvolutionMessage(instanceName, messageData) {
                 instance_name: instanceName,
                 phone_number: phoneNumber,
                 contact_name: null,
-                message_type: 'text',
+                message_type: messageType,
                 content: messageText,
+                media_url: mediaInfo ? mediaInfo.url : null,
                 direction: direction,
                 timestamp: new Date(),
                 raw_data: message
@@ -528,26 +541,127 @@ async function processIncomingWhatsAppMessage(instanceName, messageData) {
 }
 
 /**
- * Extrair texto da mensagem
+ * Extrair texto da mensagem e informações de mídia
  */
 function extractMessageText(messageObj) {
     if (messageObj.conversation) {
         return messageObj.conversation;
     }
-    
+
     if (messageObj.extendedTextMessage && messageObj.extendedTextMessage.text) {
         return messageObj.extendedTextMessage.text;
     }
-    
+
     if (messageObj.buttonsResponseMessage && messageObj.buttonsResponseMessage.selectedDisplayText) {
         return messageObj.buttonsResponseMessage.selectedDisplayText;
     }
-    
+
     if (messageObj.listResponseMessage && messageObj.listResponseMessage.title) {
         return messageObj.listResponseMessage.title;
     }
-    
+
+    // Mídia com caption
+    if (messageObj.imageMessage && messageObj.imageMessage.caption) {
+        return messageObj.imageMessage.caption;
+    }
+
+    if (messageObj.videoMessage && messageObj.videoMessage.caption) {
+        return messageObj.videoMessage.caption;
+    }
+
+    if (messageObj.documentMessage && messageObj.documentMessage.caption) {
+        return messageObj.documentMessage.caption;
+    }
+
+    // Mídia sem caption - retornar indicação do tipo
+    if (messageObj.imageMessage) {
+        return '[Imagem]';
+    }
+
+    if (messageObj.videoMessage) {
+        return '[Vídeo]';
+    }
+
+    if (messageObj.audioMessage) {
+        return '[Áudio]';
+    }
+
+    if (messageObj.documentMessage) {
+        return '[Documento]';
+    }
+
+    if (messageObj.stickerMessage) {
+        return '[Sticker]';
+    }
+
     return null;
+}
+
+/**
+ * Extrair informações de mídia da mensagem
+ */
+function extractMediaInfo(messageObj) {
+    let mediaInfo = null;
+
+    // Imagem
+    if (messageObj.imageMessage) {
+        mediaInfo = {
+            type: 'image',
+            mimetype: messageObj.imageMessage.mimetype,
+            url: messageObj.imageMessage.url,
+            caption: messageObj.imageMessage.caption || null,
+            filename: messageObj.imageMessage.fileName || null,
+            fileLength: messageObj.imageMessage.fileLength || null
+        };
+    }
+    // Vídeo
+    else if (messageObj.videoMessage) {
+        mediaInfo = {
+            type: 'video',
+            mimetype: messageObj.videoMessage.mimetype,
+            url: messageObj.videoMessage.url,
+            caption: messageObj.videoMessage.caption || null,
+            filename: messageObj.videoMessage.fileName || null,
+            fileLength: messageObj.videoMessage.fileLength || null,
+            seconds: messageObj.videoMessage.seconds || null
+        };
+    }
+    // Áudio
+    else if (messageObj.audioMessage) {
+        mediaInfo = {
+            type: 'audio',
+            mimetype: messageObj.audioMessage.mimetype,
+            url: messageObj.audioMessage.url,
+            filename: messageObj.audioMessage.fileName || null,
+            fileLength: messageObj.audioMessage.fileLength || null,
+            seconds: messageObj.audioMessage.seconds || null,
+            ptt: messageObj.audioMessage.ptt || false // Push to talk
+        };
+    }
+    // Documento
+    else if (messageObj.documentMessage) {
+        mediaInfo = {
+            type: 'document',
+            mimetype: messageObj.documentMessage.mimetype,
+            url: messageObj.documentMessage.url,
+            caption: messageObj.documentMessage.caption || null,
+            filename: messageObj.documentMessage.fileName || 'Documento',
+            fileLength: messageObj.documentMessage.fileLength || null,
+            title: messageObj.documentMessage.title || null
+        };
+    }
+    // Sticker
+    else if (messageObj.stickerMessage) {
+        mediaInfo = {
+            type: 'sticker',
+            mimetype: messageObj.stickerMessage.mimetype,
+            url: messageObj.stickerMessage.url,
+            filename: messageObj.stickerMessage.fileName || null,
+            fileLength: messageObj.stickerMessage.fileLength || null
+        };
+    }
+
+    return mediaInfo;
 }
 
 /**
