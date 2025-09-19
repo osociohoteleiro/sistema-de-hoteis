@@ -6,7 +6,7 @@ import ImageUpload from '../components/ImageUpload';
 import MediaCaptionModal from '../components/MediaCaptionModal';
 import { convertToBase64, getMediaType } from '../utils/imageUpload';
 
-const API_BASE_URL = 'http://localhost:3003/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const makeRequestWithRetry = async (url, maxRetries = 3) => {
   for (let i = 0; i < maxRetries; i++) {
@@ -54,6 +54,8 @@ const WorkspaceChatAoVivo = () => {
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [showCaptionModal, setShowCaptionModal] = useState(false);
   const [pendingFileData, setPendingFileData] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [showReplyPreview, setShowReplyPreview] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
@@ -987,6 +989,91 @@ const WorkspaceChatAoVivo = () => {
     setPendingFileData(null);
   };
 
+  // Funções de controle de resposta
+  const handleReplyMessage = (message) => {
+    setReplyingTo(message);
+    setShowReplyPreview(true);
+    console.log('🔄 Iniciando resposta para mensagem:', message.id);
+  };
+
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+    setShowReplyPreview(false);
+    console.log('❌ Cancelando resposta');
+  };
+
+  const sendReplyMessage = async () => {
+    if (!messageText.trim() || !selectedConversation || !replyingTo) {
+      return;
+    }
+
+    const messageToSend = messageText.trim();
+    setMessageText(''); // Limpar imediatamente para melhor UX
+
+    // Formatar mensagem com contexto de resposta
+    const replyContext = `[Respondendo a: "${replyingTo.content?.substring(0, 50) || 'Mensagem'}${replyingTo.content?.length > 50 ? '...' : ''}"]
+
+${messageToSend}`;
+
+    try {
+      const instanceName = selectedConversation.instance_name;
+      const response = await axios.post(`${API_BASE_URL}/whatsapp-messages/send/${instanceName}`, {
+        phoneNumber: selectedConversation.phone_number,
+        message: replyContext,
+        messageType: 'text'
+      });
+
+      if (response.data.success) {
+        // Adicionar mensagem enviada imediatamente ao estado local
+        const sentMessage = {
+          id: `sent_reply_${Date.now()}`,
+          message_id: response.data.data?.message_id || `sent_reply_${Date.now()}`,
+          phone_number: selectedConversation.phone_number,
+          contact_name: selectedConversation.contact_name,
+          message_type: 'text',
+          content: replyContext,
+          direction: 'outbound',
+          timestamp: new Date().toISOString(),
+          read_at: null,
+          delivered_at: null,
+          is_reply: true,
+          reply_to: replyingTo.id
+        };
+
+        // Adicionar a mensagem ao final da lista atual
+        setMessages(prev => [...prev, sentMessage]);
+
+        // Limpar estado de resposta
+        handleCancelReply();
+
+        // Auto scroll para a nova mensagem
+        setTimeout(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 100);
+
+        // Atualizar a lista de conversas
+        setTimeout(async () => {
+          try {
+            await loadAllLinkedConversations(linkedInstances);
+          } catch (error) {
+            console.error('Erro ao atualizar conversas:', error);
+          }
+        }, 500);
+
+        toast.success('Resposta enviada!');
+      } else {
+        toast.error('Erro ao enviar resposta');
+        setMessageText(messageToSend); // Restaurar texto se houve erro
+      }
+    } catch (error) {
+      console.error('Erro ao enviar resposta:', error);
+      toast.error('Erro ao enviar resposta');
+      setMessageText(messageToSend); // Restaurar texto se houve erro
+    }
+  };
+
   const getInstanceStatus = (instance) => {
     const instanceName = instance.name || instance.instanceName;
     let status = instancesStatus.get(instanceName);
@@ -1296,7 +1383,7 @@ const WorkspaceChatAoVivo = () => {
                         {/* Mensagens */}
                         <div
                           ref={messagesContainerRef}
-                          className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 max-h-[calc(100vh-420px)]"
+                          className={`flex-1 overflow-y-auto p-4 space-y-3 min-h-0 ${showReplyPreview ? 'max-h-[calc(100vh-520px)]' : 'max-h-[calc(100vh-420px)]'}`}
                         >
                           {/* Indicador de carregamento no topo */}
                           {loadingMessages && hasMoreMessages && (
@@ -1317,7 +1404,7 @@ const WorkspaceChatAoVivo = () => {
                               {messages.map((message) => (
                                 <div
                                   key={message.id}
-                                  className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'} items-end gap-2`}
+                                  className={`flex ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'} items-end gap-2 group relative`}
                                 >
                                   {message.direction === 'inbound' && (
                                     <div className="w-6 h-6 rounded-full overflow-hidden border border-sapphire-200 flex-shrink-0">
@@ -1341,13 +1428,28 @@ const WorkspaceChatAoVivo = () => {
                                       )}
                                     </div>
                                   )}
-                                  <div
-                                    className={`max-w-xs rounded-lg overflow-hidden ${
-                                      message.direction === 'outbound'
-                                        ? 'bg-gradient-sapphire text-white'
-                                        : 'bg-gray-200 text-midnight-950'
-                                    }`}
-                                  >
+
+                                  <div className="relative">
+                                    {/* Botão de resposta - só aparece em mensagens recebidas */}
+                                    {message.direction === 'inbound' && (
+                                      <button
+                                        onClick={() => handleReplyMessage(message)}
+                                        className="absolute -top-2 -right-2 z-10 w-6 h-6 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"
+                                        title="Responder mensagem"
+                                      >
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                          <path d="M10,9V5L3,12L10,19V14.9C15,14.9 18.5,16.5 21,20C20,15 17,10 10,9Z" />
+                                        </svg>
+                                      </button>
+                                    )}
+
+                                    <div
+                                      className={`max-w-xs rounded-lg overflow-hidden ${
+                                        message.direction === 'outbound'
+                                          ? 'bg-gradient-sapphire text-white'
+                                          : 'bg-gray-200 text-midnight-950'
+                                      }`}
+                                    >
                                     {/* Renderizar mídia se for mensagem de arquivo */}
                                     {['image', 'video', 'audio', 'document'].includes(message.message_type) ? (
                                       <div className="media-content">
@@ -1512,13 +1614,53 @@ const WorkspaceChatAoVivo = () => {
                                         </p>
                                       </div>
                                     )}
+                                    </div>
                                   </div>
-                                </div>
                               ))}
                               <div ref={messagesEndRef} />
                             </>
                           )}
                         </div>
+
+                        {/* Preview de Resposta */}
+                        {showReplyPreview && replyingTo && (
+                          <div className="px-4 py-3 border-t border-sapphire-200/30 bg-blue-50/50">
+                            <div className="flex items-start justify-between bg-white rounded-lg p-3 border border-blue-200">
+                              <div className="flex items-start space-x-3 flex-1">
+                                <div className="text-blue-500 mt-1">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M10,9V5L3,12L10,19V14.9C15,14.9 18.5,16.5 21,20C20,15 17,10 10,9Z" />
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-blue-600 font-medium mb-1">Respondendo a:</p>
+                                  <p className="text-sm text-gray-700 truncate">
+                                    {replyingTo.message_type === 'text' ?
+                                      replyingTo.content :
+                                      `${replyingTo.message_type === 'image' ? '🖼️' :
+                                        replyingTo.message_type === 'video' ? '🎥' :
+                                        replyingTo.message_type === 'audio' ? '🎵' : '📄'} ${replyingTo.content || 'Arquivo'}`
+                                    }
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    {new Date(replyingTo.timestamp).toLocaleTimeString('pt-BR', {
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={handleCancelReply}
+                                className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Input de Mensagem */}
                         <div className="p-4 border-t border-sapphire-200/30 mt-auto flex-shrink-0">
@@ -1537,16 +1679,16 @@ const WorkspaceChatAoVivo = () => {
                               onChange={(e) => setMessageText(e.target.value)}
                               onKeyPress={(e) => {
                                 if (e.key === 'Enter') {
-                                  sendMessage();
+                                  showReplyPreview ? sendReplyMessage() : sendMessage();
                                 }
                               }}
-                              placeholder="Digite sua mensagem..."
+                              placeholder={showReplyPreview ? "Digite sua resposta..." : "Digite sua mensagem..."}
                               className="flex-1 border border-sapphire-200 rounded-lg px-4 py-2 focus:ring-2 focus:ring-sapphire-500 focus:border-sapphire-500"
                               disabled={isUploadingFile}
                             />
 
                             <button
-                              onClick={sendMessage}
+                              onClick={showReplyPreview ? sendReplyMessage : sendMessage}
                               disabled={!messageText.trim() || isUploadingFile}
                               className="bg-gradient-sapphire hover:bg-midnight-700 text-white font-medium py-2 px-4 rounded-lg transition-minimal shadow-sapphire-glow hover:shadow-blue-soft disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -1556,7 +1698,7 @@ const WorkspaceChatAoVivo = () => {
                                   <span>Enviando...</span>
                                 </div>
                               ) : (
-                                'Enviar'
+                                showReplyPreview ? 'Responder' : 'Enviar'
                               )}
                             </button>
                           </div>
