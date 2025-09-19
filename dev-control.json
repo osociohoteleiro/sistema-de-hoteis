@@ -1,0 +1,90 @@
+{
+  "name": "OSH Development Services Control",
+  "version": "1.0.0",
+  "last_updated": "2025-09-19T14:27:35.110Z",
+  "services": {
+    "api": {
+      "name": "API Backend",
+      "port": 3001,
+      "path": "./api",
+      "command": "npm run dev",
+      "pid": 238052,
+      "status": "running",
+      "health_endpoint": "http://localhost:3001/api/health",
+      "dependencies": [
+        "PostgreSQL:5432",
+        "Redis:6379"
+      ],
+      "graceful_shutdown_timeout": 10000
+    },
+    "automacao": {
+      "name": "Automação Frontend",
+      "port": 5174,
+      "path": "./automacao",
+      "command": "npm run dev",
+      "pid": 238040,
+      "status": "running",
+      "health_endpoint": "http://localhost:5174",
+      "dependencies": [
+        "api:3001"
+      ],
+      "graceful_shutdown_timeout": 5000
+    },
+    "pms": {
+      "name": "PMS Frontend",
+      "port": 5175,
+      "path": "./pms",
+      "command": "npm run dev",
+      "pid": null,
+      "status": "stopped",
+      "health_endpoint": "http://localhost:5175",
+      "dependencies": [
+        "api:3001"
+      ],
+      "graceful_shutdown_timeout": 5000
+    },
+    "hotel-app": {
+      "name": "Hotel App Frontend",
+      "port": 5173,
+      "path": "./hotel-app",
+      "command": "npm run dev",
+      "pid": null,
+      "status": "stopped",
+      "health_endpoint": "http://localhost:5173",
+      "dependencies": [
+        "api:3001"
+      ],
+      "graceful_shutdown_timeout": 5000
+    }
+  },
+  "startup_order": [
+    "api",
+    "automacao",
+    "pms",
+    "hotel-app"
+  ],
+  "shutdown_order": [
+    "hotel-app",
+    "pms",
+    "automacao",
+    "api"
+  ],
+  "global_settings": {
+    "max_startup_wait": 30000,
+    "health_check_interval": 5000,
+    "auto_restart_on_crash": false,
+    "log_level": "info"
+  },
+  "troubleshooting": {
+    "port_conflict_resolution": [
+      "1. Identify process using port: netstat -ano | findstr :[PORT]",
+      "2. Kill specific process: taskkill /F /PID [PID]",
+      "3. Restart service using control scripts"
+    ],
+    "common_issues": {
+      "websocket_conflict": "Multiple Socket.io instances - check server.js for duplicate initialization",
+      "port_in_use": "Use force-stop script to kill all node processes",
+      "dependency_failure": "Check if databases (PostgreSQL, Redis) are running"
+    }
+  }
+}

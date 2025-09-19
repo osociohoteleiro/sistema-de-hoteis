@@ -1,6 +1,5 @@
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -12,39 +11,6 @@ const { initDatabase } = require('./init-database');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: function (origin, callback) {
-      // Lista de origins permitidos para Socket.io
-      const allowedOrigins = [
-        // Desenvolvimento local
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://localhost:5175',
-        'http://localhost:5176', // PMS atualizado
-        // EasyPanel domains (usar variável de ambiente se configurada)
-        ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(o => o.trim()) : [])
-      ];
-
-      // Permitir requisições sem origin
-      if (!origin) {
-        return callback(null, true);
-      }
-      
-      // Verificar se origin está na lista permitida ou é localhost
-      if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:') || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      
-      console.log(`🚫 Socket.io CORS bloqueado para: ${origin}`);
-      console.log('🔍 Socket.io Origins permitidos:', allowedOrigins);
-      callback(new Error('Socket.io: Não permitido pelo CORS'));
-    },
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
-});
 
 // Use PORT from environment (EasyPanel sets this) or default to 3001 for local dev
 const PORT = process.env.PORT || 3001;
@@ -329,6 +295,60 @@ app.get('/api/init-db-get', async (req, res) => {
   }
 });
 
+// Create contacts_cache table endpoint
+app.get('/api/create-contacts-cache', async (req, res) => {
+  try {
+    console.log('🔄 Criando tabela contacts_cache...');
+
+    // Conectar ao banco
+    await db.connect();
+
+    // Criar tabela
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS contacts_cache (
+          id SERIAL PRIMARY KEY,
+          phone_number VARCHAR(20) NOT NULL,
+          instance_name VARCHAR(100) NOT NULL,
+          contact_name VARCHAR(255),
+          profile_picture_url TEXT,
+          contact_exists BOOLEAN DEFAULT true,
+          last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(phone_number, instance_name)
+      );
+    `);
+
+    // Criar índices
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_contacts_cache_phone ON contacts_cache(phone_number);
+      CREATE INDEX IF NOT EXISTS idx_contacts_cache_instance ON contacts_cache(instance_name);
+      CREATE INDEX IF NOT EXISTS idx_contacts_cache_updated ON contacts_cache(last_updated);
+    `);
+
+    // Verificar se a tabela foi criada
+    const tables = await db.query(`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'contacts_cache'
+    `);
+
+    res.json({
+      success: true,
+      message: 'Tabela contacts_cache criada com sucesso!',
+      tableExists: tables.length > 0,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao criar tabela:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 
 // Importar rotas
 const authRoutes = require('./routes/auth');
@@ -372,6 +392,18 @@ console.log('🔄 Carregando leads routes...');
 const leadsRoutes = require('./routes/leads');
 console.log('✅ Leads routes carregadas');
 
+console.log('🔄 Carregando contacts-cache routes...');
+const contactsCacheRoutes = require('./routes/contacts-cache');
+console.log('✅ Contacts-cache routes carregadas');
+
+console.log('🔄 Carregando evolution-webhook routes...');
+const evolutionWebhookRoutes = require('./routes/evolution-webhook');
+console.log('✅ Evolution-webhook routes carregadas');
+
+console.log('🔄 Carregando webhook-config routes...');
+const webhookConfigRoutes = require('./routes/webhook-config');
+console.log('✅ Webhook-config routes carregadas');
+
 // Rotas da API
 app.use('/api/data-import', dataImportRoutes);
 app.use('/api/auth', authRoutes);
@@ -407,27 +439,22 @@ app.use('/api/app-configurations', appConfigurationsRoutes);
 app.use('/api/whatsapp-messages', whatsappMessagesRoutes);
 app.use('/api/workspace-instances', workspaceInstancesRoutes);
 app.use('/api/leads', leadsRoutes);
+app.use('/api/contacts-cache', contactsCacheRoutes);
+app.use('/api/evolution-webhook', evolutionWebhookRoutes);
+app.use('/api/webhook-config', webhookConfigRoutes);
 
 app.use('/api/migrate', migrateRoutes); // Habilitado temporariamente
 
-// Socket.io configuration
-io.on('connection', (socket) => {
-  console.log('🔌 Cliente conectado:', socket.id);
-  
-  // Join room baseado no hotel ID para segregar eventos
-  socket.on('join-hotel-room', (hotelId) => {
-    const roomName = `hotel-${hotelId}`;
-    socket.join(roomName);
-    console.log(`👥 Socket ${socket.id} entrou na sala: ${roomName}`);
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('🔌 Cliente desconectado:', socket.id);
-  });
-});
+// Inicializar WebSocket Service
+const websocketService = require('./services/websocketService');
+websocketService.initialize(server);
 
-// Fazer o io disponível para as rotas
-app.set('socketio', io);
+// Fazer o websocketService disponível para as rotas
+app.set('websocketService', websocketService);
+
+// Legacy compatibility: fazer io disponível para rotas antigas
+// FIXME: Migrar todas as rotas para websocketService
+app.set('socketio', websocketService.io);
 
 // Middleware de erro global
 app.use((err, req, res, next) => {

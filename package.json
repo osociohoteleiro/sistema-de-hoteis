@@ -1,5 +1,42 @@
 {
+  "name": "osh-development-suite",
+  "version": "1.0.0",
+  "description": "OSH Hotels Management System - Development Environment",
+  "scripts": {
+    "osh:start": "scripts/services/start-all.bat",
+    "osh:stop": "scripts/services/stop-all.bat",
+    "osh:kill-force": "scripts/services/force-stop-all.bat",
+    "osh:status": "node scripts/services/pid-manager.js status",
+    "osh:health": "scripts/services/check-health.bat",
+    "osh:start-api": "scripts/services/start-api.bat",
+    "osh:restart": "npm run osh:stop && timeout /t 2 >nul && npm run osh:start",
+    "osh:list": "node scripts/services/pid-manager.js list",
+    "dev:api": "cd api && npm run dev",
+    "dev:hotel-app": "cd hotel-app && npm run dev",
+    "dev:pms": "cd pms && npm run dev",
+    "dev:automacao": "cd automacao && npm run dev",
+    "install:all": "npm install && cd api && npm install && cd ../hotel-app && npm install && cd ../pms && npm install && cd ../automacao && npm install",
+    "build:all": "cd hotel-app && npm run build && cd ../pms && npm run build && cd ../automacao && npm run build"
+  },
+  "keywords": [
+    "hotel-management",
+    "pms",
+    "automation",
+    "osh",
+    "development"
+  ],
+  "author": "OSH Development Team",
+  "license": "ISC",
   "dependencies": {
     "axios": "^1.11.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "."
   }
 }
