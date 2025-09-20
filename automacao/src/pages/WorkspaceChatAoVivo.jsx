@@ -1027,36 +1027,7 @@ const WorkspaceChatAoVivo = () => {
         dataCompleto: data
       });
 
-      // 🚨 TESTE IMEDIATO - EXECUTAR SEMPRE
-      console.log('🚨 EXECUTANDO LÓGICA DE ADIÇÃO IMEDIATA');
-
-      if (data && data.message && data.instance) {
-        const newMessage = data.message;
-
-        console.log('🚨 FORÇANDO ADIÇÃO DE MENSAGEM - SEMPRE PARA DEBUG');
-
-        const formattedMessage = {
-          id: newMessage.messageId || `ws-${Date.now()}`,
-          message_id: newMessage.messageId || `ws-${Date.now()}`,
-          instance_name: data.instance,
-          phone_number: newMessage.phoneNumber,
-          content: newMessage.content,
-          from_me: newMessage.fromMe || false,
-          message_type: newMessage.messageType || 'text',
-          timestamp: newMessage.timestamp || Date.now(),
-          direction: newMessage.fromMe ? 'outbound' : 'inbound',
-          status: newMessage.status || 'delivered'
-        };
-
-        console.log('🚨 ADICIONANDO MENSAGEM WEBSOCKET DIRETO:', formattedMessage);
-
-        setMessages(prevMessages => {
-          console.log('🚨 ESTADO ANTERIOR:', prevMessages.length, 'mensagens');
-          const newMessages = [...prevMessages, formattedMessage];
-          console.log('🚨 NOVO ESTADO:', newMessages.length, 'mensagens');
-          return newMessages;
-        });
-      }
+      // 🎯 LÓGICA PRINCIPAL DE ADIÇÃO DE MENSAGENS
 
       if (data.message && data.instance) {
         const newMessage = data.message;
@@ -1104,72 +1075,43 @@ const WorkspaceChatAoVivo = () => {
           selectedConversationExists: !!selectedConversation
         });
 
-        // ✅ SEMPRE ADICIONAR MENSAGEM (FORÇAR PARA DEBUG)
-        console.log('🚨 FORÇANDO ADIÇÃO DE MENSAGEM - SEMPRE PARA DEBUG');
-        if (true) { // FORÇAR SEMPRE
-          console.log('🚨 FORÇANDO ADIÇÃO DE MENSAGEM - IGNORANDO FILTROS PARA DEBUG');
+        // ✅ LÓGICA DE ADIÇÃO DE MENSAGEM COM VERIFICAÇÃO DE DUPLICATAS
+        console.log('🎯 ADICIONANDO MENSAGEM VIA WEBSOCKET');
 
-          const formattedMessage = {
-            id: newMessage.messageId || `ws-${Date.now()}`,
-            message_id: newMessage.messageId || `ws-${Date.now()}`,
-            instance_name: data.instance,
-            phone_number: newMessage.phoneNumber,
-            content: newMessage.content,
-            from_me: newMessage.fromMe || false,
-            message_type: newMessage.messageType || 'text',
-            timestamp: newMessage.timestamp || Date.now(),
-            direction: newMessage.fromMe ? 'outbound' : 'inbound',
-            status: newMessage.status || 'delivered'
-          };
+        const formattedMessage = {
+          id: newMessage.messageId || `ws-${Date.now()}`,
+          message_id: newMessage.messageId || `ws-${Date.now()}`,
+          instance_name: data.instance,
+          phone_number: newMessage.phoneNumber,
+          content: newMessage.content,
+          from_me: newMessage.fromMe || false,
+          message_type: newMessage.messageType || 'text',
+          timestamp: newMessage.timestamp || Date.now(),
+          direction: newMessage.fromMe ? 'outbound' : 'inbound',
+          status: newMessage.status || 'delivered'
+        };
 
-          console.log('🚨 ADICIONANDO MENSAGEM WEBSOCKET:', formattedMessage);
+        console.log('🎯 MENSAGEM FORMATADA:', formattedMessage);
 
-          setMessages(prevMessages => {
-            const messageExists = prevMessages.some(msg =>
-              (msg.message_id || msg.id) === formattedMessage.message_id
-            );
+        setMessages(prevMessages => {
+          const messageExists = prevMessages.some(msg =>
+            (msg.message_id || msg.id) === formattedMessage.message_id
+          );
 
-            if (!messageExists) {
-              console.log('✅ NOVA MENSAGEM ADICIONADA VIA WEBSOCKET');
-              return [...prevMessages, formattedMessage];
-            } else {
-              console.log('⚠️ MENSAGEM JÁ EXISTE, IGNORANDO');
-              return prevMessages;
-            }
-          });
-        }
+          if (!messageExists) {
+            console.log('✅ NOVA MENSAGEM ADICIONADA VIA WEBSOCKET');
+            return [...prevMessages, formattedMessage];
+          } else {
+            console.log('⚠️ MENSAGEM JÁ EXISTE, IGNORANDO DUPLICATA');
+            return prevMessages;
+          }
+        });
 
-        // ✅ LÓGICA ORIGINAL (QUANDO selectedConversation FUNCIONAR)
+        // ✅ AUTO SCROLL E MARCAR COMO LIDA (APENAS PARA CONVERSA ATUAL)
         if (selectedConversation &&
             selectedConversation.instance_name === data.instance &&
             selectedConversation.phone_number === newMessage.phoneNumber) {
-          console.log('✅ MENSAGEM É DA CONVERSA ATUAL - ADICIONANDO...');
-
-          // Adicionar mensagem à lista atual
-          setMessages(prevMessages => {
-            const messageExists = prevMessages.some(msg =>
-              (msg.message_id || msg.id) === newMessage.messageId
-            );
-
-            if (!messageExists) {
-              const formattedMessage = {
-                id: newMessage.messageId,
-                message_id: newMessage.messageId,
-                instance_name: data.instance,
-                phone_number: newMessage.phoneNumber,
-                message_type: newMessage.messageType || 'text',
-                content: newMessage.content,
-                direction: newMessage.fromMe ? 'outbound' : 'inbound',
-                timestamp: newMessage.timestamp,
-                status: newMessage.status || 'delivered',
-                raw_data: newMessage.raw
-              };
-
-              return [...prevMessages, formattedMessage];
-            }
-
-            return prevMessages;
-          });
+          console.log('✅ MENSAGEM É DA CONVERSA ATUAL - Aplicando scroll e marcando como lida');
 
           // Auto scroll
           setTimeout(forceScrollToBottom, 100);
@@ -1179,7 +1121,7 @@ const WorkspaceChatAoVivo = () => {
             markMessagesAsRead(data.instance, newMessage.phoneNumber);
           }
         } else {
-          console.log('⚠️ MENSAGEM NÃO É DA CONVERSA ATUAL - mas lista será atualizada');
+          console.log('⚠️ MENSAGEM NÃO É DA CONVERSA ATUAL - atualizando lista de conversas');
 
           // 🚀 SE A MENSAGEM É DA MESMA INSTÂNCIA, FORÇAR RELOAD DAS MENSAGENS
           if (selectedConversation && selectedConversation.instance_name === data.instance) {

@@ -155,12 +155,6 @@ class WebSocketService {
         // Eventos de dados
         this.setupDataEventListeners();
 
-        // 🔧 DEBUG: Listener direto para testar
-        this.socket.on('new-message', (data) => {
-          console.log('🎉 MENSAGEM RECEBIDA DIRETAMENTE:', data);
-          console.log(`📨 MENSAGEM DIRETA: ${JSON.stringify(data).substring(0, 100)}`);
-        });
-
         // 🔧 DEBUG: Listener para teste direto do backend
         this.socket.on('test-message', (data) => {
           console.log('🧪 TESTE DIRETO RECEBIDO:', data);
@@ -187,10 +181,8 @@ class WebSocketService {
   setupDataEventListeners() {
     // Nova mensagem
     this.socket.on('new-message', (data) => {
-      console.log('🔥 WEBSOCKET SERVICE: EVENT RECEBIDO!', data);
-      console.log('🔥 EMITINDO PARA LISTENERS...');
+      console.log('💬 Nova mensagem recebida via WebSocket:', data.instance);
       this.emitToListeners('new-message', data);
-      console.log('🔥 EMISSÃO CONCLUÍDA');
     });
 
     // TESTE DIRETO - verificar se eventos chegam ao frontend
@@ -368,16 +360,12 @@ class WebSocketService {
    * Adicionar listener para eventos
    */
   addEventListener(event, callback) {
-    console.log(`🎧 REGISTRANDO LISTENER PARA EVENTO: ${event}`);
-    console.log(`🎧 CALLBACK:`, callback.toString().substring(0, 100));
-
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set());
     }
     this.eventListeners.get(event).add(callback);
 
-    console.log(`🎧 LISTENER REGISTRADO! Total listeners para ${event}:`, this.eventListeners.get(event).size);
-    console.log(`🎧 TODOS OS EVENTOS COM LISTENERS:`, Array.from(this.eventListeners.keys()));
+    console.log(`🎧 Listener registrado para ${event} (total: ${this.eventListeners.get(event).size})`);
 
     // Retornar função para remover o listener
     return () => {
@@ -402,24 +390,18 @@ class WebSocketService {
    * Emitir evento para todos os listeners
    */
   emitToListeners(event, data) {
-    console.log(`🎯 EMITINDO EVENTO: ${event}`);
-    console.log(`🎯 LISTENERS REGISTRADOS PARA ${event}:`, this.eventListeners.get(event)?.size || 0);
-    console.log(`🎯 TODOS OS LISTENERS REGISTRADOS:`, Array.from(this.eventListeners.keys()));
-
     const listeners = this.eventListeners.get(event);
     if (listeners) {
-      console.log(`🎯 CHAMANDO ${listeners.size} LISTENER(S) PARA ${event}`);
-      listeners.forEach((callback, index) => {
+      console.log(`📡 Emitindo evento ${event} para ${listeners.size} listener(s)`);
+      listeners.forEach((callback) => {
         try {
-          console.log(`🎯 CHAMANDO LISTENER ${index + 1}/${listeners.size} PARA ${event}`);
           callback(data);
-          console.log(`🎯 LISTENER ${index + 1} EXECUTADO COM SUCESSO`);
         } catch (error) {
           console.error(`❌ Erro no listener ${event}:`, error);
         }
       });
     } else {
-      console.warn(`⚠️ NENHUM LISTENER REGISTRADO PARA EVENTO: ${event}`);
+      console.warn(`⚠️ Nenhum listener registrado para evento: ${event}`);
     }
   }
 
