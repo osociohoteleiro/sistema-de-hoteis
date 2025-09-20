@@ -80,6 +80,16 @@ class WebSocketService {
         connectedAt: new Date()
       });
 
+      // 🔧 DEBUG: Enviar mensagem de teste direto para o cliente
+      setTimeout(() => {
+        console.log(`📤 ENVIANDO TESTE DIRETO para cliente ${socket.id}`);
+        socket.emit('test-message', {
+          message: 'Teste direto do backend',
+          timestamp: new Date(),
+          socketId: socket.id
+        });
+      }, 2000);
+
       // Evento: Cliente quer se inscrever em uma instância
       socket.on('subscribe-instance', (data) => {
         try {
@@ -170,7 +180,10 @@ class WebSocketService {
    */
   subscribeToInstance(socketId, instanceName, workspaceUuid) {
     const client = this.connectedClients.get(socketId);
-    if (!client) return;
+    if (!client) {
+      console.warn(`⚠️ Cliente ${socketId} não encontrado para inscrição na instância ${instanceName}`);
+      return;
+    }
 
     // Adicionar instância ao cliente
     client.subscribedInstances.add(instanceName);
@@ -183,8 +196,20 @@ class WebSocketService {
     this.subscribedInstances.get(instanceName).add(socketId);
 
     // Fazer cliente entrar na sala da instância
-    client.socket.join(`instance-${instanceName}`);
-    client.socket.join(`workspace-${workspaceUuid}`);
+    const roomInstance = `instance-${instanceName}`;
+    const roomWorkspace = `workspace-${workspaceUuid}`;
+
+    client.socket.join(roomInstance);
+    client.socket.join(roomWorkspace);
+
+    console.log(`✅ INSCRIÇÃO REALIZADA: Cliente ${socketId} inscrito em:`, {
+      instanceName: instanceName,
+      workspaceUuid: workspaceUuid,
+      roomInstance: roomInstance,
+      roomWorkspace: roomWorkspace,
+      totalClientesInstancia: this.subscribedInstances.get(instanceName).size,
+      totalClientesConectados: this.connectedClients.size
+    });
   }
 
   /**
@@ -231,6 +256,23 @@ class WebSocketService {
   broadcastToInstance(instanceName, event, data, excludeSocketId = null) {
     const room = `instance-${instanceName}`;
 
+    // 🔧 MELHOR LOGGING: Verificar quantos clientes estão conectados
+    const roomSockets = this.io.sockets.adapter.rooms.get(room);
+    const clientCount = roomSockets ? roomSockets.size : 0;
+
+    console.log(`📡 BROADCAST DEBUG: instância '${instanceName}', evento '${event}'`, {
+      room: room,
+      clientesConectados: clientCount,
+      temClientes: clientCount > 0,
+      data: data.type || 'dados',
+      excludeSocket: excludeSocketId ? 'sim' : 'não'
+    });
+
+    if (clientCount === 0) {
+      console.warn(`⚠️ NENHUM CLIENTE conectado na sala '${room}' para receber evento '${event}'`);
+      return;
+    }
+
     if (excludeSocketId) {
       // Emitir para todos na sala, exceto o socket especificado
       this.io.to(room).except(excludeSocketId).emit(event, data);
@@ -239,10 +281,7 @@ class WebSocketService {
       this.io.to(room).emit(event, data);
     }
 
-    console.log(`📡 Evento '${event}' enviado para instância ${instanceName}:`, {
-      data: data.type || data.message || 'dados',
-      excludeSocket: excludeSocketId ? 'sim' : 'não'
-    });
+    console.log(`✅ Evento '${event}' enviado para ${clientCount} clientes na instância '${instanceName}'`);
   }
 
   /**
@@ -303,34 +342,133 @@ class WebSocketService {
   }
 
   /**
-   * Manipular nova mensagem
+   * Manipular nova mensagem - Melhorado para suportar diferentes formatos
    */
   handleNewMessage(instance, messageData) {
-    if (!messageData || !messageData.messages) return;
+    try {
+      let messages = [];
 
-    for (const message of messageData.messages) {
-      const processedMessage = {
-        messageId: message.key?.id,
-        instanceName: instance,
-        phoneNumber: message.key?.remoteJid?.replace('@s.whatsapp.net', ''),
-        fromMe: message.key?.fromMe || false,
-        messageType: message.messageType,
-        content: message.message || message.body,
-        timestamp: new Date(message.messageTimestamp * 1000),
-        status: message.status,
-        raw: message
-      };
+      // Suportar diferentes estruturas de dados
+      if (messageData && messageData.messages && Array.isArray(messageData.messages)) {
+        messages = messageData.messages;
+      } else if (messageData && Array.isArray(messageData)) {
+        messages = messageData;
+      } else if (messageData && (messageData.key || messageData.message)) {
+        messages = [messageData];
+      } else if (messageData && messageData.data && messageData.data.key && messageData.data.message) {
+        // 🔧 CORREÇÃO: Formato novo da Evolution API - dados em messageData.data
+        messages = [messageData.data];
+        console.log(`📥 WebSocket processando mensagem Evolution formato novo:`, {
+          messageType: messageData.data.messageType,
+          fromMe: messageData.data.key.fromMe,
+          content: messageData.data.message.conversation || 'Mídia/Outro tipo',
+          pushName: messageData.data.pushName
+        });
+      } else {
+        console.warn(`⚠️ Estrutura de mensagem não reconhecida para ${instance}:`, messageData);
+        return;
+      }
 
-      // Emitir para clientes inscritos nesta instância
-      this.broadcastToInstance(instance, 'new-message', {
-        type: 'new-message',
-        message: processedMessage,
-        instance,
-        timestamp: new Date()
-      });
+      for (const message of messages) {
+        try {
+          // 🔧 CORREÇÃO: Melhorar filtro de mensagens enviadas
+          const isFromMe = message.key?.fromMe === true || message.key?.fromMe === 'true';
 
-      console.log(`💬 Nova mensagem via WebSocket: ${instance}/${processedMessage.phoneNumber}`);
+          console.log(`🔍 FILTRO DEBUG: ${instance} - fromMe: ${message.key?.fromMe} (${typeof message.key?.fromMe}), isFromMe: ${isFromMe}`);
+
+          if (isFromMe) {
+            console.log(`⏩ PULANDO mensagem enviada por nós: ${instance}/${message.key?.remoteJid}`);
+            continue; // Pular mensagens enviadas
+          }
+
+          const processedMessage = {
+            messageId: message.key?.id || `ws_${Date.now()}_${Math.random()}`,
+            instanceName: instance,
+            phoneNumber: message.key?.remoteJid?.replace('@s.whatsapp.net', '') || 'unknown',
+            fromMe: message.key?.fromMe || false,
+            messageType: this.extractMessageType(message),
+            content: this.extractMessageContent(message),
+            timestamp: new Date(message.messageTimestamp ? message.messageTimestamp * 1000 : Date.now()),
+            status: message.status || 'delivered',
+            raw: message
+          };
+
+          // Emitir para clientes inscritos nesta instância
+          const websocketData = {
+            type: 'new-message',
+            message: processedMessage,
+            instance,
+            timestamp: new Date()
+          };
+
+          console.log(`📤 ENVIANDO VIA WEBSOCKET: ${instance}/${processedMessage.phoneNumber}`, {
+            messageId: processedMessage.messageId,
+            content: processedMessage.content.substring(0, 50) + '...',
+            phoneNumber: processedMessage.phoneNumber,
+            messageType: processedMessage.messageType,
+            timestamp: processedMessage.timestamp,
+            websocketDataCompleto: websocketData
+          });
+
+          console.log('🔧 DEBUG: Estrutura completa da mensagem WebSocket:', JSON.stringify(websocketData, null, 2));
+          this.broadcastToInstance(instance, 'new-message', websocketData);
+
+          console.log(`✅ Mensagem WebSocket emitida: ${instance}/${processedMessage.phoneNumber}`);
+        } catch (messageError) {
+          console.error(`❌ Erro ao processar mensagem individual:`, messageError);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao manipular nova mensagem:`, error);
     }
+  }
+
+  /**
+   * Extrair tipo da mensagem
+   */
+  extractMessageType(message) {
+    if (!message.message) return 'text';
+
+    if (message.message.conversation) return 'text';
+    if (message.message.extendedTextMessage) return 'text';
+    if (message.message.imageMessage) return 'image';
+    if (message.message.videoMessage) return 'video';
+    if (message.message.audioMessage) return 'audio';
+    if (message.message.documentMessage) return 'document';
+    if (message.message.stickerMessage) return 'sticker';
+
+    return 'text';
+  }
+
+  /**
+   * Extrair conteúdo da mensagem
+   */
+  extractMessageContent(message) {
+    if (!message.message) return 'Mensagem sem conteúdo';
+
+    if (message.message.conversation) {
+      return message.message.conversation;
+    }
+    if (message.message.extendedTextMessage?.text) {
+      return message.message.extendedTextMessage.text;
+    }
+    if (message.message.imageMessage) {
+      return message.message.imageMessage.caption || '[Imagem]';
+    }
+    if (message.message.videoMessage) {
+      return message.message.videoMessage.caption || '[Vídeo]';
+    }
+    if (message.message.audioMessage) {
+      return '[Áudio]';
+    }
+    if (message.message.documentMessage) {
+      return message.message.documentMessage.caption || '[Documento]';
+    }
+    if (message.message.stickerMessage) {
+      return '[Sticker]';
+    }
+
+    return JSON.stringify(message.message).substring(0, 100);
   }
 
   /**
@@ -388,6 +526,45 @@ class WebSocketService {
         workspaceUuid: client.workspaceUuid
       }))
     };
+  }
+
+  /**
+   * TESTE: Enviar mensagem direto para todos os sockets conectados
+   */
+  testDirectMessage() {
+    const testMessage = {
+      type: 'test-direct-message',
+      message: 'TESTE DIRETO DE TODOS OS SOCKETS',
+      timestamp: new Date()
+    };
+
+    console.log('🧪 ENVIANDO TESTE DIRETO PARA TODOS OS SOCKETS:', testMessage);
+    this.io.emit('test-direct-message', testMessage);
+
+    console.log(`✅ Teste enviado para ${this.connectedClients.size} clientes conectados`);
+  }
+
+  /**
+   * TESTE: Enviar new-message direto para todos os sockets
+   */
+  testNewMessageDirect() {
+    const testMessage = {
+      type: 'new-message',
+      message: {
+        messageId: 'TEST_123',
+        content: 'TESTE NEW-MESSAGE DIRETO',
+        phoneNumber: '5511999999999',
+        messageType: 'text',
+        timestamp: new Date()
+      },
+      instance: 'osociohoteleiro_notificacoes',
+      timestamp: new Date()
+    };
+
+    console.log('🧪 ENVIANDO NEW-MESSAGE DIRETO PARA TODOS OS SOCKETS:', testMessage);
+    this.io.emit('new-message', testMessage);
+
+    console.log(`✅ new-message enviado para ${this.connectedClients.size} clientes conectados`);
   }
 }
 

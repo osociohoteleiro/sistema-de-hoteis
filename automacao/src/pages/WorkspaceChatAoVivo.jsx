@@ -8,7 +8,7 @@ import { convertToBase64, getMediaType } from '../utils/imageUpload';
 import websocketService from '../services/websocketService';
 import WebSocketStats from '../components/WebSocketStats';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'http://localhost:3004/api';
 
 const makeRequestWithRetry = async (url, maxRetries = 3) => {
   for (let i = 0; i < maxRetries; i++) {
@@ -77,17 +77,30 @@ const WorkspaceChatAoVivo = () => {
 
   // 🚀 WEBSOCKET CONNECTION - Conectar quando o workspace for carregado
   useEffect(() => {
-    if (workspaceUuid && useWebSocket) {
+    console.log('🔍 VERIFICANDO CONDIÇÕES WEBSOCKET:', {
+      workspaceUuid: !!workspaceUuid,
+      workspaceUuidValue: workspaceUuid,
+      useWebSocket,
+      deveInicializar: !!(workspaceUuid && useWebSocket)
+    });
+
+    if (workspaceUuid && useWebSocket && !isWebSocketConnected) {
+      console.log('✅ CONDIÇÕES ATENDIDAS - Inicializando WebSocket');
       initializeWebSocket();
+    } else {
+      console.warn('⚠️ CONDIÇÕES NÃO ATENDIDAS para WebSocket:', {
+        temWorkspace: !!workspaceUuid,
+        useWebSocket,
+        jaConectado: isWebSocketConnected
+      });
     }
 
-    // Cleanup na desmontagem do componente
+    // Cleanup apenas na desmontagem real do componente
     return () => {
-      if (useWebSocket) {
-        websocketService.disconnect();
-      }
+      // Não desconectar no StrictMode, apenas na desmontagem real
+      // O WebSocket será reutilizado entre renderizações
     };
-  }, [workspaceUuid, useWebSocket]);
+  }, [workspaceUuid, useWebSocket, isWebSocketConnected]);
 
   // Carregar conversa específica quando instanceName e phoneNumber forem fornecidos
   useEffect(() => {
@@ -180,21 +193,18 @@ const WorkspaceChatAoVivo = () => {
         return;
       }
 
-      // Verificar se já temos a imagem carregada
+      // Verificar se já temos a imagem carregada PARA ESTA CONVERSA ESPECÍFICA
       const existingImage = conversationProfileImages[conversationKey];
-      const hasValidImage = profileImageUrl && !profileImageError;
 
-      if (existingImage || hasValidImage) {
-        console.log('✅ IMAGEM JÁ DISPONÍVEL - usando existente:', {
+      if (existingImage) {
+        console.log('✅ IMAGEM JÁ DISPONÍVEL para esta conversa:', {
           conversationKey,
           existingImage: !!existingImage,
-          hasValidImage,
-          profileImageUrl: profileImageUrl?.substring(0, 30) + '...'
+          profileImageUrl: existingImage?.substring(0, 30) + '...'
         });
 
-        if (existingImage && !hasValidImage) {
-          setProfileImageUrl(existingImage);
-        }
+        // Sempre atualizar para a imagem da conversa atual
+        setProfileImageUrl(existingImage);
         setProfileImageError(false);
         setLoadingProfileImage(false);
         return;
@@ -204,12 +214,7 @@ const WorkspaceChatAoVivo = () => {
       const contactName = selectedConversation.contact_name;
       const phoneNumber = selectedConversation.phone_number;
 
-      // Verificar se é Williams Lopes (problema específico)
-      if (contactName === 'Williams Lopes' || phoneNumber === '551191264619') {
-        console.log('🚫 BLOQUEIO ESPECÍFICO: Williams Lopes - usando fallback permanente');
-        setProfileImageError(true);
-        return;
-      }
+      // BLOQUEIO REMOVIDO: Permitindo carregar Williams Lopes
 
       // Cache local: verificar se já tentou carregar recentemente
       const headerCacheKey = `header-load-${conversationKey}`;
@@ -220,16 +225,19 @@ const WorkspaceChatAoVivo = () => {
         return;
       }
 
-      // 🚀 CARREGAMENTO INTELIGENTE: Apenas para contatos específicos que realmente precisam
+      // 🚀 CARREGAMENTO INTELIGENTE: Resetar foto primeiro, depois carregar nova
       console.log('🔍 CARREGANDO FOTO - contato autorizado:', conversationKey);
       sessionStorage.setItem(headerCacheKey, Date.now().toString());
+
+      // IMPORTANTE: Resetar estado da foto anterior antes de carregar nova
       setProfileImageError(false);
       setProfileImageUrl(null);
+      setLoadingProfileImage(true);
 
       // Carregar com delay maior para evitar conflitos
       setTimeout(() => {
         loadProfilePictureWithPriority(selectedConversation.instance_name, selectedConversation.phone_number);
-      }, 500);
+      }, 300);
 
       // Marcar mensagens como lidas quando abrir a conversa
       markMessagesAsRead(selectedConversation.instance_name, selectedConversation.phone_number);
@@ -269,13 +277,7 @@ const WorkspaceChatAoVivo = () => {
 
     const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
 
-    // 🚫 BLOQUEIO ESPECÍFICO: Williams Lopes (problema conhecido)
-    if (cleanPhoneNumber === '551191264619' || cleanPhoneNumber === '5511916264619') {
-      console.warn('🚫 BLOQUEIO: Williams Lopes - não carregar foto (problema conhecido)');
-      setLoadingProfileImage(false);
-      setProfileImageError(true);
-      return;
-    }
+    // BLOQUEIO REMOVIDO: Permitindo carregar foto de Williams Lopes
 
     // 🚀 PROTEÇÃO EXTRA: Verificar se já está processando esta conversa
     if (loadingProfileImage && currentProfileRequest?.includes(conversationKey)) {
@@ -543,11 +545,7 @@ const WorkspaceChatAoVivo = () => {
 
     const conversationKey = `${cleanInstanceName}-${cleanPhoneNumber}`;
 
-    // 🚫 BLOQUEIO ESPECÍFICO: Williams Lopes (problema conhecido)
-    if (cleanPhoneNumber === '551191264619' || cleanPhoneNumber === '5511916264619') {
-      console.warn(`🚫 BLOQUEIO CONVERSATION: Williams Lopes - ${conversationKey}`);
-      return;
-    }
+    // BLOQUEIO REMOVIDO: Permitindo carregar conversação de Williams Lopes
 
     // 🚀 PROTEÇÃO ANTI-RECARREGAMENTO: Múltiplas verificações
     if (loadingConversationImages[conversationKey]) {
@@ -718,17 +716,17 @@ const WorkspaceChatAoVivo = () => {
   useEffect(() => {
     if (linkedInstances.length === 0) return;
 
-    // Ajustar polling baseado no status do WebSocket
+    // 🚀 NOVA LÓGICA: Polling sempre ativo e responsivo (MÉTODO PRINCIPAL)
     let pollingInterval;
     if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
-      pollingInterval = 300000; // 5 minutos - apenas backup
-      console.log('📡 WebSocket ATIVO - Polling reduzido para 5 minutos');
+      pollingInterval = 30000; // 30 segundos - WebSocket + Polling híbrido SEGURO
+      console.log('📡 WebSocket ATIVO + Polling híbrido a cada 30 segundos (SEGURO CONTRA BANIMENTO)');
     } else if (isFallbackMode) {
-      pollingInterval = 15000; // 15 segundos - fallback ativo
-      console.log('⚠️ Modo FALLBACK ativo - Polling a cada 15 segundos');
+      pollingInterval = 3000; // 3 segundos - fallback mais responsivo
+      console.log('⚠️ Modo FALLBACK ativo - Polling responsivo a cada 3 segundos');
     } else {
-      pollingInterval = 30000; // 30 segundos - padrão
-      console.log('🔄 Polling PADRÃO - A cada 30 segundos');
+      pollingInterval = 4000; // 4 segundos - padrão responsivo
+      console.log('🔄 Polling principal a cada 4 segundos (MÉTODO CONFIÁVEL)');
     }
 
     console.log('🌐 Status WebSocket:', {
@@ -749,31 +747,77 @@ const WorkspaceChatAoVivo = () => {
 
     // Se WebSocket estiver ativo e não em fallback, inscrever em todas as instâncias
     if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
-      linkedInstances.forEach(async (instance) => {
-        await subscribeToInstanceWebSocket(instance.instance_name);
+      console.log('🔔 INSCREVENDO EM INSTÂNCIAS VIA WEBSOCKET:', {
+        useWebSocket,
+        isWebSocketConnected,
+        isFallbackMode,
+        linkedInstances: linkedInstances.length,
+        instances: linkedInstances
+      });
+
+      linkedInstances.forEach(async (instanceName) => {
+        console.log('🔄 PROCESSANDO INSCRIÇÃO para instância:', instanceName);
+        await subscribeToInstanceWebSocket(instanceName, false); // 🔧 DESABILITAR validação temporariamente
+      });
+    } else {
+      console.warn('⚠️ NÃO INSCREVENDO NO WEBSOCKET:', {
+        useWebSocket,
+        isWebSocketConnected,
+        isFallbackMode,
+        linkedInstances: linkedInstances.length
       });
     }
 
     return () => clearInterval(interval);
   }, [linkedInstances, useWebSocket, isWebSocketConnected, isFallbackMode]);
 
-  // Polling para atualizar mensagens da conversa selecionada
-  // 🚀 OTIMIZAÇÃO: Desativar polling completamente quando WebSocket estiver ativo
+  // 🚀 POLLING PRINCIPAL para mensagens da conversa selecionada
+  // MÉTODO PRIMÁRIO: Polling confiável + WebSocket como bonus
   useEffect(() => {
     if (!selectedConversation) return;
 
-    // Se WebSocket estiver ativo e não em fallback, reduzir polling significativamente
+    setIsPollingActive(true);
+
+    // 🚀 POLLING PRINCIPAL: Confiável e responsivo (MÉTODO PRIMÁRIO)
+    let pollingFrequency;
     if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
-      console.log('📡 WebSocket ativo - polling de mensagens reduzido');
-      setIsPollingActive(false);
-      return;
+      // WebSocket + Polling híbrido para máxima confiabilidade
+      pollingFrequency = 30000; // 30 segundos - SEGURO contra banimento
+      console.log('📡 WebSocket + Polling PRINCIPAL a cada 30s (HÍBRIDO SEGURO)');
+    } else if (isFallbackMode) {
+      pollingFrequency = 45000; // 45 segundos em fallback - MÁXIMA SEGURANÇA
+      console.log('⚠️ Modo fallback ativo - polling PRINCIPAL a cada 45s (SEGURO)');
+    } else {
+      pollingFrequency = 30000; // 30 segundos padrão - SEGURO contra banimento
+      console.log('🔄 Polling PRINCIPAL a cada 30s (MÉTODO SEGURO)');
     }
 
-    setIsPollingActive(true);
+    // 🚀 TÉCNICAS ANTI-BANIMENTO: Controle inteligente de requisições
+    let consecutiveEmptyChecks = 0;
+    let lastMessageCount = messages.length;
 
     const interval = setInterval(async () => {
       try {
         setLastMessageCheck(new Date());
+
+        // 🛡️ PROTEÇÃO 1: Verificar se usuário está ativo na conversa
+        const isUserActive = document.hasFocus() &&
+          !document.hidden &&
+          selectedConversation &&
+          selectedConversation.phone_number;
+
+        if (!isUserActive) {
+          console.log('👤 Usuário inativo - pulando verificação para economizar recursos');
+          return;
+        }
+
+        // 🛡️ PROTEÇÃO 2: Rate limiting inteligente baseado em atividade
+        if (consecutiveEmptyChecks > 10) {
+          console.log('😴 Conversa sem atividade - reduzindo frequência temporariamente');
+          // Pular esta verificação se muitas checagens vazias consecutivas
+          consecutiveEmptyChecks = 0; // Reset contador
+          return;
+        }
 
         // Buscar novas mensagens da conversa atual
         const response = await axios.get(`${API_BASE_URL}/whatsapp-messages/${selectedConversation.instance_name}/${selectedConversation.phone_number}?limit=12&offset=0`);
@@ -781,18 +825,27 @@ const WorkspaceChatAoVivo = () => {
         if (response.data.success) {
           const newMessages = response.data.data.messages || [];
 
+          // 🛡️ PROTEÇÃO 3: Verificar se houve mudança real
+          if (newMessages.length === lastMessageCount) {
+            consecutiveEmptyChecks++;
+          } else {
+            consecutiveEmptyChecks = 0; // Reset se houve mudança
+            lastMessageCount = newMessages.length;
+          }
+
           // Verificar se há mensagens novas
           if (newMessages.length > 0) {
             if (messages.length === 0) {
               // Se não há mensagens atuais, carregar as novas
               setMessages(newMessages);
+              console.log('📥 Mensagens iniciais carregadas via polling');
             } else {
               // Verificar se há mensagens realmente novas
               const currentMessageIds = new Set(messages.map(msg => msg.message_id || msg.id));
               const hasNewMessages = newMessages.some(msg => !currentMessageIds.has(msg.message_id || msg.id));
 
               if (hasNewMessages) {
-                console.log('🔄 Nova mensagem detectada via polling...');
+                console.log('⚡ NOVA MENSAGEM INSTANTÂNEA detectada via polling!');
 
                 // Verificar se o usuário está no final da conversa para auto-scroll
                 const shouldAutoScroll = messagesContainerRef.current &&
@@ -808,14 +861,19 @@ const WorkspaceChatAoVivo = () => {
 
                 // Marcar mensagens como lidas automaticamente
                 markMessagesAsRead(selectedConversation.instance_name, selectedConversation.phone_number);
+
+                // Reset contador de checagens vazias quando há atividade
+                consecutiveEmptyChecks = 0;
               }
             }
           }
         }
       } catch (error) {
         console.error('Erro ao verificar novas mensagens:', error);
+        // Em caso de erro, reduzir agressividade temporariamente
+        consecutiveEmptyChecks += 2;
       }
-    }, 10000); // Polling como fallback quando WebSocket não estiver disponível
+    }, pollingFrequency); // Usar frequência variável baseada no status do WebSocket
 
     return () => {
       clearInterval(interval);
@@ -830,12 +888,27 @@ const WorkspaceChatAoVivo = () => {
 
       // Conectar ao WebSocket
       await websocketService.connect(workspaceUuid);
-      setIsWebSocketConnected(true);
+
+      // Verificar se realmente conectou
+      const status = websocketService.getStatus();
+      console.log('📊 Status WebSocket após conexão:', status);
+
+      setIsWebSocketConnected(status.isConnected);
+      setWebSocketStatus(status);
 
       // Configurar listeners para eventos
       setupWebSocketListeners();
 
       console.log('✅ WebSocket inicializado com sucesso');
+
+      // Forçar inscrição nas instâncias após conexão bem-sucedida
+      if (status.isConnected && linkedInstances.length > 0) {
+        console.log('🔔 FORÇANDO INSCRIÇÕES após conexão WebSocket:', linkedInstances);
+        linkedInstances.forEach(async (instanceName) => {
+          console.log('🔄 INSCREVENDO IMEDIATAMENTE na instância:', instanceName);
+          await subscribeToInstanceWebSocket(instanceName, false); // 🔧 DESABILITAR validação temporariamente
+        });
+      }
     } catch (error) {
       console.error('❌ Erro ao inicializar WebSocket:', error);
       setIsWebSocketConnected(false);
@@ -846,16 +919,38 @@ const WorkspaceChatAoVivo = () => {
 
   const setupWebSocketListeners = () => {
     // Listener para novas mensagens
+    console.log('🎧 CONFIGURANDO LISTENER PARA NOVAS MENSAGENS...');
     const removeNewMessageListener = websocketService.addEventListener('new-message', (data) => {
-      console.log('💬 Nova mensagem via WebSocket:', data);
+      console.log('🎉 NOVA MENSAGEM RECEBIDA VIA WEBSOCKET:', {
+        temMessage: !!data.message,
+        temInstance: !!data.instance,
+        instanceName: data.instance,
+        messageId: data.message?.messageId,
+        phoneNumber: data.message?.phoneNumber,
+        content: data.message?.content?.substring(0, 50) + '...',
+        fromMe: data.message?.fromMe,
+        timestamp: data.message?.timestamp,
+        dataCompleto: data
+      });
 
       if (data.message && data.instance) {
         const newMessage = data.message;
 
         // Verificar se é da conversa atual
+        console.log('🔍 VERIFICANDO SE É DA CONVERSA ATUAL:', {
+          temConversa: !!selectedConversation,
+          conversaInstance: selectedConversation?.instance_name,
+          mensagemInstance: data.instance,
+          conversaPhone: selectedConversation?.phone_number,
+          mensagemPhone: newMessage.phoneNumber,
+          instanceMatch: selectedConversation?.instance_name === data.instance,
+          phoneMatch: selectedConversation?.phone_number === newMessage.phoneNumber
+        });
+
         if (selectedConversation &&
             selectedConversation.instance_name === data.instance &&
             selectedConversation.phone_number === newMessage.phoneNumber) {
+          console.log('✅ MENSAGEM É DA CONVERSA ATUAL - ADICIONANDO...');
 
           // Adicionar mensagem à lista atual
           setMessages(prevMessages => {
@@ -946,16 +1041,27 @@ const WorkspaceChatAoVivo = () => {
     };
   };
 
-  const subscribeToInstanceWebSocket = async (instanceName) => {
+  const subscribeToInstanceWebSocket = async (instanceName, validateInstance = true) => {
+    console.log(`🔔 TENTANDO INSCREVER NA INSTÂNCIA: ${instanceName}`, {
+      useWebSocket,
+      isWebSocketConnected,
+      isFallbackMode,
+      podeInscrever: useWebSocket && isWebSocketConnected && !isFallbackMode
+    });
+
     if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
       try {
-        const success = await websocketService.subscribeToInstance(instanceName, true);
-        if (!success) {
+        const success = await websocketService.subscribeToInstance(instanceName, validateInstance);
+        if (success) {
+          console.log(`✅ INSCRITO COM SUCESSO na instância ${instanceName}`);
+        } else {
           console.warn(`⚠️ Falha ao inscrever na instância ${instanceName}`);
         }
       } catch (error) {
         console.error(`❌ Erro ao inscrever na instância ${instanceName}:`, error);
       }
+    } else {
+      console.warn(`⚠️ NÃO FOI POSSÍVEL INSCREVER - WebSocket não está disponível para ${instanceName}`);
     }
   };
 
@@ -1029,14 +1135,23 @@ const WorkspaceChatAoVivo = () => {
 
   const loadLinkedInstances = async () => {
     try {
+      console.log('🔄 CARREGANDO INSTÂNCIAS VINCULADAS para workspace:', workspaceUuid);
       const response = await axios.get(`${API_BASE_URL}/workspace-instances/${workspaceUuid}`);
+      console.log('📦 RESPOSTA DA API workspace-instances:', response.data);
+
       if (response.data.success) {
         const linked = response.data.data || [];
+        console.log('🔍 INSTÂNCIAS BRUTAS recebidas:', linked);
 
         // Filtrar e validar nomes de instâncias antes de usar
         const linkedNames = linked
-          .map(item => item.instance_name)
+          .map(item => {
+            console.log('🔄 PROCESSANDO instância:', item.instance_name);
+            return item.instance_name;
+          })
           .filter(name => {
+            console.log('🔍 VALIDANDO nome:', name);
+
             if (!name || typeof name !== 'string') {
               console.warn('⚠️ Nome de instância inválido encontrado:', name);
               return false;
@@ -1054,15 +1169,19 @@ const WorkspaceChatAoVivo = () => {
               return false;
             }
 
+            console.log('✅ INSTÂNCIA VÁLIDA:', trimmedName);
             return true;
           });
+
+        console.log('🎯 INSTÂNCIAS FINAIS após filtro:', linkedNames);
 
         setLinkedInstances(linkedNames);
         setLinkedInstancesData(linked); // Armazenar dados completos incluindo custom_name
         console.log('✅ Instâncias vinculadas ao workspace (filtradas):', {
           total: linked.length,
           valid: linkedNames.length,
-          names: linkedNames
+          names: linkedNames,
+          temOsociohoteleiro: linkedNames.includes('osociohoteleiro_notificacoes')
         });
 
         // Carregar conversas de todas as instâncias vinculadas (apenas válidas)

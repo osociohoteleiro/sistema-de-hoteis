@@ -503,6 +503,36 @@ router.get('/instances-summary', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/whatsapp-messages/exists/:messageId
+ * Verificar se uma mensagem já existe no banco
+ */
+router.get('/exists/:messageId', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    const result = await db.query(`
+      SELECT COUNT(*) as count
+      FROM whatsapp_messages
+      WHERE message_id = $1
+    `, [messageId]);
+
+    const exists = parseInt(result[0].count) > 0;
+
+    res.json({
+      success: true,
+      exists: exists
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao verificar existência da mensagem:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro interno do servidor'
+    });
+  }
+});
+
 
 // Exportar função helper para uso em webhooks
 module.exports = router;

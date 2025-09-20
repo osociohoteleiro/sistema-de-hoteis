@@ -26,26 +26,55 @@ class WebSocketService {
       return Promise.resolve();
     }
 
+    // Evitar múltiplas tentativas de conexão simultâneas
+    if (this.socket && !this.isConnected) {
+      console.log('🔄 Conexão WebSocket já em andamento...');
+      return new Promise((resolve) => {
+        const checkConnection = () => {
+          if (this.isConnected) {
+            resolve();
+          } else {
+            setTimeout(checkConnection, 100);
+          }
+        };
+        checkConnection();
+      });
+    }
+
     return new Promise((resolve, reject) => {
       try {
-        console.log('🔄 Conectando ao WebSocket...');
+        console.log('🔄 Conectando ao WebSocket...', {
+          workspaceUuid,
+          socketUrl: import.meta.env.VITE_SOCKET_URL || 'http://localhost:3004',
+          currentUrl: window.location.href
+        });
 
         this.currentWorkspaceUuid = workspaceUuid;
 
         // Configurar conexão
-        this.socket = io(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001', {
-          transports: ['websocket', 'polling'],
-          timeout: 20000,
+        this.socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3004', {
+          transports: ['websocket'],
+          timeout: 30000,
           autoConnect: true,
           reconnection: true,
           reconnectionAttempts: this.maxReconnectAttempts,
           reconnectionDelay: this.reconnectDelay,
-          forceNew: false
+          reconnectionDelayMax: 5000,
+          randomizationFactor: 0.5,
+          forceNew: false,
+          upgrade: true,
+          rememberUpgrade: true
         });
 
         // Eventos de conexão
         this.socket.on('connect', () => {
-          console.log('✅ WebSocket conectado:', this.socket.id);
+          console.log('✅ WebSocket conectado com sucesso!', {
+            socketId: this.socket.id,
+            transport: this.socket.io.engine.transport.name,
+            url: this.socket.io.uri
+          });
+          // 🔧 DEBUG: Forçar alert de conexão
+          console.log(`🔌 WebSocket conectado! Socket ID: ${this.socket.id}`);
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.fallbackMode = false;
@@ -69,8 +98,10 @@ class WebSocketService {
           this.connectionQuality = 'failed';
           this.stopHealthCheck();
 
-          // Ativar modo fallback imediatamente
-          this.enableFallbackMode();
+          // Só ativar modo fallback após múltiplas tentativas de reconexão
+          if (this.reconnectAttempts >= 3) {
+            this.enableFallbackMode();
+          }
 
           // Tentar reconectar automaticamente
           if (reason !== 'io client disconnect') {
@@ -79,12 +110,22 @@ class WebSocketService {
         });
 
         this.socket.on('connect_error', (error) => {
-          console.error('❌ Erro de conexão WebSocket:', error);
+          console.error('❌ Erro de conexão WebSocket:', {
+            error: error.message,
+            description: error.description,
+            type: error.type,
+            transport: error.transport,
+            reconnectAttempts: this.reconnectAttempts,
+            socketUrl: import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
+          });
           this.isConnected = false;
           this.connectionQuality = 'failed';
 
-          // Ativar modo fallback
-          this.enableFallbackMode();
+          // Só ativar modo fallback após múltiplas tentativas
+          if (this.reconnectAttempts >= 2) {
+            console.log('⚠️ Múltiplas tentativas falharam, ativando modo fallback');
+            this.enableFallbackMode();
+          }
 
           if (this.reconnectAttempts === 0) {
             reject(error);
@@ -109,6 +150,18 @@ class WebSocketService {
         // Eventos de dados
         this.setupDataEventListeners();
 
+        // 🔧 DEBUG: Listener direto para testar
+        this.socket.on('new-message', (data) => {
+          console.log('🎉 MENSAGEM RECEBIDA DIRETAMENTE:', data);
+          console.log(`📨 MENSAGEM DIRETA: ${JSON.stringify(data).substring(0, 100)}`);
+        });
+
+        // 🔧 DEBUG: Listener para teste direto do backend
+        this.socket.on('test-message', (data) => {
+          console.log('🧪 TESTE DIRETO RECEBIDO:', data);
+          console.log(`🧪 TESTE BACKEND: ${data.message} - Socket: ${data.socketId}`);
+        });
+
         // Ping/Pong para manter conexão viva
         this.socket.on('pong', () => {
           // console.log('🏓 Pong recebido');
@@ -131,6 +184,11 @@ class WebSocketService {
     this.socket.on('new-message', (data) => {
       console.log('💬 Nova mensagem via WebSocket:', data);
       this.emitToListeners('new-message', data);
+    });
+
+    // TESTE DIRETO - verificar se eventos chegam ao frontend
+    this.socket.on('test-direct-message', (data) => {
+      console.log('🧪 TESTE DIRETO RECEBIDO:', data);
     });
 
     // Atualização de mensagem
@@ -168,31 +226,60 @@ class WebSocketService {
    * Inscrever-se em uma instância
    */
   async subscribeToInstance(instanceName, validateInstance = true) {
+    console.log('🔔 TENTANDO INSCREVER-SE NA INSTÂNCIA:', {
+      instanceName,
+      isConnected: this.isConnected,
+      socketExists: !!this.socket,
+      socketId: this.socket?.id,
+      workspaceUuid: this.currentWorkspaceUuid,
+      validateInstance
+    });
+
+    // 🔧 DEBUG: Alert para mostrar tentativa de inscrição
+    console.log(`📝 Tentando inscrever na instância: ${instanceName}`);
+
     if (!this.socket || !this.isConnected) {
-      console.warn('⚠️ WebSocket não conectado para inscrição');
+      console.warn('⚠️ WebSocket não conectado para inscrição', {
+        socket: !!this.socket,
+        isConnected: this.isConnected
+      });
+      console.error(`❌ ERRO: WebSocket não conectado para inscrição. Socket: ${!!this.socket}, Conectado: ${this.isConnected}`);
       return false;
     }
 
     if (this.subscribedInstances.has(instanceName)) {
       console.log(`📝 Já inscrito na instância: ${instanceName}`);
+      console.log(`✅ JÁ INSCRITO na instância: ${instanceName}`);
       return true;
     }
 
     // Validar se a instância é válida e pertence ao workspace
     if (validateInstance && this.currentWorkspaceUuid) {
+      console.log(`🔍 VALIDANDO instância: ${instanceName} para workspace: ${this.currentWorkspaceUuid}`);
       const isValid = await this.validateInstance(instanceName, this.currentWorkspaceUuid);
       if (!isValid) {
         console.warn(`⚠️ Instância ${instanceName} não é válida para o workspace ${this.currentWorkspaceUuid}`);
+        console.error(`❌ ERRO: Instância ${instanceName} NÃO É VÁLIDA para o workspace`);
         return false;
       }
+      console.log(`✅ VALIDAÇÃO OK: Instância ${instanceName} é válida`);
     }
 
     console.log(`📝 Inscrevendo na instância: ${instanceName}`);
 
-    this.socket.emit('subscribe-instance', {
+    const subscriptionData = {
       instanceName,
       workspaceUuid: this.currentWorkspaceUuid
-    });
+    };
+
+    console.log('📤 ENVIANDO INSCRIÇÃO:', subscriptionData);
+
+    this.socket.emit('subscribe-instance', subscriptionData);
+
+    console.log('✅ INSCRIÇÃO ENVIADA para instância:', instanceName);
+
+    // 🔧 DEBUG: Alert de confirmação
+    console.log(`📤 Inscrição ENVIADA para: ${instanceName}`);
 
     return true;
   }
@@ -203,7 +290,7 @@ class WebSocketService {
   async validateInstance(instanceName, workspaceUuid) {
     try {
       // Fazer requisição para validar a instância
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/workspace-instances/validate`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3004'}/api/workspace-instances/validate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -339,7 +426,11 @@ class WebSocketService {
 
       console.log(`🔄 Tentativa de reconexão ${this.reconnectAttempts}/${this.maxReconnectAttempts} em ${delay}ms`);
 
-      this.connectionQuality = 'poor';
+      // Só marcar como poor após várias tentativas
+      if (this.reconnectAttempts >= 3) {
+        this.connectionQuality = 'poor';
+      }
+
       this.emitToListeners('connection-status', {
         status: 'reconnecting',
         attempt: this.reconnectAttempts,
@@ -368,7 +459,11 @@ class WebSocketService {
    */
   disconnect() {
     if (this.socket) {
-      console.log('🔌 Desconectando WebSocket...');
+      console.log('🔌 Desconectando WebSocket...', {
+        isConnected: this.isConnected,
+        socketId: this.socket.id,
+        subscribedInstances: this.subscribedInstances.size
+      });
       this.isConnected = false;
       this.subscribedInstances.clear();
       this.eventListeners.clear();
@@ -456,7 +551,7 @@ class WebSocketService {
         const timeout = setTimeout(() => {
           console.warn('⚠️ Health check timeout - conexão pode estar lenta');
           this.connectionQuality = 'poor';
-        }, 5000);
+        }, 10000);
 
         this.socket.once('pong', (data) => {
           clearTimeout(timeout);

@@ -57,7 +57,7 @@ async function processWebhookEvent(webhookData) {
   try {
     switch (event) {
       case 'MESSAGES_UPSERT':
-        await handleNewMessages(instance, data);
+        await handleNewMessages(instance, data, webhookData);
         break;
 
       case 'MESSAGES_UPDATE':
@@ -87,20 +87,88 @@ async function processWebhookEvent(webhookData) {
 /**
  * Manipular novas mensagens
  */
-async function handleNewMessages(instance, data) {
-  if (!data || !data.messages) return;
+async function handleNewMessages(instance, data, webhookData = null) {
+  if (!data) {
+    console.warn(`⚠️ Dados vazios para instância ${instance}`);
+    return;
+  }
 
-  for (const message of data.messages) {
+  // Verificar se a mensagem vem no formato array (data.messages) ou objeto individual (data diretamente)
+  let messages = [];
+
+  if (data.messages && Array.isArray(data.messages)) {
+    // Formato antigo: array de mensagens
+    messages = data.messages;
+    console.log(`📥 Processando ${messages.length} mensagens do array para ${instance}`);
+  } else if (data.data && data.data.key && data.data.message) {
+    // Formato Evolution: mensagem individual dentro de data.data
+    messages = [data.data];
+    console.log(`📥 Processando mensagem Evolution individual para ${instance}:`, {
+      messageType: data.data.messageType,
+      fromMe: data.data.key.fromMe,
+      content: data.data.message.conversation || 'Mídia/Outro tipo'
+    });
+  } else if (data.key && data.message) {
+    // Formato alternativo: mensagem individual diretamente no data
+    messages = [data];
+    console.log(`📥 Processando mensagem individual para ${instance}:`, {
+      messageType: data.messageType,
+      fromMe: data.key.fromMe,
+      content: data.message.conversation || 'Mídia/Outro tipo'
+    });
+  } else if (webhookData.data && webhookData.data.key && webhookData.data.message) {
+    // 🔧 CORREÇÃO: Formato novo da Evolution API - dados diretamente no webhookData.data
+    messages = [webhookData.data];
+    console.log(`📥 Processando mensagem Evolution formato novo para ${instance}:`, {
+      messageType: webhookData.data.messageType,
+      fromMe: webhookData.data.key.fromMe,
+      content: webhookData.data.message.conversation || 'Mídia/Outro tipo',
+      pushName: webhookData.data.pushName,
+      timestamp: webhookData.data.messageTimestamp
+    });
+  } else if (webhookData.event === 'messages.upsert' && webhookData.data && webhookData.data.key) {
+    // 🔧 CORREÇÃO FINAL: Formato Evolution API atual - estrutura direta como nos logs
+    messages = [webhookData.data];
+    console.log(`📥 Processando mensagem Evolution formato atual para ${instance}:`, {
+      event: webhookData.event,
+      messageType: webhookData.data.messageType,
+      fromMe: webhookData.data.key.fromMe,
+      content: webhookData.data.message ? (webhookData.data.message.conversation || 'Mídia/Outro tipo') : 'Sem conteúdo',
+      pushName: webhookData.data.pushName,
+      timestamp: webhookData.data.messageTimestamp,
+      remoteJid: webhookData.data.key.remoteJid
+    });
+  } else if (webhookData.event && webhookData.instance && webhookData.data && webhookData.data.key) {
+    // 🔧 NOVO: Formato Evolution API real que está chegando agora
+    messages = [webhookData.data];
+    console.log(`📥 Processando mensagem Evolution formato REAL para ${instance}:`, {
+      event: webhookData.event,
+      messageType: webhookData.data.messageType,
+      fromMe: webhookData.data.key.fromMe,
+      content: webhookData.data.message ? (webhookData.data.message.conversation || 'Mídia/Outro tipo') : 'Sem conteúdo',
+      pushName: webhookData.data.pushName,
+      timestamp: webhookData.data.messageTimestamp,
+      remoteJid: webhookData.data.key.remoteJid
+    });
+  } else {
+    console.warn(`⚠️ Estrutura de mensagem não reconhecida para ${instance}:`, webhookData);
+    return;
+  }
+
+  for (const message of messages) {
     try {
       // Extrair informações da mensagem
       const messageInfo = extractMessageInfo(instance, message);
 
-      if (!messageInfo) continue;
+      if (!messageInfo) {
+        console.warn(`⚠️ Não foi possível extrair info da mensagem para ${instance}`);
+        continue;
+      }
 
       // Salvar mensagem no banco de dados
       await saveMessage(messageInfo);
 
-      console.log(`💾 Mensagem salva via webhook: ${instance}/${messageInfo.phone_number} - ${messageInfo.message_type}`);
+      console.log(`💾 Mensagem salva via webhook: ${instance}/${messageInfo.phone_number} - ${messageInfo.message_type} - "${messageInfo.content}"`);
 
     } catch (error) {
       console.error('❌ Erro ao salvar mensagem via webhook:', error);
@@ -167,7 +235,7 @@ function extractMessageInfo(instance, message) {
       content: content,
       media_url: mediaUrl,
       direction: message.key?.fromMe ? 'outbound' : 'inbound',
-      timestamp: new Date(message.messageTimestamp * 1000),
+      timestamp: message.messageTimestamp ? new Date(message.messageTimestamp * 1000) : new Date(),
       caption: caption,
       status: message.status || 'delivered',
       raw_data: message
@@ -245,6 +313,200 @@ router.get('/stats', (req, res) => {
       success: false,
       error: 'Erro ao obter estatísticas'
     });
+  }
+});
+
+/**
+ * GET /api/evolution-webhook/test-direct
+ * Teste direto para todos os sockets
+ */
+router.get('/test-direct', (req, res) => {
+  try {
+    websocketService.testDirectMessage();
+    res.json({
+      success: true,
+      message: 'Teste enviado para todos os sockets',
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('❌ Erro ao enviar teste:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao enviar teste'
+    });
+  }
+});
+
+/**
+ * GET /api/evolution-webhook/test-new-message
+ * Teste new-message direto para todos os sockets
+ */
+router.get('/test-new-message', (req, res) => {
+  try {
+    websocketService.testNewMessageDirect();
+    res.json({
+      success: true,
+      message: 'Teste new-message enviado para todos os sockets',
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('❌ Erro ao enviar teste new-message:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao enviar teste new-message'
+    });
+  }
+});
+
+/**
+ * Rotas específicas para diferentes tipos de eventos da Evolution
+ * (A Evolution parece enviar para endpoints específicos em vez da rota geral)
+ */
+
+// Rota para mensagens recebidas
+router.post('/messages-upsert', async (req, res) => {
+  try {
+    console.log('📨 MESSAGES_UPSERT recebido:', req.body);
+
+    const webhookData = {
+      instance: req.body.instance || 'unknown',
+      event: 'MESSAGES_UPSERT',
+      data: req.body
+    };
+
+    await processWebhookEvent(webhookData);
+    websocketService.processEvolutionWebhook(webhookData);
+
+    res.status(200).json({ success: true, message: 'MESSAGES_UPSERT processado' });
+  } catch (error) {
+    console.error('❌ Erro MESSAGES_UPSERT:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rota para atualizações de mensagens
+router.post('/messages-update', async (req, res) => {
+  try {
+    console.log('📝 MESSAGES_UPDATE recebido:', req.body);
+
+    const webhookData = {
+      instance: req.body.instance || 'unknown',
+      event: 'MESSAGES_UPDATE',
+      data: req.body
+    };
+
+    await processWebhookEvent(webhookData);
+    websocketService.processEvolutionWebhook(webhookData);
+
+    res.status(200).json({ success: true, message: 'MESSAGES_UPDATE processado' });
+  } catch (error) {
+    console.error('❌ Erro MESSAGES_UPDATE:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rota para atualizações de chats
+router.post('/chats-upsert', async (req, res) => {
+  try {
+    console.log('💬 CHATS_UPSERT recebido:', req.body);
+
+    const webhookData = {
+      instance: req.body.instance || 'unknown',
+      event: 'CHATS_UPSERT',
+      data: req.body
+    };
+
+    await processWebhookEvent(webhookData);
+    websocketService.processEvolutionWebhook(webhookData);
+
+    res.status(200).json({ success: true, message: 'CHATS_UPSERT processado' });
+  } catch (error) {
+    console.error('❌ Erro CHATS_UPSERT:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rota para atualizações de chats
+router.post('/chats-update', async (req, res) => {
+  try {
+    console.log('💬 CHATS_UPDATE recebido:', req.body);
+
+    const webhookData = {
+      instance: req.body.instance || 'unknown',
+      event: 'CHATS_UPDATE',
+      data: req.body
+    };
+
+    await processWebhookEvent(webhookData);
+    websocketService.processEvolutionWebhook(webhookData);
+
+    res.status(200).json({ success: true, message: 'CHATS_UPDATE processado' });
+  } catch (error) {
+    console.error('❌ Erro CHATS_UPDATE:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rota para atualizações de contatos
+router.post('/contacts-update', async (req, res) => {
+  try {
+    console.log('👤 CONTACTS_UPDATE recebido:', req.body);
+
+    const webhookData = {
+      instance: req.body.instance || 'unknown',
+      event: 'CONTACTS_UPDATE',
+      data: req.body
+    };
+
+    await processWebhookEvent(webhookData);
+    websocketService.processEvolutionWebhook(webhookData);
+
+    res.status(200).json({ success: true, message: 'CONTACTS_UPDATE processado' });
+  } catch (error) {
+    console.error('❌ Erro CONTACTS_UPDATE:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rota para atualizações de presença
+router.post('/presence-update', async (req, res) => {
+  try {
+    console.log('👀 PRESENCE_UPDATE recebido:', req.body);
+
+    const webhookData = {
+      instance: req.body.instance || 'unknown',
+      event: 'PRESENCE_UPDATE',
+      data: req.body
+    };
+
+    await processWebhookEvent(webhookData);
+    websocketService.processEvolutionWebhook(webhookData);
+
+    res.status(200).json({ success: true, message: 'PRESENCE_UPDATE processado' });
+  } catch (error) {
+    console.error('❌ Erro PRESENCE_UPDATE:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rota para mensagens enviadas
+router.post('/send-message', async (req, res) => {
+  try {
+    console.log('📤 SEND_MESSAGE recebido:', req.body);
+
+    const webhookData = {
+      instance: req.body.instance || 'unknown',
+      event: 'SEND_MESSAGE',
+      data: req.body
+    };
+
+    await processWebhookEvent(webhookData);
+    websocketService.processEvolutionWebhook(webhookData);
+
+    res.status(200).json({ success: true, message: 'SEND_MESSAGE processado' });
+  } catch (error) {
+    console.error('❌ Erro SEND_MESSAGE:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

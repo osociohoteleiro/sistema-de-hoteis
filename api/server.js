@@ -462,6 +462,10 @@ console.log('📍 Todas as rotas carregadas');
 const websocketService = require('./services/websocketService');
 websocketService.initialize(server);
 
+// 🔧 DESABILITADO: MessagesSyncService pode estar conflitando com WebSocket
+// const messagesSyncService = require('./services/messagesSyncService');
+// messagesSyncService.setWebSocketService(websocketService);
+
 // Fazer o websocketService disponível para as rotas
 app.set('websocketService', websocketService);
 
@@ -503,23 +507,38 @@ async function startServer() {
     // Inicializar banco de dados (criar usuário admin se necessário)
     await initDatabase();
     
-    server.listen(PORT, () => {
-      console.log(`✅ Servidor rodando na porta ${PORT}`);
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Servidor rodando na porta ${PORT} (todas as interfaces)`);
       console.log(`🔌 Socket.io habilitado`);
       console.log(`🌍 CORS configurado para: ${process.env.CORS_ORIGINS}`);
       console.log(`🗄️  Conectado ao banco: ${db.currentHost}/${process.env.POSTGRES_DB}`);
       console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🧪 DB test: http://localhost:${PORT}/api/db-test`);
+
+      // 🔧 DESABILITADO: MessagesSyncService pode estar conflitando com WebSocket
+      // console.log('🚀 Iniciando MessagesSyncService para capturar mensagens WhatsApp...');
+      // messagesSyncService.start();
+      console.log('✅ Sistema completo: WebSocket + Webhooks (MessagesSyncService DESABILITADO)');
     });
     
   } catch (error) {
     console.error('❌ Erro ao iniciar servidor:', error.message);
     console.log('⚠️  Servidor iniciando sem conexão com banco...');
     
-    server.listen(PORT, () => {
-      console.log(`⚠️  Servidor rodando na porta ${PORT} (sem DB)`);
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`⚠️  Servidor rodando na porta ${PORT} (sem DB - todas as interfaces)`);
       console.log(`🔌 Socket.io habilitado`);
       console.log(`📋 Health check: http://localhost:${PORT}/api/health`);
+
+      // 🔧 DESABILITADO: MessagesSyncService pode estar conflitando com WebSocket
+      // try {
+      //   console.log('⚠️ Tentando iniciar MessagesSyncService sem DB...');
+      //   messagesSyncService.start();
+      //   console.log('✅ MessagesSyncService iniciado (modo degradado)');
+      // } catch (syncError) {
+      //   console.log('❌ MessagesSyncService falhou sem DB:', syncError.message);
+      // }
+      console.log('⚠️ MessagesSyncService DESABILITADO - usando apenas WebSocket + Webhooks');
     });
   }
 }
@@ -527,12 +546,14 @@ async function startServer() {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('🔄 Recebido SIGTERM, encerrando servidor...');
+  // messagesSyncService.stop(); // DESABILITADO
   await db.close();
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('🔄 Recebido SIGINT, encerrando servidor...');
+  // messagesSyncService.stop(); // DESABILITADO
   await db.close();
   process.exit(0);
 });
