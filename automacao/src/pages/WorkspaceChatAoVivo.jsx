@@ -8,7 +8,7 @@ import { convertToBase64, getMediaType } from '../utils/imageUpload';
 import websocketService from '../services/websocketService';
 import WebSocketStats from '../components/WebSocketStats';
 
-const API_BASE_URL = 'http://localhost:3004/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 const makeRequestWithRetry = async (url, maxRetries = 3) => {
   for (let i = 0; i < maxRetries; i++) {
@@ -124,6 +124,49 @@ const WorkspaceChatAoVivo = () => {
       setTimeout(forceScrollToBottom, 2000);
     }
   }, [instanceName, phoneNumber, selectedConversation, messages]);
+
+  // 🔄 AUTO-REFRESH SIMPLES: Atualizar mensagens a cada 3 segundos
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    console.log('🔄 Iniciando auto-refresh para:', selectedConversation.instance_name, selectedConversation.phone_number);
+
+    // Auto-refresh removido - WebSocket + polling otimizado cuida das atualizações
+    // const interval = setInterval(() => {
+    //   console.log('🔄 AUTO-REFRESH: Buscando novas mensagens...');
+    //   loadMessages(selectedConversation.instance_name, selectedConversation.phone_number, false);
+    // }, 3000);
+
+    // return () => {
+    //   console.log('🔄 Parando auto-refresh');
+    //   clearInterval(interval);
+    // };
+  }, [selectedConversation?.instance_name, selectedConversation?.phone_number]);
+
+  // 🔄 AUTO-REFRESH AO FOCAR: Atualizar quando voltar à aba
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    const handleFocus = () => {
+      console.log('🔄 FOCUS: Aba voltou ao foco, atualizando mensagens...');
+      loadMessages(selectedConversation.instance_name, selectedConversation.phone_number, false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 VISIBILITY: Página voltou a ser visível, atualizando mensagens...');
+        loadMessages(selectedConversation.instance_name, selectedConversation.phone_number, false);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [selectedConversation?.instance_name, selectedConversation?.phone_number]);
 
   // Função para forçar scroll para baixo sempre
   const forceScrollToBottom = () => {
@@ -711,22 +754,23 @@ const WorkspaceChatAoVivo = () => {
     return () => messagesContainer.removeEventListener('scroll', handleScroll);
   }, [hasMoreMessages, loadingMessages, selectedConversation]);
 
-  // Polling para atualizar contadores de mensagens não lidas e conversas
-  // 🚀 OTIMIZAÇÃO: Usar WebSocket quando disponível, polling como fallback
+  // Polling otimizado para atualizar contadores apenas quando WebSocket falhar
+  // 🚀 OTIMIZAÇÃO: WebSocket como método principal, polling apenas como fallback
   useEffect(() => {
     if (linkedInstances.length === 0) return;
 
-    // 🚀 NOVA LÓGICA: Polling sempre ativo e responsivo (MÉTODO PRINCIPAL)
+    // 🚀 NOVA LÓGICA: Polling apenas quando WebSocket não estiver disponível
     let pollingInterval;
     if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
-      pollingInterval = 30000; // 30 segundos - WebSocket + Polling híbrido SEGURO
-      console.log('📡 WebSocket ATIVO + Polling híbrido a cada 30 segundos (SEGURO CONTRA BANIMENTO)');
+      // WebSocket ativo - polling desativado para economizar recursos
+      console.log('📡 WebSocket ATIVO - Polling de conversas DESATIVADO (economia de recursos)');
+      return; // Sair do useEffect sem criar polling
     } else if (isFallbackMode) {
-      pollingInterval = 3000; // 3 segundos - fallback mais responsivo
-      console.log('⚠️ Modo FALLBACK ativo - Polling responsivo a cada 3 segundos');
+      pollingInterval = 5000; // 5 segundos - fallback otimizado
+      console.log('⚠️ Modo FALLBACK ativo - Polling de conversas a cada 5 segundos');
     } else {
-      pollingInterval = 4000; // 4 segundos - padrão responsivo
-      console.log('🔄 Polling principal a cada 4 segundos (MÉTODO CONFIÁVEL)');
+      pollingInterval = 6000; // 6 segundos - padrão otimizado
+      console.log('🔄 WebSocket indisponível - Polling de conversas a cada 6 segundos');
     }
 
     console.log('🌐 Status WebSocket:', {
@@ -771,25 +815,75 @@ const WorkspaceChatAoVivo = () => {
     return () => clearInterval(interval);
   }, [linkedInstances, useWebSocket, isWebSocketConnected, isFallbackMode]);
 
-  // 🚀 POLLING PRINCIPAL para mensagens da conversa selecionada
-  // MÉTODO PRIMÁRIO: Polling confiável + WebSocket como bonus
+  // 🚀 NOVO: useEffect específico para gerenciar inscrições WebSocket
+  useEffect(() => {
+    const manageWebSocketSubscriptions = async () => {
+      console.log('🔄 EFFECT: GERENCIANDO INSCRIÇÕES WEBSOCKET:', {
+        useWebSocket,
+        isWebSocketConnected,
+        isFallbackMode,
+        linkedInstancesCount: linkedInstances.length,
+        linkedInstances: linkedInstances,
+        canSubscribe: useWebSocket && isWebSocketConnected && !isFallbackMode && linkedInstances.length > 0
+      });
+
+      if (useWebSocket && isWebSocketConnected && !isFallbackMode && linkedInstances.length > 0) {
+        console.log('✅ CONDIÇÕES ATENDIDAS - Iniciando inscrições via effect');
+        for (const instanceName of linkedInstances) {
+          console.log(`🔔 EFFECT: TENTANDO INSCREVER NA INSTÂNCIA: ${instanceName}`);
+          try {
+            const success = await websocketService.subscribeToInstance(instanceName, false);
+            if (success) {
+              console.log(`✅ EFFECT: INSCRITO COM SUCESSO na instância ${instanceName}`);
+            } else {
+              console.warn(`⚠️ EFFECT: FALHA ao inscrever na instância ${instanceName}`);
+            }
+          } catch (error) {
+            console.error(`❌ EFFECT: Erro ao inscrever na instância ${instanceName}:`, error);
+          }
+        }
+      } else {
+        console.warn('⚠️ EFFECT: CONDIÇÕES NÃO ATENDIDAS para inscrições WebSocket:', {
+          useWebSocket,
+          isWebSocketConnected,
+          isFallbackMode,
+          hasInstances: linkedInstances.length > 0
+        });
+      }
+    };
+
+    // Aguardar um pouco para garantir que tudo está carregado
+    const timeoutId = setTimeout(() => {
+      manageWebSocketSubscriptions();
+    }, 1000);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [useWebSocket, isWebSocketConnected, isFallbackMode, linkedInstances]);
+
+  // 🚀 POLLING OTIMIZADO para mensagens - apenas como fallback do WebSocket
+  // MÉTODO PRINCIPAL: WebSocket, polling apenas quando necessário
   useEffect(() => {
     if (!selectedConversation) return;
 
+    // 🚀 NOVA LÓGICA: Polling apenas quando WebSocket não funcionar
+    if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
+      console.log('📡 WebSocket ATIVO - Polling de mensagens DESATIVADO para conversa:', selectedConversation.phone_number);
+      setIsPollingActive(false);
+      return; // WebSocket cuida das mensagens - não precisa de polling
+    }
+
     setIsPollingActive(true);
 
-    // 🚀 POLLING PRINCIPAL: Confiável e responsivo (MÉTODO PRIMÁRIO)
+    // 🚀 POLLING FALLBACK: Ativo apenas quando WebSocket falha
     let pollingFrequency;
-    if (useWebSocket && isWebSocketConnected && !isFallbackMode) {
-      // WebSocket + Polling híbrido para máxima confiabilidade
-      pollingFrequency = 30000; // 30 segundos - SEGURO contra banimento
-      console.log('📡 WebSocket + Polling PRINCIPAL a cada 30s (HÍBRIDO SEGURO)');
-    } else if (isFallbackMode) {
-      pollingFrequency = 45000; // 45 segundos em fallback - MÁXIMA SEGURANÇA
-      console.log('⚠️ Modo fallback ativo - polling PRINCIPAL a cada 45s (SEGURO)');
+    if (isFallbackMode) {
+      pollingFrequency = 4000; // 4 segundos em fallback - responsivo
+      console.log('⚠️ Modo FALLBACK ativo - polling de mensagens a cada 4s para:', selectedConversation.phone_number);
     } else {
-      pollingFrequency = 30000; // 30 segundos padrão - SEGURO contra banimento
-      console.log('🔄 Polling PRINCIPAL a cada 30s (MÉTODO SEGURO)');
+      pollingFrequency = 5000; // 5 segundos quando WebSocket indisponível
+      console.log('🔄 WebSocket indisponível - polling de mensagens a cada 5s para:', selectedConversation.phone_number);
     }
 
     // 🚀 TÉCNICAS ANTI-BANIMENTO: Controle inteligente de requisições
@@ -933,6 +1027,37 @@ const WorkspaceChatAoVivo = () => {
         dataCompleto: data
       });
 
+      // 🚨 TESTE IMEDIATO - EXECUTAR SEMPRE
+      console.log('🚨 EXECUTANDO LÓGICA DE ADIÇÃO IMEDIATA');
+
+      if (data && data.message && data.instance) {
+        const newMessage = data.message;
+
+        console.log('🚨 FORÇANDO ADIÇÃO DE MENSAGEM - SEMPRE PARA DEBUG');
+
+        const formattedMessage = {
+          id: newMessage.messageId || `ws-${Date.now()}`,
+          message_id: newMessage.messageId || `ws-${Date.now()}`,
+          instance_name: data.instance,
+          phone_number: newMessage.phoneNumber,
+          content: newMessage.content,
+          from_me: newMessage.fromMe || false,
+          message_type: newMessage.messageType || 'text',
+          timestamp: newMessage.timestamp || Date.now(),
+          direction: newMessage.fromMe ? 'outbound' : 'inbound',
+          status: newMessage.status || 'delivered'
+        };
+
+        console.log('🚨 ADICIONANDO MENSAGEM WEBSOCKET DIRETO:', formattedMessage);
+
+        setMessages(prevMessages => {
+          console.log('🚨 ESTADO ANTERIOR:', prevMessages.length, 'mensagens');
+          const newMessages = [...prevMessages, formattedMessage];
+          console.log('🚨 NOVO ESTADO:', newMessages.length, 'mensagens');
+          return newMessages;
+        });
+      }
+
       if (data.message && data.instance) {
         const newMessage = data.message;
 
@@ -944,9 +1069,77 @@ const WorkspaceChatAoVivo = () => {
           conversaPhone: selectedConversation?.phone_number,
           mensagemPhone: newMessage.phoneNumber,
           instanceMatch: selectedConversation?.instance_name === data.instance,
-          phoneMatch: selectedConversation?.phone_number === newMessage.phoneNumber
+          phoneMatch: selectedConversation?.phone_number === newMessage.phoneNumber,
+          // 🚨 DEBUG DETALHADO DOS TIPOS E VALORES
+          tipoConversaPhone: typeof selectedConversation?.phone_number,
+          tipoMensagemPhone: typeof newMessage.phoneNumber,
+          conversaPhoneString: String(selectedConversation?.phone_number),
+          mensagemPhoneString: String(newMessage.phoneNumber),
+          selectedConversationCompleta: selectedConversation,
+          newMessageCompleta: newMessage
         });
 
+        // 🚀 SEMPRE ATUALIZAR LISTA DE CONVERSAS PRIMEIRO
+        console.log('🔄 ATUALIZANDO LISTA DE CONVERSAS EM TEMPO REAL...', {
+          linkedInstancesCount: linkedInstances.length,
+          linkedInstances: linkedInstances
+        });
+
+        // FORÇAR ATUALIZAÇÃO INDEPENDENTE DO NÚMERO DE INSTÂNCIAS
+        loadAllLinkedConversations(['osociohoteleiro_notificacoes', 'bugaendrus', 'test_new_instance', 'o_socio_hoteleiro_treinamentos']);
+
+        if (linkedInstances.length > 0) {
+          loadAllLinkedConversations(linkedInstances);
+        }
+
+        // 🚨 CORREÇÃO: selectedConversation está undefined, vou usar URL para identificar conversa atual
+        const currentUrl = window.location.pathname;
+        const currentHref = window.location.href;
+        const isInChatPage = currentUrl.includes('/chat-ao-vivo') || currentHref.includes('/chat-ao-vivo');
+
+        console.log('🔍 DEBUG URL:', {
+          currentUrl,
+          currentHref,
+          isInChatPage,
+          selectedConversationExists: !!selectedConversation
+        });
+
+        // ✅ SEMPRE ADICIONAR MENSAGEM (FORÇAR PARA DEBUG)
+        console.log('🚨 FORÇANDO ADIÇÃO DE MENSAGEM - SEMPRE PARA DEBUG');
+        if (true) { // FORÇAR SEMPRE
+          console.log('🚨 FORÇANDO ADIÇÃO DE MENSAGEM - IGNORANDO FILTROS PARA DEBUG');
+
+          const formattedMessage = {
+            id: newMessage.messageId || `ws-${Date.now()}`,
+            message_id: newMessage.messageId || `ws-${Date.now()}`,
+            instance_name: data.instance,
+            phone_number: newMessage.phoneNumber,
+            content: newMessage.content,
+            from_me: newMessage.fromMe || false,
+            message_type: newMessage.messageType || 'text',
+            timestamp: newMessage.timestamp || Date.now(),
+            direction: newMessage.fromMe ? 'outbound' : 'inbound',
+            status: newMessage.status || 'delivered'
+          };
+
+          console.log('🚨 ADICIONANDO MENSAGEM WEBSOCKET:', formattedMessage);
+
+          setMessages(prevMessages => {
+            const messageExists = prevMessages.some(msg =>
+              (msg.message_id || msg.id) === formattedMessage.message_id
+            );
+
+            if (!messageExists) {
+              console.log('✅ NOVA MENSAGEM ADICIONADA VIA WEBSOCKET');
+              return [...prevMessages, formattedMessage];
+            } else {
+              console.log('⚠️ MENSAGEM JÁ EXISTE, IGNORANDO');
+              return prevMessages;
+            }
+          });
+        }
+
+        // ✅ LÓGICA ORIGINAL (QUANDO selectedConversation FUNCIONAR)
         if (selectedConversation &&
             selectedConversation.instance_name === data.instance &&
             selectedConversation.phone_number === newMessage.phoneNumber) {
@@ -962,7 +1155,7 @@ const WorkspaceChatAoVivo = () => {
               const formattedMessage = {
                 id: newMessage.messageId,
                 message_id: newMessage.messageId,
-                instance_name: newMessage.instanceName,
+                instance_name: data.instance,
                 phone_number: newMessage.phoneNumber,
                 message_type: newMessage.messageType || 'text',
                 content: newMessage.content,
@@ -985,12 +1178,22 @@ const WorkspaceChatAoVivo = () => {
           if (!newMessage.fromMe) {
             markMessagesAsRead(data.instance, newMessage.phoneNumber);
           }
+        } else {
+          console.log('⚠️ MENSAGEM NÃO É DA CONVERSA ATUAL - mas lista será atualizada');
+
+          // 🚀 SE A MENSAGEM É DA MESMA INSTÂNCIA, FORÇAR RELOAD DAS MENSAGENS
+          if (selectedConversation && selectedConversation.instance_name === data.instance) {
+            console.log('🔄 FORÇANDO RELOAD DAS MENSAGENS DA CONVERSA ATUAL...');
+            loadMessages(selectedConversation.instance_name, selectedConversation.phone_number, false);
+          }
         }
 
-        // Atualizar lista de conversas (nova mensagem pode criar nova conversa)
-        if (linkedInstances.length > 0) {
-          loadAllLinkedConversations(linkedInstances);
-        }
+        // 🚀 NOTIFICAÇÃO VISUAL DE NOVA MENSAGEM
+        console.log('🔔 NOVA MENSAGEM PROCESSADA:', {
+          instancia: data.instance,
+          telefone: newMessage.phoneNumber,
+          conteudo: newMessage.content?.substring(0, 30) + '...'
+        });
       }
     });
 
@@ -2219,6 +2422,19 @@ ${messageToSend}`;
 
                             {/* Indicador de conectividade WebSocket/Polling */}
                             <div className="flex items-center space-x-3">
+                              {/* Botão de Atualizar Mensagens */}
+                              <button
+                                onClick={() => {
+                                  console.log('🔄 REFRESH MANUAL clicado');
+                                  loadMessages(selectedConversation.instance_name, selectedConversation.phone_number, false);
+                                }}
+                                className="p-2 rounded-full bg-sapphire-100 hover:bg-sapphire-200 text-sapphire-600 transition-colors"
+                                title="Atualizar mensagens"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                              </button>
                               {useWebSocket && isWebSocketConnected && !isFallbackMode ? (
                                 <div className="flex items-center space-x-2 text-xs text-blue-600">
                                   <div className={`w-2 h-2 rounded-full animate-pulse ${

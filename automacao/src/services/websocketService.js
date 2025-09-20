@@ -45,25 +45,28 @@ class WebSocketService {
       try {
         console.log('🔄 Conectando ao WebSocket...', {
           workspaceUuid,
-          socketUrl: import.meta.env.VITE_SOCKET_URL || 'http://localhost:3004',
+          socketUrl: import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001',
           currentUrl: window.location.href
         });
 
         this.currentWorkspaceUuid = workspaceUuid;
 
-        // Configurar conexão
-        this.socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3004', {
-          transports: ['websocket'],
-          timeout: 30000,
+        // Configurar conexão otimizada
+        this.socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001', {
+          transports: ['websocket', 'polling'], // WebSocket primeiro, polling como fallback
+          timeout: 20000, // Timeout reduzido para falhar mais rápido
           autoConnect: true,
           reconnection: true,
           reconnectionAttempts: this.maxReconnectAttempts,
           reconnectionDelay: this.reconnectDelay,
-          reconnectionDelayMax: 5000,
-          randomizationFactor: 0.5,
+          reconnectionDelayMax: 10000, // Máximo 10s entre reconexões
+          randomizationFactor: 0.3, // Menos randomização para reconexão mais rápida
           forceNew: false,
           upgrade: true,
-          rememberUpgrade: true
+          rememberUpgrade: true,
+          // Configurações adicionais para estabilidade
+          pingTimeout: 60000,
+          pingInterval: 25000
         });
 
         // Eventos de conexão
@@ -71,10 +74,10 @@ class WebSocketService {
           console.log('✅ WebSocket conectado com sucesso!', {
             socketId: this.socket.id,
             transport: this.socket.io.engine.transport.name,
-            url: this.socket.io.uri
+            url: this.socket.io.uri,
+            workspaceUuid: this.currentWorkspaceUuid
           });
-          // 🔧 DEBUG: Forçar alert de conexão
-          console.log(`🔌 WebSocket conectado! Socket ID: ${this.socket.id}`);
+
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.fallbackMode = false;
@@ -85,6 +88,7 @@ class WebSocketService {
           // Reinscrever em instâncias após reconexão
           this.resubscribeToInstances();
 
+          console.log(`🎉 CHAT AO VIVO: WebSocket conectado e pronto! ID: ${this.socket.id}`);
           resolve();
         });
 
@@ -110,20 +114,21 @@ class WebSocketService {
         });
 
         this.socket.on('connect_error', (error) => {
-          console.error('❌ Erro de conexão WebSocket:', {
+          console.error('❌ CHAT AO VIVO: Erro de conexão WebSocket:', {
             error: error.message,
             description: error.description,
             type: error.type,
             transport: error.transport,
             reconnectAttempts: this.reconnectAttempts,
-            socketUrl: import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
+            socketUrl: import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001',
+            workspaceUuid: this.currentWorkspaceUuid
           });
           this.isConnected = false;
           this.connectionQuality = 'failed';
 
-          // Só ativar modo fallback após múltiplas tentativas
+          // Ativar modo fallback após 2 tentativas para ser mais responsivo
           if (this.reconnectAttempts >= 2) {
-            console.log('⚠️ Múltiplas tentativas falharam, ativando modo fallback');
+            console.log('⚠️ CHAT AO VIVO: Ativando modo fallback (polling) após múltiplas falhas');
             this.enableFallbackMode();
           }
 
@@ -182,8 +187,10 @@ class WebSocketService {
   setupDataEventListeners() {
     // Nova mensagem
     this.socket.on('new-message', (data) => {
-      console.log('💬 Nova mensagem via WebSocket:', data);
+      console.log('🔥 WEBSOCKET SERVICE: EVENT RECEBIDO!', data);
+      console.log('🔥 EMITINDO PARA LISTENERS...');
       this.emitToListeners('new-message', data);
+      console.log('🔥 EMISSÃO CONCLUÍDA');
     });
 
     // TESTE DIRETO - verificar se eventos chegam ao frontend
@@ -290,7 +297,7 @@ class WebSocketService {
   async validateInstance(instanceName, workspaceUuid) {
     try {
       // Fazer requisição para validar a instância
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3004'}/api/workspace-instances/validate`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/workspace-instances/validate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -361,10 +368,16 @@ class WebSocketService {
    * Adicionar listener para eventos
    */
   addEventListener(event, callback) {
+    console.log(`🎧 REGISTRANDO LISTENER PARA EVENTO: ${event}`);
+    console.log(`🎧 CALLBACK:`, callback.toString().substring(0, 100));
+
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set());
     }
     this.eventListeners.get(event).add(callback);
+
+    console.log(`🎧 LISTENER REGISTRADO! Total listeners para ${event}:`, this.eventListeners.get(event).size);
+    console.log(`🎧 TODOS OS EVENTOS COM LISTENERS:`, Array.from(this.eventListeners.keys()));
 
     // Retornar função para remover o listener
     return () => {
@@ -389,15 +402,24 @@ class WebSocketService {
    * Emitir evento para todos os listeners
    */
   emitToListeners(event, data) {
+    console.log(`🎯 EMITINDO EVENTO: ${event}`);
+    console.log(`🎯 LISTENERS REGISTRADOS PARA ${event}:`, this.eventListeners.get(event)?.size || 0);
+    console.log(`🎯 TODOS OS LISTENERS REGISTRADOS:`, Array.from(this.eventListeners.keys()));
+
     const listeners = this.eventListeners.get(event);
     if (listeners) {
-      listeners.forEach(callback => {
+      console.log(`🎯 CHAMANDO ${listeners.size} LISTENER(S) PARA ${event}`);
+      listeners.forEach((callback, index) => {
         try {
+          console.log(`🎯 CHAMANDO LISTENER ${index + 1}/${listeners.size} PARA ${event}`);
           callback(data);
+          console.log(`🎯 LISTENER ${index + 1} EXECUTADO COM SUCESSO`);
         } catch (error) {
           console.error(`❌ Erro no listener ${event}:`, error);
         }
       });
+    } else {
+      console.warn(`⚠️ NENHUM LISTENER REGISTRADO PARA EVENTO: ${event}`);
     }
   }
 

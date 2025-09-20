@@ -92,23 +92,19 @@ router.get('/statuses', async (req, res) => {
   }
 });
 
-// GET /api/bots/workspace/:workspaceId - Bots por ID do workspace
-router.get('/workspace/:workspaceId', async (req, res) => {
+// GET /api/bots/workspace/:workspaceIdentifier - Bots por ID ou UUID do workspace
+router.get('/workspace/:workspaceIdentifier', async (req, res) => {
   try {
-    const { workspaceId } = req.params;
-    
-    // Validar se workspaceId é um número válido
-    if (!workspaceId || isNaN(parseInt(workspaceId))) {
+    const { workspaceIdentifier } = req.params;
+
+    if (!workspaceIdentifier) {
       return res.status(400).json({
         success: false,
-        message: 'ID do workspace deve ser um número válido',
-        error: `workspaceId recebido: ${workspaceId}`
+        message: 'ID ou UUID do workspace é obrigatório',
+        error: `workspaceIdentifier recebido: ${workspaceIdentifier}`
       });
     }
-    
-    const workspaceIdNum = parseInt(workspaceId);
-    console.log('Buscando bots para workspace ID:', workspaceIdNum);
-    
+
     const filters = {
       active: req.query.active !== undefined ? req.query.active === 'true' : undefined,
       bot_type: req.query.bot_type,
@@ -116,24 +112,37 @@ router.get('/workspace/:workspaceId', async (req, res) => {
       search: req.query.search
     };
 
-    const bots = await Bot.findByWorkspace(workspaceIdNum, filters);
-    
-    console.log(`Encontrados ${bots.length} bots para workspace ${workspaceIdNum}`);
-    
+    let bots;
+    let isUuid = isNaN(parseInt(workspaceIdentifier)) || workspaceIdentifier.includes('-');
+
+    if (isUuid) {
+      // É um UUID, usar findByWorkspaceUuid
+      console.log('Buscando bots para workspace UUID:', workspaceIdentifier);
+      bots = await Bot.findByWorkspaceUuid(workspaceIdentifier, filters);
+    } else {
+      // É um ID numérico, usar findByWorkspace
+      const workspaceIdNum = parseInt(workspaceIdentifier);
+      console.log('Buscando bots para workspace ID:', workspaceIdNum);
+      bots = await Bot.findByWorkspace(workspaceIdNum, filters);
+    }
+
+    console.log(`Encontrados ${bots.length} bots para workspace ${workspaceIdentifier}`);
+
     res.json({
       success: true,
       data: bots.map(b => b.toJSON()),
       count: bots.length,
-      workspace_id: workspaceIdNum
+      workspace_identifier: workspaceIdentifier,
+      identifier_type: isUuid ? 'uuid' : 'id'
     });
   } catch (error) {
     console.error('Erro ao listar bots do workspace:', error);
-    
+
     // Verificar se é erro de workspace não encontrado
     if (error.message && error.message.includes('não encontrado')) {
       res.status(404).json({
         success: false,
-        message: `Workspace com ID ${req.params.workspaceId} não foi encontrado`,
+        message: `Workspace com identificador ${req.params.workspaceIdentifier} não foi encontrado`,
         error: error.message
       });
     } else {

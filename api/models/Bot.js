@@ -177,31 +177,48 @@ class Bot {
 
   static async findByWorkspaceUuid(workspaceUuid, filters = {}) {
     let query = `
-      SELECT b.*, w.name as workspace_name, h.name as hotel_nome 
-      FROM bots b 
-      LEFT JOIN workspaces w ON b.workspace_id = w.id 
-      LEFT JOIN hotels h ON b.hotel_id = h.id 
-      WHERE b.workspace_uuid = ?
+      SELECT
+        b.*,
+        w.name as workspace_name,
+        w.uuid as workspace_uuid_full,
+        w.active as workspace_active,
+        h.name as hotel_nome,
+        h.hotel_uuid as hotel_uuid_full,
+        h.status as hotel_status,
+        (SELECT COUNT(*) FROM flows f WHERE f.bot_id = b.id AND f.active = true) as flows_count,
+        (SELECT COUNT(*) FROM folders fd WHERE fd.bot_id = b.id AND fd.active = true) as folders_count
+      FROM bots b
+      LEFT JOIN workspaces w ON b.workspace_id = w.id
+      LEFT JOIN hotels h ON b.hotel_id = h.id
+      WHERE b.workspace_uuid = $1
     `;
     const params = [workspaceUuid];
+    let paramCount = 1;
 
     if (filters.active !== undefined) {
-      query += ' AND b.active = ?';
+      paramCount++;
+      query += ` AND b.active = $${paramCount}`;
       params.push(filters.active);
     }
 
     if (filters.bot_type) {
-      query += ' AND b.bot_type = ?';
+      paramCount++;
+      query += ` AND b.bot_type = $${paramCount}`;
       params.push(filters.bot_type);
     }
 
     if (filters.status) {
-      query += ' AND b.status = ?';
+      paramCount++;
+      query += ` AND b.status = $${paramCount}`;
       params.push(filters.status);
     }
 
     if (filters.search) {
-      query += ' AND (b.name LIKE ? OR b.description LIKE ?)';
+      paramCount++;
+      const searchParam1 = paramCount;
+      paramCount++;
+      const searchParam2 = paramCount;
+      query += ` AND (b.name ILIKE $${searchParam1} OR b.description ILIKE $${searchParam2})`;
       params.push(`%${filters.search}%`, `%${filters.search}%`);
     }
 
@@ -211,7 +228,11 @@ class Bot {
     return result.map(row => {
       const bot = new Bot(row);
       bot.workspace_name = row.workspace_name;
+      bot.workspace_active = row.workspace_active;
       bot.hotel_nome = row.hotel_nome;
+      bot.hotel_status = row.hotel_status;
+      bot.flows_count = parseInt(row.flows_count) || 0;
+      bot.folders_count = parseInt(row.folders_count) || 0;
       return bot;
     });
   }
